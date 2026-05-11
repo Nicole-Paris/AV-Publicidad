@@ -1,0 +1,22 @@
+services:
+
+  mysql:
+    image: elisasc/av-db:2.0
+    container_name: av-db
+
+    ports:
+      - "3308:3306"
+
+    restart: always
+
+  backend:
+    build: ./backend/proyecto
+    container_name: av-backend
+
+    ports:
+      - "8083:8083"
+
+    depends_on:
+      - mysql
+
+    restart: always
