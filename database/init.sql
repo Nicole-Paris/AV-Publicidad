@@ -24,7 +24,9 @@ VALUES
   (2, 'Empleado', 'Acceso operativo limitado', 1)
 ON DUPLICATE KEY UPDATE
   `nombre` = VALUES(`nombre`),
-  `descripcion` = VALUES(`descripcion`);
+  `descripcion` = VALUES(`descripcion`),
+  `deleted_at` = NULL,
+  `deleted_by` = NULL;
 
 CREATE TABLE IF NOT EXISTS `sucursal` (
   `id_sucursal` INT NOT NULL AUTO_INCREMENT,
