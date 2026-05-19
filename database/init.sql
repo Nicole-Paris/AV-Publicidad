@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS `empleado` (
   `id_empleado` INT NOT NULL AUTO_INCREMENT,
   `nombre` VARCHAR(50) NOT NULL,
   `apellido_paterno` VARCHAR(45) NOT NULL,
-  `apellido_materno` VARCHAR(45) NOT NULL,
+  `apellido_materno` VARCHAR(45) NULL,
   `telefono` VARCHAR(15) NOT NULL,
   `correo` VARCHAR(100) NOT NULL,
   `contrasena` VARCHAR(255) NOT NULL,
@@ -207,7 +207,7 @@ CREATE TABLE IF NOT EXISTS `servicio` (
 
 CREATE TABLE IF NOT EXISTS `detalle_pedido` (
   `id_detalle_pedido` INT NOT NULL AUTO_INCREMENT,
-  `cantidad` DECIMAL(10,2) NOT NULL,
+  `cantidad` DECIMAL(10,2) NULL,
   `precio_unitario` DECIMAL(10,2) NOT NULL,
   `subtotal` DECIMAL(10,2) NOT NULL,
   `unidad_detalle` ENUM('Piezas', 'Metros', 'Litros') NOT NULL,
