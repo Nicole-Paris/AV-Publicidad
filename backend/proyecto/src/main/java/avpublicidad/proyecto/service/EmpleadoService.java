@@ -4,10 +4,10 @@ import avpublicidad.proyecto.dto.EmpleadoRequest;
 import avpublicidad.proyecto.exception.ResourceNotFoundException;
 import avpublicidad.proyecto.model.Empleado;
 import avpublicidad.proyecto.repository.EmpleadoRepository;
+import avpublicidad.proyecto.repository.RolRepository;
 import avpublicidad.proyecto.repository.SucursalRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -19,8 +19,8 @@ import java.util.List;
 public class EmpleadoService {
 
     private final EmpleadoRepository empleadoRepository;
+    private final RolRepository rolRepository;
     private final SucursalRepository sucursalRepository;
-    private final JdbcTemplate jdbcTemplate;
 
     public List<Empleado> listar() {
         return empleadoRepository.findByDeletedAtIsNull();
@@ -93,17 +93,7 @@ public class EmpleadoService {
     }
 
     private void validarRol(Integer rolId) {
-        if (rolId == null) {
-            return;
-        }
-
-        Integer total = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM rol WHERE id_rol = ?",
-                Integer.class,
-                rolId
-        );
-
-        if (total == null || total == 0) {
+        if (rolId != null && !rolRepository.existsById(rolId)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Rol no encontrado");
         }
     }
