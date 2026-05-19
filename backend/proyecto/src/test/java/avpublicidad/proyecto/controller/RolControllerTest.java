@@ -1,6 +1,7 @@
 package avpublicidad.proyecto.controller;
 
 import avpublicidad.proyecto.config.SecurityConfig;
+import avpublicidad.proyecto.constants.RolConstants;
 import avpublicidad.proyecto.model.Rol;
 import avpublicidad.proyecto.service.RolService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -49,7 +50,7 @@ class RolControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(2)))
                 .andExpect(jsonPath("$[0].idRol").value(1))
-                .andExpect(jsonPath("$[0].nombre").value("Administrador"));
+                .andExpect(jsonPath("$[0].nombre").value(RolConstants.ADMINISTRADOR));
     }
 
     @Test
@@ -71,7 +72,7 @@ class RolControllerTest {
                         .content(objectMapper.writeValueAsString(requestValido())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.idRol").value(1))
-                .andExpect(jsonPath("$.nombre").value("Administrador"));
+                .andExpect(jsonPath("$.nombre").value(RolConstants.ADMINISTRADOR));
 
         verify(rolService).crear(any());
     }
@@ -163,7 +164,7 @@ class RolControllerTest {
     private Rol rol(Integer id) {
         return Rol.builder()
                 .idRol(id)
-                .nombre("Administrador")
+                .nombre(RolConstants.ADMINISTRADOR)
                 .descripcion("Rol administrador")
                 .createdBy(1)
                 .build();
@@ -180,7 +181,7 @@ class RolControllerTest {
 
     private RolJson requestValido() {
         RolJson request = new RolJson();
-        request.nombre = "Administrador";
+        request.nombre = RolConstants.ADMINISTRADOR;
         request.descripcion = "Rol administrador";
         request.createdBy = 1;
         return request;
