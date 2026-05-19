@@ -18,6 +18,14 @@ CREATE TABLE IF NOT EXISTS `rol` (
   PRIMARY KEY (`id_rol`)
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+INSERT INTO `rol` (`id_rol`, `nombre`, `descripcion`, `created_by`)
+VALUES
+  (1, 'Administrador', 'Acceso completo al sistema', 1),
+  (2, 'Empleado', 'Acceso operativo limitado', 1)
+ON DUPLICATE KEY UPDATE
+  `nombre` = VALUES(`nombre`),
+  `descripcion` = VALUES(`descripcion`);
+
 CREATE TABLE IF NOT EXISTS `sucursal` (
   `id_sucursal` INT NOT NULL AUTO_INCREMENT,
   `nombre` VARCHAR(50) NOT NULL,
