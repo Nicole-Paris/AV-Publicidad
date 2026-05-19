@@ -1,7 +1,7 @@
 services:
 
   mysql:
-    image: elisasc/av-db:3.0
+    image: elisasc/av-db:4.0
     container_name: av-db
 
     ports:
