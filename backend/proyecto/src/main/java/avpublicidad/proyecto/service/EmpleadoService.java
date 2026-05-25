@@ -8,6 +8,7 @@ import avpublicidad.proyecto.repository.RolRepository;
 import avpublicidad.proyecto.repository.SucursalRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -21,6 +22,7 @@ public class EmpleadoService {
     private final EmpleadoRepository empleadoRepository;
     private final RolRepository rolRepository;
     private final SucursalRepository sucursalRepository;
+    private final PasswordEncoder passwordEncoder;
 
     public List<Empleado> listar() {
         return empleadoRepository.findByDeletedAtIsNull();
@@ -43,7 +45,7 @@ public class EmpleadoService {
                 .apellidoMaterno(request.getApellidoMaterno())
                 .telefono(request.getTelefono())
                 .correo(normalizarCorreo(request.getCorreo()))
-                .contrasena(request.getContrasena())
+                .contrasena(encriptarContrasena(request.getContrasena()))
                 .horaEntrada(request.getHoraEntrada())
                 .horaSalida(request.getHoraSalida())
                 .rolId(request.getRolId())
@@ -64,7 +66,7 @@ public class EmpleadoService {
         empleado.setApellidoMaterno(request.getApellidoMaterno());
         empleado.setTelefono(request.getTelefono());
         empleado.setCorreo(normalizarCorreo(request.getCorreo()));
-        empleado.setContrasena(request.getContrasena());
+        empleado.setContrasena(encriptarContrasena(request.getContrasena()));
         empleado.setHoraEntrada(request.getHoraEntrada());
         empleado.setHoraSalida(request.getHoraSalida());
         empleado.setRolId(request.getRolId());
@@ -110,5 +112,13 @@ public class EmpleadoService {
         }
 
         return correo.trim().toLowerCase();
+    }
+
+    private String encriptarContrasena(String contrasena) {
+        if (contrasena == null || contrasena.startsWith("$2")) {
+            return contrasena;
+        }
+
+        return passwordEncoder.encode(contrasena);
     }
 }
