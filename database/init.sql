@@ -70,6 +70,18 @@ ENGINE = InnoDB
 DEFAULT CHARACTER SET = utf8mb4
 COLLATE = utf8mb4_0900_ai_ci;
 
+INSERT INTO `AV`.`sucursal` (`id_sucursal`, `nombre`, `direccion`, `codigo_postal`, `telefono`, `horario`, `created_by`)
+VALUES
+  (1, 'Sucursal Centro', 'Av. Principal 123', '62740', '5551112233', 'Lunes a viernes 09:00 a 18:00', 1)
+ON DUPLICATE KEY UPDATE
+  `nombre` = VALUES(`nombre`),
+  `direccion` = VALUES(`direccion`),
+  `codigo_postal` = VALUES(`codigo_postal`),
+  `telefono` = VALUES(`telefono`),
+  `horario` = VALUES(`horario`),
+  `deleted_at` = NULL,
+  `deleted_by` = NULL;
+
 
 -- -----------------------------------------------------
 -- Table `AV`.`empleado`
@@ -107,6 +119,23 @@ ENGINE = InnoDB
 DEFAULT CHARACTER SET = utf8mb4
 COLLATE = utf8mb4_0900_ai_ci;
 
+INSERT INTO `AV`.`empleado` (
+  `id_empleado`, `nombre`, `apellido_paterno`, `apellido_materno`, `telefono`, `correo`, `contrasena`,
+  `hora_entrada`, `hora_salida`, `rol_id`, `sucursal_id_sucursal`
+)
+VALUES
+  (1, 'Admin', 'Sistema', 'AV', '5551112233', 'admin@av.com', '$2a$10$3ybwP10I3b6rHtQckqaN7.70pXPwiX.5kbbLMmhGInHA3ZJPeiCdG', '09:00:00', '18:00:00', 1, 1),
+  (2, 'Empleado', 'General', 'AV', '5551112244', 'empleado@av.com', '$2a$10$Rhos0oyEuyFqDuOg0hDOC.rJd7ivRUGyfw3FplmWxD/EVBnsJvjVq', '09:00:00', '18:00:00', 2, 1)
+ON DUPLICATE KEY UPDATE
+  `nombre` = VALUES(`nombre`),
+  `apellido_paterno` = VALUES(`apellido_paterno`),
+  `apellido_materno` = VALUES(`apellido_materno`),
+  `telefono` = VALUES(`telefono`),
+  `correo` = VALUES(`correo`),
+  `rol_id` = VALUES(`rol_id`),
+  `sucursal_id_sucursal` = VALUES(`sucursal_id_sucursal`),
+  `deleted_at` = NULL;
+
 
 -- -----------------------------------------------------
 -- Table `AV`.`categoria_material`
@@ -127,6 +156,17 @@ ENGINE = InnoDB
 DEFAULT CHARACTER SET = utf8mb4
 COLLATE = utf8mb4_0900_ai_ci;
 
+INSERT INTO `AV`.`categoria_material` (`id_categoria_material`, `nombre`, `estado`, `descripcion`, `created_by`)
+VALUES
+  (1, 'Impresion', 'Activo', 'Materiales para impresion y acabados', 1),
+  (2, 'Estructura', 'Activo', 'Materiales rigidos y de soporte', 1)
+ON DUPLICATE KEY UPDATE
+  `nombre` = VALUES(`nombre`),
+  `estado` = VALUES(`estado`),
+  `descripcion` = VALUES(`descripcion`),
+  `deleted_at` = NULL,
+  `deleted_by` = NULL;
+
 
 -- -----------------------------------------------------
 -- Table `AV`.`categoria_servicio`
@@ -146,6 +186,17 @@ CREATE TABLE IF NOT EXISTS `AV`.`categoria_servicio` (
 ENGINE = InnoDB
 DEFAULT CHARACTER SET = utf8mb4
 COLLATE = utf8mb4_0900_ai_ci;
+
+INSERT INTO `AV`.`categoria_servicio` (`id_categoria_servicio`, `nombre`, `descripcion`, `estado`, `created_by`)
+VALUES
+  (1, 'Impresion digital', 'Servicios de impresion para publicidad', 'Activo', 1),
+  (2, 'Rotulacion', 'Servicios de rotulacion y vinil', 'Activo', 1)
+ON DUPLICATE KEY UPDATE
+  `nombre` = VALUES(`nombre`),
+  `descripcion` = VALUES(`descripcion`),
+  `estado` = VALUES(`estado`),
+  `deleted_at` = NULL,
+  `deleted_by` = NULL;
 
 
 -- -----------------------------------------------------
@@ -183,6 +234,30 @@ CREATE TABLE IF NOT EXISTS `AV`.`cliente` (
 ENGINE = InnoDB
 DEFAULT CHARACTER SET = utf8mb4
 COLLATE = utf8mb4_0900_ai_ci;
+
+INSERT INTO `AV`.`cliente` (
+  `id_cliente`, `nombre`, `apellido_paterno`, `apellido_materno`, `tipo`, `telefono`, `tiene_credito`,
+  `credito_actual`, `limite_credito`, `direccion`, `rfc`, `codigo_postal`, `razon_social`, `created_by`
+)
+VALUES
+  (1, 'Carlos', 'Ramirez', 'Lopez', 'Frecuente', '5551112233', 1, 0.00, 3000.00, 'Av. Principal 123',
+   'RALO900101XYZ', '62740', 'Carlos Ramirez Lopez', 1),
+  (2, 'Cliente', 'Mostrador', 'General', 'No frecuente', '5550000000', 0, 0.00, NULL, NULL,
+   NULL, NULL, NULL, 1)
+ON DUPLICATE KEY UPDATE
+  `nombre` = VALUES(`nombre`),
+  `apellido_paterno` = VALUES(`apellido_paterno`),
+  `apellido_materno` = VALUES(`apellido_materno`),
+  `tipo` = VALUES(`tipo`),
+  `telefono` = VALUES(`telefono`),
+  `tiene_credito` = VALUES(`tiene_credito`),
+  `credito_actual` = VALUES(`credito_actual`),
+  `limite_credito` = VALUES(`limite_credito`),
+  `direccion` = VALUES(`direccion`),
+  `codigo_postal` = VALUES(`codigo_postal`),
+  `razon_social` = VALUES(`razon_social`),
+  `deleted_at` = NULL,
+  `deleted_by` = NULL;
 
 
 -- -----------------------------------------------------
@@ -289,6 +364,18 @@ ENGINE = InnoDB
 DEFAULT CHARACTER SET = utf8mb4
 COLLATE = utf8mb4_0900_ai_ci;
 
+INSERT INTO `AV`.`servicio` (`id_servicio`, `nombre`, `descripcion`, `estado`, `categoria_servicio_id`, `created_by`)
+VALUES
+  (1, 'Lona impresa', 'Impresion de lona por metro cuadrado', 'Activo', 1, 1),
+  (2, 'Vinil de corte', 'Rotulacion en vinil por metro', 'Activo', 2, 1)
+ON DUPLICATE KEY UPDATE
+  `nombre` = VALUES(`nombre`),
+  `descripcion` = VALUES(`descripcion`),
+  `estado` = VALUES(`estado`),
+  `categoria_servicio_id` = VALUES(`categoria_servicio_id`),
+  `deleted_at` = NULL,
+  `deleted_by` = NULL;
+
 
 -- -----------------------------------------------------
 -- Table `AV`.`detalle_pedido`
@@ -352,6 +439,19 @@ ENGINE = InnoDB
 DEFAULT CHARACTER SET = utf8mb4
 COLLATE = utf8mb4_0900_ai_ci;
 
+INSERT INTO `AV`.`material` (`id_material`, `nombre`, `unidad`, `estado`, `costo_unitario`, `categoria_material_id`, `created_by`)
+VALUES
+  (1, 'Lona front 13oz', 'Metros', 'Disponible', 45.00, 1, 1),
+  (2, 'Vinil adhesivo', 'Metros', 'Disponible', 35.00, 1, 1)
+ON DUPLICATE KEY UPDATE
+  `nombre` = VALUES(`nombre`),
+  `unidad` = VALUES(`unidad`),
+  `estado` = VALUES(`estado`),
+  `costo_unitario` = VALUES(`costo_unitario`),
+  `categoria_material_id` = VALUES(`categoria_material_id`),
+  `deleted_at` = NULL,
+  `deleted_by` = NULL;
+
 
 -- -----------------------------------------------------
 -- Table `AV`.`inventario`
@@ -392,6 +492,18 @@ CREATE TABLE IF NOT EXISTS `AV`.`inventario` (
 ENGINE = InnoDB
 DEFAULT CHARACTER SET = utf8mb4
 COLLATE = utf8mb4_0900_ai_ci;
+
+INSERT INTO `AV`.`inventario` (`id_inventario`, `stock_actual`, `stock_minimo`, `material_id`, `sucursal_id`, `created_by`)
+VALUES
+  (1, 100.00, 10.00, 1, 1, 1),
+  (2, 80.00, 10.00, 2, 1, 1)
+ON DUPLICATE KEY UPDATE
+  `stock_actual` = VALUES(`stock_actual`),
+  `stock_minimo` = VALUES(`stock_minimo`),
+  `material_id` = VALUES(`material_id`),
+  `sucursal_id` = VALUES(`sucursal_id`),
+  `deleted_at` = NULL,
+  `deleted_by` = NULL;
 
 
 -- -----------------------------------------------------
@@ -507,6 +619,23 @@ CREATE TABLE IF NOT EXISTS `AV`.`global_values` (
   UNIQUE INDEX `uk_global_values_tipo_nombre` (`tipo` ASC, `nombre` ASC))
 ENGINE = InnoDB
 COMMENT = '	';
+
+INSERT INTO `AV`.`global_values` (`id`, `tipo`, `nombre`, `valor`, `created_by`)
+VALUES
+  (1, 'empresa', 'nombre_empresa', 'AV Publicidad', 1),
+  (2, 'empresa', 'razon_social', 'AV Publicidad', 1),
+  (3, 'empresa', 'telefono', '5551112233', 1),
+  (4, 'empresa', 'correo', 'contacto@av.com', 1),
+  (5, 'empresa', 'direccion_fiscal', 'Av. Principal 123, CP 62740', 1),
+  (6, 'logo', 'nombre_logo', 'AV Publicidad', 1),
+  (7, 'logo', 'tipo_imagen', 'image/png', 1),
+  (8, 'logo', 'valor_url', '/assets/logo-av.png', 1)
+ON DUPLICATE KEY UPDATE
+  `tipo` = VALUES(`tipo`),
+  `nombre` = VALUES(`nombre`),
+  `valor` = VALUES(`valor`),
+  `deleted_at` = NULL,
+  `deleted_by` = NULL;
 
 
 SET SQL_MODE=@OLD_SQL_MODE;
