@@ -3,6 +3,7 @@ package avpublicidad.proyecto.controller;
 import avpublicidad.proyecto.config.SecurityConfig;
 import avpublicidad.proyecto.constants.PedidoConstants;
 import avpublicidad.proyecto.model.Pedido;
+import avpublicidad.proyecto.service.NotaPedidoPdfService;
 import avpublicidad.proyecto.service.PedidoService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -44,6 +45,9 @@ class PedidoControllerTest {
     @MockitoBean
     private PedidoService pedidoService;
 
+    @MockitoBean
+    private NotaPedidoPdfService notaPedidoPdfService;
+
     @Test
     void listar_debeRetornarPedidos() throws Exception {
         when(pedidoService.listar()).thenReturn(List.of(pedido(1), pedido(2)));
@@ -63,6 +67,18 @@ class PedidoControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.idPedido").value(1))
                 .andExpect(jsonPath("$.clienteId").value(1));
+    }
+
+    @Test
+    void generarNotaPdf_debeRetornarArchivoPdf() throws Exception {
+        when(notaPedidoPdfService.generarNotaPedido(1)).thenReturn("%PDF-1.4".getBytes());
+
+        mockMvc.perform(get("/pedidos/1/nota-pdf"))
+                .andExpect(status().isOk())
+                .andExpect(result -> org.assertj.core.api.Assertions.assertThat(result.getResponse().getContentType())
+                        .isEqualTo("application/pdf"))
+                .andExpect(result -> org.assertj.core.api.Assertions.assertThat(result.getResponse().getHeader("Content-Disposition"))
+                        .contains("nota-pedido-1.pdf"));
     }
 
     @Test

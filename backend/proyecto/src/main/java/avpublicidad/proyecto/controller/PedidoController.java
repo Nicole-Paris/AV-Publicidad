@@ -2,9 +2,13 @@ package avpublicidad.proyecto.controller;
 
 import avpublicidad.proyecto.dto.PedidoRequest;
 import avpublicidad.proyecto.model.Pedido;
+import avpublicidad.proyecto.service.NotaPedidoPdfService;
 import avpublicidad.proyecto.service.PedidoService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -24,6 +28,7 @@ import java.util.List;
 public class PedidoController {
 
     private final PedidoService pedidoService;
+    private final NotaPedidoPdfService notaPedidoPdfService;
 
     @GetMapping
     public List<Pedido> listar() {
@@ -33,6 +38,16 @@ public class PedidoController {
     @GetMapping("/{id}")
     public Pedido obtenerPorId(@PathVariable Integer id) {
         return pedidoService.obtenerPorId(id);
+    }
+
+    @GetMapping("/{id}/nota-pdf")
+    public ResponseEntity<byte[]> generarNotaPdf(@PathVariable Integer id) {
+        byte[] pdf = notaPedidoPdfService.generarNotaPedido(id);
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=nota-pedido-" + id + ".pdf")
+                .contentType(MediaType.APPLICATION_PDF)
+                .body(pdf);
     }
 
     @PostMapping

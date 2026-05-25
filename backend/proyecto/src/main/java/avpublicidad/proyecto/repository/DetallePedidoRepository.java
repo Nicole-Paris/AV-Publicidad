@@ -8,4 +8,6 @@ import java.util.List;
 public interface DetallePedidoRepository extends JpaRepository<DetallePedido, Integer> {
 
     List<DetallePedido> findByDeletedAtIsNull();
+
+    List<DetallePedido> findByPedidoIdAndDeletedAtIsNull(Integer pedidoId);
 }
