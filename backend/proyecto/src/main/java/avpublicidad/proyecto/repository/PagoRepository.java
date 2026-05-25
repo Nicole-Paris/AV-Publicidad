@@ -8,4 +8,6 @@ import java.util.List;
 public interface PagoRepository extends JpaRepository<Pago, Integer> {
 
     List<Pago> findByDeletedAtIsNull();
+
+    List<Pago> findByPedidoIdAndDeletedAtIsNull(Integer pedidoId);
 }
