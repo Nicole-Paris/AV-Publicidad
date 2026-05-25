@@ -3,6 +3,7 @@ package avpublicidad.proyecto.service;
 import avpublicidad.proyecto.constants.MovimientoInventarioConstants;
 import avpublicidad.proyecto.dto.MovimientoInventarioRequest;
 import avpublicidad.proyecto.exception.ResourceNotFoundException;
+import avpublicidad.proyecto.model.Inventario;
 import avpublicidad.proyecto.model.MovimientoInventario;
 import avpublicidad.proyecto.repository.InventarioRepository;
 import avpublicidad.proyecto.repository.MovimientoInventarioRepository;
@@ -10,8 +11,10 @@ import jakarta.validation.ValidationException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @Service
@@ -30,44 +33,90 @@ public class MovimientoInventarioService {
                 .orElseThrow(() -> new ResourceNotFoundException("Movimiento de inventario no encontrado"));
     }
 
+    @Transactional
     public MovimientoInventario crear(MovimientoInventarioRequest request) {
-        validarInventario(request.getInventarioId());
+        Inventario inventario = obtenerInventario(request.getInventarioId());
+        String tipo = normalizarTipo(request.getTipo());
+        aplicarMovimiento(inventario, tipo, request.getCantidad());
 
         MovimientoInventario movimiento = MovimientoInventario.builder()
                 .cantidad(request.getCantidad())
                 .fecha(request.getFecha())
-                .tipo(normalizarTipo(request.getTipo()))
+                .tipo(tipo)
                 .motivo(request.getMotivo())
                 .inventarioId(request.getInventarioId())
                 .createdBy(request.getCreatedBy())
                 .build();
 
+        inventarioRepository.save(inventario);
         return movimientoInventarioRepository.save(movimiento);
     }
 
+    @Transactional
     public MovimientoInventario actualizar(Integer id, MovimientoInventarioRequest request) {
         MovimientoInventario movimiento = obtenerPorId(id);
-        validarInventario(request.getInventarioId());
+        Inventario inventarioAnterior = obtenerInventario(movimiento.getInventarioId());
+        revertirMovimiento(inventarioAnterior, movimiento.getTipo(), movimiento.getCantidad());
+        inventarioRepository.save(inventarioAnterior);
+
+        Inventario inventarioNuevo = obtenerInventario(request.getInventarioId());
+        String tipoNuevo = normalizarTipo(request.getTipo());
+        aplicarMovimiento(inventarioNuevo, tipoNuevo, request.getCantidad());
 
         movimiento.setCantidad(request.getCantidad());
         movimiento.setFecha(request.getFecha());
-        movimiento.setTipo(normalizarTipo(request.getTipo()));
+        movimiento.setTipo(tipoNuevo);
         movimiento.setMotivo(request.getMotivo());
         movimiento.setInventarioId(request.getInventarioId());
         movimiento.setCreatedBy(request.getCreatedBy());
 
+        inventarioRepository.save(inventarioNuevo);
         return movimientoInventarioRepository.save(movimiento);
     }
 
+    @Transactional
     public void eliminar(Integer id) {
         MovimientoInventario movimiento = obtenerPorId(id);
+        Inventario inventario = obtenerInventario(movimiento.getInventarioId());
+        revertirMovimiento(inventario, movimiento.getTipo(), movimiento.getCantidad());
+        inventarioRepository.save(inventario);
         movimientoInventarioRepository.delete(movimiento);
     }
 
-    private void validarInventario(Integer inventarioId) {
-        if (inventarioId != null && !inventarioRepository.existsById(inventarioId)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Inventario no encontrado");
+    private Inventario obtenerInventario(Integer inventarioId) {
+        return inventarioRepository.findById(inventarioId)
+                .filter(inventario -> inventario.getDeletedAt() == null)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Inventario no encontrado"));
+    }
+
+    private void aplicarMovimiento(Inventario inventario, String tipo, BigDecimal cantidad) {
+        if (cantidad == null) {
+            return;
         }
+
+        if (MovimientoInventarioConstants.TIPO_ENTRADA.equals(tipo)) {
+            inventario.setStockActual(inventario.getStockActual().add(cantidad));
+            return;
+        }
+
+        BigDecimal stockFinal = inventario.getStockActual().subtract(cantidad);
+        if (stockFinal.compareTo(BigDecimal.ZERO) < 0) {
+            throw new ValidationException("La salida no puede dejar el stock en negativo");
+        }
+        inventario.setStockActual(stockFinal);
+    }
+
+    private void revertirMovimiento(Inventario inventario, String tipo, BigDecimal cantidad) {
+        if (cantidad == null) {
+            return;
+        }
+
+        if (MovimientoInventarioConstants.TIPO_ENTRADA.equals(tipo)) {
+            inventario.setStockActual(inventario.getStockActual().subtract(cantidad));
+            return;
+        }
+
+        inventario.setStockActual(inventario.getStockActual().add(cantidad));
     }
 
     private String normalizarTipo(String tipo) {

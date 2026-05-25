@@ -25,7 +25,7 @@ public class PedidoRequest {
     private String estado;
 
     @NotNull(message = "El total es obligatorio")
-    @DecimalMin(value = "0.00", message = "El total no puede ser negativo")
+    @DecimalMin(value = "0.01", message = "El total debe ser mayor a cero y capturarse manualmente")
     @Digits(integer = 8, fraction = 2, message = "El total debe tener maximo 8 enteros y 2 decimales")
     private BigDecimal total;
 

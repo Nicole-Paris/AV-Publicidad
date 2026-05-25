@@ -14,6 +14,7 @@ public final class PedidoConstants {
 
     public static final String FORMA_PAGO_CONTADO = "Contado";
     public static final String FORMA_PAGO_CREDITO = "Credito";
+    public static final String FORMA_PAGO_INTERCAMBIO = "Intercambio";
 
     private PedidoConstants() {
     }

@@ -1,9 +1,11 @@
 package avpublicidad.proyecto.service;
 
 import avpublicidad.proyecto.constants.DetallePedidoConstants;
+import avpublicidad.proyecto.constants.PedidoConstants;
 import avpublicidad.proyecto.dto.DetallePedidoRequest;
 import avpublicidad.proyecto.exception.ResourceNotFoundException;
 import avpublicidad.proyecto.model.DetallePedido;
+import avpublicidad.proyecto.model.Pedido;
 import avpublicidad.proyecto.repository.DetallePedidoRepository;
 import avpublicidad.proyecto.repository.PedidoRepository;
 import avpublicidad.proyecto.repository.ServicioRepository;
@@ -13,6 +15,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -36,11 +40,13 @@ public class DetallePedidoService {
 
     public DetallePedido crear(DetallePedidoRequest request) {
         validarRelaciones(request);
+        validarPedidoEditable(request.getPedidoId());
+        BigDecimal subtotal = calcularSubtotal(request);
 
         DetallePedido detallePedido = DetallePedido.builder()
                 .cantidad(request.getCantidad())
                 .precioUnitario(request.getPrecioUnitario())
-                .subtotal(request.getSubtotal())
+                .subtotal(subtotal)
                 .unidadDetalle(normalizarUnidadDetalle(request.getUnidadDetalle()))
                 .pedidoId(request.getPedidoId())
                 .servicioId(request.getServicioId())
@@ -55,10 +61,13 @@ public class DetallePedidoService {
     public DetallePedido actualizar(Integer id, DetallePedidoRequest request) {
         DetallePedido detallePedido = obtenerPorId(id);
         validarRelaciones(request);
+        validarPedidoEditable(detallePedido.getPedidoId());
+        validarPedidoEditable(request.getPedidoId());
+        BigDecimal subtotal = calcularSubtotal(request);
 
         detallePedido.setCantidad(request.getCantidad());
         detallePedido.setPrecioUnitario(request.getPrecioUnitario());
-        detallePedido.setSubtotal(request.getSubtotal());
+        detallePedido.setSubtotal(subtotal);
         detallePedido.setUnidadDetalle(normalizarUnidadDetalle(request.getUnidadDetalle()));
         detallePedido.setPedidoId(request.getPedidoId());
         detallePedido.setServicioId(request.getServicioId());
@@ -71,6 +80,7 @@ public class DetallePedidoService {
 
     public void eliminar(Integer id) {
         DetallePedido detallePedido = obtenerPorId(id);
+        validarPedidoEditable(detallePedido.getPedidoId());
         detallePedido.setDeletedAt(LocalDateTime.now());
         detallePedidoRepository.save(detallePedido);
     }
@@ -83,6 +93,37 @@ public class DetallePedidoService {
         if (request.getServicioId() != null && !servicioRepository.existsById(request.getServicioId())) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Servicio no encontrado");
         }
+    }
+
+    private void validarPedidoEditable(Integer pedidoId) {
+        if (pedidoId == null) {
+            return;
+        }
+
+        Pedido pedido = pedidoRepository.findById(pedidoId)
+                .filter(pedidoEncontrado -> pedidoEncontrado.getDeletedAt() == null)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pedido no encontrado"));
+
+        if (!PedidoConstants.ESTADO_BORRADOR.equals(pedido.getEstado())
+                && !PedidoConstants.ESTADO_PENDIENTE.equals(pedido.getEstado())) {
+            throw new ValidationException("Los detalles solo se pueden modificar en pedidos Borrador o Pendiente");
+        }
+    }
+
+    private BigDecimal calcularSubtotal(DetallePedidoRequest request) {
+        if (request.getCantidad() == null || request.getPrecioUnitario() == null) {
+            return null;
+        }
+
+        BigDecimal subtotal = request.getCantidad()
+                .multiply(request.getPrecioUnitario())
+                .setScale(2, RoundingMode.HALF_UP);
+
+        if (request.getSubtotal() != null && request.getSubtotal().compareTo(subtotal) != 0) {
+            throw new ValidationException("El subtotal debe coincidir con cantidad por precio unitario");
+        }
+
+        return subtotal;
     }
 
     private String normalizarUnidadDetalle(String unidadDetalle) {

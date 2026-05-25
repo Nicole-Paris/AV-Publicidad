@@ -22,7 +22,6 @@ public class DetallePedidoRequest {
     @Digits(integer = 8, fraction = 2)
     private BigDecimal precioUnitario;
 
-    @NotNull
     @DecimalMin(value = "0.01")
     @Digits(integer = 8, fraction = 2)
     private BigDecimal subtotal;
