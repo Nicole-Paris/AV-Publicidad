@@ -48,6 +48,10 @@ public class JwtService {
         return obtenerClaims(token).getSubject();
     }
 
+    public String obtenerRol(String token) {
+        return obtenerClaims(token).get("rol", String.class);
+    }
+
     public boolean esTokenValido(String token, Empleado empleado) {
         String correo = obtenerCorreo(token);
         return correo.equals(empleado.getCorreo()) && !estaExpirado(token);
