@@ -58,10 +58,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     private void autenticar(HttpServletRequest request, Empleado empleado) {
+        String rol = jwtService.obtenerRol(request.getHeader("Authorization").substring(7));
         UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                 empleado,
                 null,
-                List.of(new SimpleGrantedAuthority("ROLE_" + empleado.getRolId()))
+                List.of(new SimpleGrantedAuthority("ROLE_" + rol.toUpperCase()))
         );
         authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
         SecurityContextHolder.getContext().setAuthentication(authentication);
