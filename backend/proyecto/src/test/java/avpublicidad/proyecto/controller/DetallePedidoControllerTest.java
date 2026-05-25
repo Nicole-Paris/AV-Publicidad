@@ -129,14 +129,16 @@ class DetallePedidoControllerTest {
     }
 
     @Test
-    void crear_sinSubtotal_debeResponderBadRequest() throws Exception {
+    void crear_sinSubtotal_debeSerValidoPorqueElBackendLoCalcula() throws Exception {
         DetallePedidoJson request = requestValido();
         request.subtotal = null;
+        when(detallePedidoService.crear(any())).thenReturn(detallePedido(1));
 
         mockMvc.perform(post("/detalles-pedido")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.subtotal").value(300.00));
     }
 
     @Test

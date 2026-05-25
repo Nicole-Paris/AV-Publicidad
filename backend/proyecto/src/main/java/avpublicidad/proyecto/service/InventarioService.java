@@ -1,11 +1,14 @@
 package avpublicidad.proyecto.service;
 
+import avpublicidad.proyecto.constants.MaterialConstants;
 import avpublicidad.proyecto.dto.InventarioRequest;
 import avpublicidad.proyecto.exception.ResourceNotFoundException;
 import avpublicidad.proyecto.model.Inventario;
+import avpublicidad.proyecto.model.Material;
 import avpublicidad.proyecto.repository.InventarioRepository;
 import avpublicidad.proyecto.repository.MaterialRepository;
 import avpublicidad.proyecto.repository.SucursalRepository;
+import jakarta.validation.ValidationException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -34,6 +37,8 @@ public class InventarioService {
 
     public Inventario crear(InventarioRequest request) {
         validarRelaciones(request);
+        validarMaterialDisponible(request.getMaterialId());
+        validarInventarioUnico(request, null);
 
         Inventario inventario = Inventario.builder()
                 .stockActual(request.getStockActual())
@@ -51,6 +56,8 @@ public class InventarioService {
     public Inventario actualizar(Integer id, InventarioRequest request) {
         Inventario inventario = obtenerPorId(id);
         validarRelaciones(request);
+        validarMaterialDisponible(request.getMaterialId());
+        validarInventarioUnico(request, id);
 
         inventario.setStockActual(request.getStockActual());
         inventario.setStockMinimo(request.getStockMinimo());
@@ -77,5 +84,31 @@ public class InventarioService {
         if (request.getSucursalId() != null && !sucursalRepository.existsById(request.getSucursalId())) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Sucursal no encontrada");
         }
+    }
+
+    private void validarMaterialDisponible(Integer materialId) {
+        if (materialId == null) {
+            return;
+        }
+
+        Material material = materialRepository.findById(materialId)
+                .filter(materialEncontrado -> materialEncontrado.getDeletedAt() == null)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Material no encontrado"));
+
+        if (!MaterialConstants.ESTADO_DISPONIBLE.equals(material.getEstado())) {
+            throw new ValidationException("No se puede crear inventario con un material no disponible");
+        }
+    }
+
+    private void validarInventarioUnico(InventarioRequest request, Integer inventarioActualId) {
+        if (request.getMaterialId() == null || request.getSucursalId() == null) {
+            return;
+        }
+
+        inventarioRepository.findByMaterialIdAndSucursalIdAndDeletedAtIsNull(request.getMaterialId(), request.getSucursalId())
+                .filter(inventario -> !inventario.getIdInventario().equals(inventarioActualId))
+                .ifPresent(inventario -> {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Ya existe inventario para ese material en esa sucursal");
+                });
     }
 }

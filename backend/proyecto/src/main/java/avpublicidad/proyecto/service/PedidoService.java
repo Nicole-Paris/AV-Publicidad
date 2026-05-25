@@ -5,7 +5,9 @@ import avpublicidad.proyecto.dto.PedidoRequest;
 import avpublicidad.proyecto.exception.ResourceNotFoundException;
 import avpublicidad.proyecto.model.Pedido;
 import avpublicidad.proyecto.repository.ClienteRepository;
+import avpublicidad.proyecto.repository.DetallePedidoRepository;
 import avpublicidad.proyecto.repository.EmpleadoRepository;
+import avpublicidad.proyecto.repository.PagoRepository;
 import avpublicidad.proyecto.repository.PedidoRepository;
 import avpublicidad.proyecto.repository.SucursalRepository;
 import jakarta.validation.ValidationException;
@@ -26,6 +28,8 @@ public class PedidoService {
     private final ClienteRepository clienteRepository;
     private final EmpleadoRepository empleadoRepository;
     private final SucursalRepository sucursalRepository;
+    private final PagoRepository pagoRepository;
+    private final DetallePedidoRepository detallePedidoRepository;
 
     public List<Pedido> listar() {
         return pedidoRepository.findByDeletedAtIsNull();
@@ -65,10 +69,14 @@ public class PedidoService {
         Pedido pedido = obtenerPorId(id);
         validarRelaciones(request);
         validarReglasNegocio(request);
+        String estadoNuevo = normalizarEstado(request.getEstado());
+        validarFlujoEstado(pedido.getEstado(), estadoNuevo);
+        validarPedidoEditable(pedido, request);
+        validarRequisitosEstado(pedido, estadoNuevo);
 
         pedido.setFechaPedido(request.getFechaPedido());
         pedido.setFechaEntrega(request.getFechaEntrega());
-        pedido.setEstado(normalizarEstado(request.getEstado()));
+        pedido.setEstado(estadoNuevo);
         pedido.setTotal(request.getTotal());
         pedido.setDescripcion(request.getDescripcion());
         pedido.setTipoPedido(normalizarTipoPedido(request.getTipoPedido()));
@@ -86,6 +94,9 @@ public class PedidoService {
 
     public void eliminar(Integer id) {
         Pedido pedido = obtenerPorId(id);
+        if (!pagoRepository.findByPedidoIdAndDeletedAtIsNull(id).isEmpty()) {
+            throw new ValidationException("No se puede eliminar un pedido con pagos registrados; cancelalo");
+        }
         pedido.setDeletedAt(LocalDateTime.now());
         pedidoRepository.save(pedido);
     }
@@ -120,6 +131,62 @@ public class PedidoService {
                 && (request.getMotivoCancelacion() == null || request.getMotivoCancelacion().isBlank())) {
             throw new ValidationException("El motivo de cancelacion es obligatorio cuando el pedido esta cancelado");
         }
+    }
+
+    private void validarFlujoEstado(String estadoActual, String estadoNuevo) {
+        if (estadoActual == null || estadoActual.equals(estadoNuevo)) {
+            return;
+        }
+
+        boolean transicionValida =
+                (PedidoConstants.ESTADO_BORRADOR.equals(estadoActual)
+                        && (PedidoConstants.ESTADO_PENDIENTE.equals(estadoNuevo)
+                        || PedidoConstants.ESTADO_CANCELADO.equals(estadoNuevo)))
+                        || (PedidoConstants.ESTADO_PENDIENTE.equals(estadoActual)
+                        && (PedidoConstants.ESTADO_EN_PROCESO.equals(estadoNuevo)
+                        || PedidoConstants.ESTADO_CANCELADO.equals(estadoNuevo)))
+                        || (PedidoConstants.ESTADO_EN_PROCESO.equals(estadoActual)
+                        && (PedidoConstants.ESTADO_TERMINADO.equals(estadoNuevo)
+                        || PedidoConstants.ESTADO_CANCELADO.equals(estadoNuevo)))
+                        || (PedidoConstants.ESTADO_TERMINADO.equals(estadoActual)
+                        && PedidoConstants.ESTADO_ENTREGADO.equals(estadoNuevo));
+
+        if (!transicionValida) {
+            throw new ValidationException("El pedido no puede cambiar de " + estadoActual + " a " + estadoNuevo);
+        }
+    }
+
+    private void validarPedidoEditable(Pedido pedido, PedidoRequest request) {
+        if (PedidoConstants.ESTADO_BORRADOR.equals(pedido.getEstado())
+                || PedidoConstants.ESTADO_PENDIENTE.equals(pedido.getEstado())) {
+            return;
+        }
+
+        boolean cambioDatosBase = !pedido.getClienteId().equals(request.getClienteId())
+                || !pedido.getEmpleadoId().equals(request.getEmpleadoId())
+                || !pedido.getSucursalId().equals(request.getSucursalId());
+
+        if (cambioDatosBase) {
+            throw new ValidationException("No se puede cambiar cliente, empleado o sucursal cuando el pedido ya esta en proceso");
+        }
+    }
+
+    private void validarRequisitosEstado(Pedido pedido, String estadoNuevo) {
+        if (!PedidoConstants.ESTADO_BORRADOR.equals(estadoNuevo)
+                && detallePedidoRepository.findByPedidoIdAndDeletedAtIsNull(pedido.getIdPedido()).isEmpty()) {
+            throw new ValidationException("El pedido debe tener al menos un detalle para avanzar de estado");
+        }
+
+        if (PedidoConstants.ESTADO_ENTREGADO.equals(estadoNuevo)
+                && calcularTotalPagado(pedido.getIdPedido()).compareTo(pedido.getTotal()) < 0) {
+            throw new ValidationException("No se puede entregar un pedido con saldo pendiente");
+        }
+    }
+
+    private BigDecimal calcularTotalPagado(Integer pedidoId) {
+        return pagoRepository.findByPedidoIdAndDeletedAtIsNull(pedidoId).stream()
+                .map(pago -> pago.getMonto() == null ? BigDecimal.ZERO : pago.getMonto())
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     private String normalizarEstado(String estado) {

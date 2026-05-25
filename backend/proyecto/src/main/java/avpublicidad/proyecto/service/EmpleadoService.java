@@ -1,11 +1,14 @@
 package avpublicidad.proyecto.service;
 
+import avpublicidad.proyecto.constants.RolConstants;
 import avpublicidad.proyecto.dto.EmpleadoRequest;
 import avpublicidad.proyecto.exception.ResourceNotFoundException;
 import avpublicidad.proyecto.model.Empleado;
+import avpublicidad.proyecto.model.Rol;
 import avpublicidad.proyecto.repository.EmpleadoRepository;
 import avpublicidad.proyecto.repository.RolRepository;
 import avpublicidad.proyecto.repository.SucursalRepository;
+import jakarta.validation.ValidationException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -38,6 +41,7 @@ public class EmpleadoService {
         validarCorreoDisponible(request.getCorreo(), null);
         validarRol(request.getRolId());
         validarSucursal(request.getSucursalIdSucursal());
+        validarReglasNegocio(request);
 
         Empleado empleado = Empleado.builder()
                 .nombre(request.getNombre())
@@ -60,6 +64,8 @@ public class EmpleadoService {
         validarCorreoDisponible(request.getCorreo(), id);
         validarRol(request.getRolId());
         validarSucursal(request.getSucursalIdSucursal());
+        validarReglasNegocio(request);
+        validarNoQuitarUltimoAdministrador(empleado, request.getRolId());
 
         empleado.setNombre(request.getNombre());
         empleado.setApellidoPaterno(request.getApellidoPaterno());
@@ -77,6 +83,7 @@ public class EmpleadoService {
 
     public void eliminar(Integer id) {
         Empleado empleado = obtenerPorId(id);
+        validarNoEliminarUltimoAdministrador(empleado);
         empleado.setDeletedAt(LocalDateTime.now());
         empleadoRepository.save(empleado);
     }
@@ -104,6 +111,51 @@ public class EmpleadoService {
         if (sucursalId != null && !sucursalRepository.existsById(sucursalId)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Sucursal no encontrada");
         }
+    }
+
+    private void validarReglasNegocio(EmpleadoRequest request) {
+        if (request.getHoraEntrada() != null
+                && request.getHoraSalida() != null
+                && !request.getHoraSalida().isAfter(request.getHoraEntrada())) {
+            throw new ValidationException("La hora de salida debe ser posterior a la hora de entrada");
+        }
+
+        if (request.getContrasena() != null
+                && !request.getContrasena().startsWith("$2")
+                && !esContrasenaFuerte(request.getContrasena())) {
+            throw new ValidationException("La contrasena debe tener al menos 8 caracteres, una mayuscula, una minuscula y un numero");
+        }
+    }
+
+    private boolean esContrasenaFuerte(String contrasena) {
+        return contrasena.length() >= 8
+                && contrasena.chars().anyMatch(Character::isUpperCase)
+                && contrasena.chars().anyMatch(Character::isLowerCase)
+                && contrasena.chars().anyMatch(Character::isDigit);
+    }
+
+    private void validarNoQuitarUltimoAdministrador(Empleado empleado, Integer nuevoRolId) {
+        if (empleado.getRolId().equals(nuevoRolId) || !esRolAdministrador(empleado.getRolId())) {
+            return;
+        }
+
+        if (empleadoRepository.countByRolIdAndDeletedAtIsNull(empleado.getRolId()) <= 1) {
+            throw new ValidationException("No se puede cambiar el rol del ultimo administrador");
+        }
+    }
+
+    private void validarNoEliminarUltimoAdministrador(Empleado empleado) {
+        if (esRolAdministrador(empleado.getRolId())
+                && empleadoRepository.countByRolIdAndDeletedAtIsNull(empleado.getRolId()) <= 1) {
+            throw new ValidationException("No se puede eliminar el ultimo administrador");
+        }
+    }
+
+    private boolean esRolAdministrador(Integer rolId) {
+        return rolRepository.findByNombreIgnoreCaseAndDeletedAtIsNull(RolConstants.ADMINISTRADOR)
+                .map(Rol::getIdRol)
+                .filter(rolId::equals)
+                .isPresent();
     }
 
     private String normalizarCorreo(String correo) {

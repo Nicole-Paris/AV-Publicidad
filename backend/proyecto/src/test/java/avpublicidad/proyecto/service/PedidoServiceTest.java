@@ -2,9 +2,12 @@ package avpublicidad.proyecto.service;
 
 import avpublicidad.proyecto.constants.PedidoConstants;
 import avpublicidad.proyecto.dto.PedidoRequest;
+import avpublicidad.proyecto.model.DetallePedido;
 import avpublicidad.proyecto.model.Pedido;
 import avpublicidad.proyecto.repository.ClienteRepository;
+import avpublicidad.proyecto.repository.DetallePedidoRepository;
 import avpublicidad.proyecto.repository.EmpleadoRepository;
+import avpublicidad.proyecto.repository.PagoRepository;
 import avpublicidad.proyecto.repository.PedidoRepository;
 import avpublicidad.proyecto.repository.SucursalRepository;
 import jakarta.validation.ValidationException;
@@ -16,6 +19,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -36,6 +41,12 @@ class PedidoServiceTest {
 
     @Mock
     private SucursalRepository sucursalRepository;
+
+    @Mock
+    private PagoRepository pagoRepository;
+
+    @Mock
+    private DetallePedidoRepository detallePedidoRepository;
 
     @InjectMocks
     private PedidoService pedidoService;
@@ -88,6 +99,44 @@ class PedidoServiceTest {
                 .hasMessageContaining("motivo de cancelacion");
     }
 
+    @Test
+    void actualizar_dePendienteAEnProceso_debePermitirFlujoValido() {
+        PedidoRequest request = requestValido();
+        request.setEstado(PedidoConstants.ESTADO_EN_PROCESO);
+        relacionesExistentes();
+        when(pedidoRepository.findById(1)).thenReturn(Optional.of(pedidoExistente(PedidoConstants.ESTADO_PENDIENTE)));
+        when(detallePedidoRepository.findByPedidoIdAndDeletedAtIsNull(1)).thenReturn(List.of(detallePedido()));
+        when(pedidoRepository.save(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Pedido pedido = pedidoService.actualizar(1, request);
+
+        assertThat(pedido.getEstado()).isEqualTo(PedidoConstants.ESTADO_EN_PROCESO);
+    }
+
+    @Test
+    void actualizar_dePendienteAEntregado_debeRechazarSaltoDeEstado() {
+        PedidoRequest request = requestValido();
+        request.setEstado(PedidoConstants.ESTADO_ENTREGADO);
+        relacionesExistentes();
+        when(pedidoRepository.findById(1)).thenReturn(Optional.of(pedidoExistente(PedidoConstants.ESTADO_PENDIENTE)));
+
+        assertThatThrownBy(() -> pedidoService.actualizar(1, request))
+                .isInstanceOf(ValidationException.class)
+                .hasMessageContaining("no puede cambiar");
+    }
+
+    @Test
+    void actualizar_deCanceladoAPendiente_debeRechazarPorqueCanceladoEsFinal() {
+        PedidoRequest request = requestValido();
+        request.setEstado(PedidoConstants.ESTADO_PENDIENTE);
+        relacionesExistentes();
+        when(pedidoRepository.findById(1)).thenReturn(Optional.of(pedidoExistente(PedidoConstants.ESTADO_CANCELADO)));
+
+        assertThatThrownBy(() -> pedidoService.actualizar(1, request))
+                .isInstanceOf(ValidationException.class)
+                .hasMessageContaining("no puede cambiar");
+    }
+
     private PedidoRequest requestValido() {
         PedidoRequest request = new PedidoRequest();
         request.setFechaPedido(LocalDateTime.of(2026, 5, 19, 10, 0));
@@ -108,5 +157,27 @@ class PedidoServiceTest {
         when(clienteRepository.existsById(1)).thenReturn(true);
         when(empleadoRepository.existsById(1)).thenReturn(true);
         when(sucursalRepository.existsById(1)).thenReturn(true);
+    }
+
+    private Pedido pedidoExistente(String estado) {
+        return Pedido.builder()
+                .idPedido(1)
+                .fechaPedido(LocalDateTime.of(2026, 5, 19, 10, 0))
+                .fechaEntrega(LocalDateTime.of(2026, 5, 20, 18, 0))
+                .estado(estado)
+                .total(new BigDecimal("1500.00"))
+                .clienteId(1)
+                .empleadoId(1)
+                .sucursalId(1)
+                .createdBy(1)
+                .build();
+    }
+
+    private DetallePedido detallePedido() {
+        return DetallePedido.builder()
+                .idDetallePedido(1)
+                .pedidoId(1)
+                .subtotal(new BigDecimal("1500.00"))
+                .build();
     }
 }

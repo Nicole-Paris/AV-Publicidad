@@ -11,4 +11,6 @@ public interface EmpleadoRepository extends JpaRepository<Empleado, Integer> {
     List<Empleado> findByDeletedAtIsNull();
 
     Optional<Empleado> findByCorreo(String correo);
+
+    long countByRolIdAndDeletedAtIsNull(Integer rolId);
 }

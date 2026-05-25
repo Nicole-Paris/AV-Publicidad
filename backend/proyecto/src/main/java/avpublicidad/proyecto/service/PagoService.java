@@ -106,15 +106,46 @@ public class PagoService {
         if (PedidoConstants.ESTADO_CANCELADO.equalsIgnoreCase(pedido.getEstado())) {
             throw new ValidationException("No se pueden registrar pagos en pedidos cancelados");
         }
+        if (PedidoConstants.ESTADO_ENTREGADO.equalsIgnoreCase(pedido.getEstado())) {
+            throw new ValidationException("No se pueden registrar pagos en pedidos entregados");
+        }
+
+        if (request.getFecha() != null && pedido.getFechaPedido() != null
+                && request.getFecha().isBefore(pedido.getFechaPedido().toLocalDate())) {
+            throw new ValidationException("La fecha del pago no puede ser anterior a la fecha del pedido");
+        }
 
         BigDecimal totalPagado = pagoRepository.findByPedidoIdAndDeletedAtIsNull(request.getPedidoId()).stream()
                 .filter(pago -> pagoActualId == null || !pagoActualId.equals(pago.getIdPago()))
                 .map(Pago::getMonto)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
+        BigDecimal saldoPendiente = pedido.getTotal().subtract(totalPagado);
+
         BigDecimal nuevoTotalPagado = totalPagado.add(request.getMonto());
         if (nuevoTotalPagado.compareTo(pedido.getTotal()) > 0) {
             throw new ValidationException("El pago excede el saldo pendiente del pedido");
+        }
+
+        validarConceptoPago(request, saldoPendiente, totalPagado);
+    }
+
+    private void validarConceptoPago(PagoRequest request, BigDecimal saldoPendiente, BigDecimal totalPagado) {
+        String concepto = normalizarConceptoPago(request.getConceptoPago());
+
+        if (PagoConstants.CONCEPTO_ANTICIPO.equals(concepto) && totalPagado.compareTo(BigDecimal.ZERO) > 0) {
+            throw new ValidationException("El anticipo solo puede registrarse como primer pago");
+        }
+
+        if ((PagoConstants.CONCEPTO_LIQUIDACION.equals(concepto)
+                || PagoConstants.CONCEPTO_PAGO_TOTAL.equals(concepto))
+                && request.getMonto().compareTo(saldoPendiente) != 0) {
+            throw new ValidationException("La liquidacion o pago total debe cubrir exactamente el saldo pendiente");
+        }
+
+        if (PagoConstants.CONCEPTO_ABONO_CREDITO.equals(concepto)
+                && request.getMonto().compareTo(saldoPendiente) >= 0) {
+            throw new ValidationException("El abono a credito debe ser menor al saldo pendiente");
         }
     }
 
