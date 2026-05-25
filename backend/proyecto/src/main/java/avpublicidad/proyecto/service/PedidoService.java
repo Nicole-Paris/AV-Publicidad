@@ -14,6 +14,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -38,6 +39,7 @@ public class PedidoService {
 
     public Pedido crear(PedidoRequest request) {
         validarRelaciones(request);
+        validarReglasNegocio(request);
 
         Pedido pedido = Pedido.builder()
                 .fechaPedido(request.getFechaPedido())
@@ -62,6 +64,7 @@ public class PedidoService {
     public Pedido actualizar(Integer id, PedidoRequest request) {
         Pedido pedido = obtenerPorId(id);
         validarRelaciones(request);
+        validarReglasNegocio(request);
 
         pedido.setFechaPedido(request.getFechaPedido());
         pedido.setFechaEntrega(request.getFechaEntrega());
@@ -98,6 +101,24 @@ public class PedidoService {
 
         if (request.getSucursalId() != null && !sucursalRepository.existsById(request.getSucursalId())) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Sucursal no encontrada");
+        }
+    }
+
+    private void validarReglasNegocio(PedidoRequest request) {
+        if (request.getFechaPedido() != null
+                && request.getFechaEntrega() != null
+                && request.getFechaEntrega().isBefore(request.getFechaPedido())) {
+            throw new ValidationException("La fecha de entrega no puede ser anterior a la fecha del pedido");
+        }
+
+        if (request.getTotal() == null || request.getTotal().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ValidationException("El total del pedido debe capturarse manualmente y ser mayor a cero");
+        }
+
+        String estado = normalizarEstado(request.getEstado());
+        if (PedidoConstants.ESTADO_CANCELADO.equals(estado)
+                && (request.getMotivoCancelacion() == null || request.getMotivoCancelacion().isBlank())) {
+            throw new ValidationException("El motivo de cancelacion es obligatorio cuando el pedido esta cancelado");
         }
     }
 
@@ -157,7 +178,10 @@ public class PedidoService {
         if (PedidoConstants.FORMA_PAGO_CREDITO.equalsIgnoreCase(valor)) {
             return PedidoConstants.FORMA_PAGO_CREDITO;
         }
+        if (PedidoConstants.FORMA_PAGO_INTERCAMBIO.equalsIgnoreCase(valor)) {
+            return PedidoConstants.FORMA_PAGO_INTERCAMBIO;
+        }
 
-        throw new ValidationException("La forma de pago debe ser Contado o Credito");
+        throw new ValidationException("La forma de pago debe ser Contado, Credito o Intercambio");
     }
 }
