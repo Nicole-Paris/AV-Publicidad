@@ -225,10 +225,22 @@ CREATE TABLE IF NOT EXISTS `AV`.`cliente` (
   PRIMARY KEY (`id_cliente`),
   UNIQUE INDEX `id_cliente_UNIQUE` (`id_cliente` ASC) VISIBLE,
   UNIQUE INDEX `rfc_UNIQUE` (`rfc` ASC) VISIBLE,
-  INDEX `fk_cliente_delered_by_idx` (`deleted_by` ASC, `updated_by` ASC, `created_by` ASC) VISIBLE,
-  CONSTRAINT `fk_cliente_delered_by`
-    FOREIGN KEY (`deleted_by` , `updated_by` , `created_by`)
-    REFERENCES `AV`.`empleado` (`id_empleado` , `id_empleado` , `id_empleado`)
+  INDEX `fk_cliente_created_by_idx` (`created_by` ASC) VISIBLE,
+  INDEX `fk_cliente_updated_by_idx` (`updated_by` ASC) VISIBLE,
+  INDEX `fk_cliente_deleted_by_idx` (`deleted_by` ASC) VISIBLE,
+  CONSTRAINT `fk_cliente_created_by`
+    FOREIGN KEY (`created_by`)
+    REFERENCES `AV`.`empleado` (`id_empleado`)
+    ON DELETE NO ACTION
+    ON UPDATE NO ACTION,
+  CONSTRAINT `fk_cliente_updated_by`
+    FOREIGN KEY (`updated_by`)
+    REFERENCES `AV`.`empleado` (`id_empleado`)
+    ON DELETE NO ACTION
+    ON UPDATE NO ACTION,
+  CONSTRAINT `fk_cliente_deleted_by`
+    FOREIGN KEY (`deleted_by`)
+    REFERENCES `AV`.`empleado` (`id_empleado`)
     ON DELETE NO ACTION
     ON UPDATE NO ACTION)
 ENGINE = InnoDB
@@ -472,8 +484,9 @@ CREATE TABLE IF NOT EXISTS `AV`.`inventario` (
   UNIQUE INDEX `uk_inventario_material_sucursal` (`material_id` ASC, `sucursal_id` ASC) VISIBLE,
   INDEX `idx_inventario_material` (`material_id` ASC) VISIBLE,
   INDEX `idx_inventario_sucursal` (`sucursal_id` ASC) VISIBLE,
-  INDEX `fk_inventario_deleted_bby_idx` (`deleted_by` ASC, `updated_by` ASC, `created_by` ASC) VISIBLE,
-  UNIQUE INDEX `uq_inventario_material_sucursal` (`material_id` ASC, `sucursal_id` ASC) VISIBLE,
+  INDEX `fk_inventario_created_by_idx` (`created_by` ASC) VISIBLE,
+  INDEX `fk_inventario_updated_by_idx` (`updated_by` ASC) VISIBLE,
+  INDEX `fk_inventario_deleted_by_idx` (`deleted_by` ASC) VISIBLE,
   CONSTRAINT `fk_inventario_material`
     FOREIGN KEY (`material_id`)
     REFERENCES `AV`.`material` (`id_material`)
@@ -484,9 +497,19 @@ CREATE TABLE IF NOT EXISTS `AV`.`inventario` (
     REFERENCES `AV`.`sucursal` (`id_sucursal`)
     ON DELETE RESTRICT
     ON UPDATE CASCADE,
-  CONSTRAINT `fk_inventario_deleted_bby`
-    FOREIGN KEY (`deleted_by` , `updated_by` , `created_by`)
-    REFERENCES `AV`.`empleado` (`id_empleado` , `id_empleado` , `id_empleado`)
+  CONSTRAINT `fk_inventario_created_by`
+    FOREIGN KEY (`created_by`)
+    REFERENCES `AV`.`empleado` (`id_empleado`)
+    ON DELETE NO ACTION
+    ON UPDATE NO ACTION,
+  CONSTRAINT `fk_inventario_updated_by`
+    FOREIGN KEY (`updated_by`)
+    REFERENCES `AV`.`empleado` (`id_empleado`)
+    ON DELETE NO ACTION
+    ON UPDATE NO ACTION,
+  CONSTRAINT `fk_inventario_deleted_by`
+    FOREIGN KEY (`deleted_by`)
+    REFERENCES `AV`.`empleado` (`id_empleado`)
     ON DELETE NO ACTION
     ON UPDATE NO ACTION)
 ENGINE = InnoDB
