@@ -10,6 +10,23 @@ Desde la raiz del proyecto:
 docker build -t patracamiguel/av-db:5.0 ./database
 ```
 
+## Construir y subir para Windows y Mac
+
+Si alguien usa Mac con chip M1/M2/M3, necesita soporte `linux/arm64`.
+Si alguien usa Windows o Intel/AMD, necesita soporte `linux/amd64`.
+
+Para subir una imagen compatible con ambas arquitecturas:
+
+```bash
+docker buildx build --platform linux/amd64,linux/arm64 -t patracamiguel/av-db:5.0 --push ./database
+```
+
+Si estas parado dentro de la carpeta `database`, usa:
+
+```bash
+docker buildx build --platform linux/amd64,linux/arm64 -t patracamiguel/av-db:5.0 --push .
+```
+
 ## Probar localmente
 
 ```bash
@@ -51,9 +68,18 @@ pago
 
 ## Subir a Docker Hub
 
+Para una sola arquitectura local:
+
 ```bash
 docker login
 docker push patracamiguel/av-db:5.0
+```
+
+Para Windows y Mac se recomienda usar `buildx`:
+
+```bash
+docker login
+docker buildx build --platform linux/amd64,linux/arm64 -t patracamiguel/av-db:5.0 --push ./database
 ```
 
 ## Usar en Windows y Mac
@@ -103,8 +129,7 @@ SHOW TABLES;
 Cuando cambie `init.sql`, sube una nueva version:
 
 ```bash
-docker build -t patracamiguel/av-db:5.1 ./database
-docker push patracamiguel/av-db:5.1
+docker buildx build --platform linux/amd64,linux/arm64 -t patracamiguel/av-db:5.1 --push ./database
 ```
 
 Luego cambia `docker-compose.yml`:
