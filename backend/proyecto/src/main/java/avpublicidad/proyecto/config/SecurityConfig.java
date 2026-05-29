@@ -40,6 +40,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/auth/login").permitAll()
                 .requestMatchers("/auth/logout").permitAll()
+                .requestMatchers(HttpMethod.GET, "/sucursales").permitAll()
                 .requestMatchers(HttpMethod.GET, "/**").hasAnyAuthority(AUTHORITY_ADMINISTRADOR, AUTHORITY_EMPLEADO)
                 .requestMatchers(HttpMethod.POST, "/clientes").hasAnyAuthority(AUTHORITY_ADMINISTRADOR, AUTHORITY_EMPLEADO)
                 .requestMatchers(HttpMethod.POST, "/pagos").hasAnyAuthority(AUTHORITY_ADMINISTRADOR, AUTHORITY_EMPLEADO)

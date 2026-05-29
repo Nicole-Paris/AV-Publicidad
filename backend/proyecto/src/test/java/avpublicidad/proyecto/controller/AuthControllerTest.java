@@ -43,7 +43,9 @@ class AuthControllerTest {
                 "Carlos Ramirez Lopez",
                 "carlos@av.com",
                 RolConstants.ID_ADMINISTRADOR,
-                RolConstants.ADMINISTRADOR
+                RolConstants.ADMINISTRADOR,
+                1,
+                "Sucursal Centro"
         ));
 
         mockMvc.perform(post("/auth/login")
@@ -111,11 +113,13 @@ class AuthControllerTest {
         LoginJson request = new LoginJson();
         request.correo = "carlos@av.com";
         request.contrasena = "Password123";
+        request.sucursalIdSucursal = 1;
         return request;
     }
 
     private static class LoginJson {
         public String correo;
         public String contrasena;
+        public Integer sucursalIdSucursal;
     }
 }

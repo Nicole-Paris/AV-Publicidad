@@ -19,7 +19,9 @@ export function AuthProvider({ children }) {
         nombre: auth.nombre,
         correo: auth.correo,
         rolId: auth.rolId,
-        rol: auth.rol
+        rol: auth.rol,
+        sucursalIdSucursal: auth.sucursalIdSucursal,
+        sucursal: auth.sucursal
       };
 
       storeSession(nextSession);

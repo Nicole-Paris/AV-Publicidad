@@ -5,8 +5,10 @@ import avpublicidad.proyecto.dto.LoginRequest;
 import avpublicidad.proyecto.dto.LogoutResponse;
 import avpublicidad.proyecto.model.Empleado;
 import avpublicidad.proyecto.model.Rol;
+import avpublicidad.proyecto.model.Sucursal;
 import avpublicidad.proyecto.repository.EmpleadoRepository;
 import avpublicidad.proyecto.repository.RolRepository;
+import avpublicidad.proyecto.repository.SucursalRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -19,6 +21,7 @@ public class AuthService {
 
     private final EmpleadoRepository empleadoRepository;
     private final RolRepository rolRepository;
+    private final SucursalRepository sucursalRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
 
@@ -31,6 +34,14 @@ public class AuthService {
         if (!contrasenaValida(request.getContrasena(), empleado.getContrasena())) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Credenciales invalidas");
         }
+
+        if (!request.getSucursalIdSucursal().equals(empleado.getSucursalIdSucursal())) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "El empleado no pertenece a la sucursal seleccionada");
+        }
+
+        Sucursal sucursal = sucursalRepository.findById(request.getSucursalIdSucursal())
+                .filter(valor -> valor.getDeletedAt() == null)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Sucursal invalida"));
 
         String rol = rolRepository.findById(empleado.getRolId())
                 .filter(valor -> valor.getDeletedAt() == null)
@@ -47,7 +58,9 @@ public class AuthService {
                 nombreCompleto,
                 empleado.getCorreo(),
                 empleado.getRolId(),
-                rol
+                rol,
+                sucursal.getIdSucursal(),
+                sucursal.getNombre()
         );
     }
 
