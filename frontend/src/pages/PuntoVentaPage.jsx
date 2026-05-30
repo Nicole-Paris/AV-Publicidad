@@ -103,7 +103,7 @@ export function PuntoVentaPage() {
 
   const canAdd =
     detalle.servicioId &&
-    Number(detalle.cantidad) > 0 &&
+    cantidadValida() &&
     Number(detalle.precioUnitario) > 0;
   const canConfirm =
     pedido.clienteId &&
@@ -120,7 +120,30 @@ export function PuntoVentaPage() {
 
   function updateDetalle(event) {
     const { name, value } = event.target;
-    setDetalle((current) => ({ ...current, [name]: value }));
+    setDetalle((current) => {
+      if (name === "cantidad" && current.unidadDetalle === "Piezas") {
+        return { ...current, cantidad: value.replace(/\D/g, "") };
+      }
+
+      if (name === "unidadDetalle" && value === "Piezas") {
+        return {
+          ...current,
+          unidadDetalle: value,
+          cantidad: current.cantidad ? String(Math.max(1, Math.trunc(Number(current.cantidad)))) : ""
+        };
+      }
+
+      return { ...current, [name]: value };
+    });
+  }
+
+  function cantidadValida() {
+    const cantidad = Number(detalle.cantidad);
+    if (cantidad <= 0) {
+      return false;
+    }
+
+    return detalle.unidadDetalle !== "Piezas" || Number.isInteger(cantidad);
   }
 
   function agregarServicio() {
@@ -128,7 +151,11 @@ export function PuntoVentaPage() {
     setSuccess("");
 
     if (!canAdd) {
-      setError("Selecciona un servicio, cantidad y precio unitario validos.");
+      setError(
+        detalle.unidadDetalle === "Piezas"
+          ? "Para piezas, la cantidad debe ser un numero entero."
+          : "Selecciona un servicio, cantidad y precio unitario validos."
+      );
       return;
     }
 
@@ -309,11 +336,11 @@ export function PuntoVentaPage() {
             <label className="pos-field floating">
               <span>Cantidad</span>
               <input
-                min="0.01"
+                inputMode={detalle.unidadDetalle === "Piezas" ? "numeric" : "decimal"}
                 name="cantidad"
                 onChange={updateDetalle}
-                step="0.01"
-                type="number"
+                pattern={detalle.unidadDetalle === "Piezas" ? "[0-9]*" : undefined}
+                type="text"
                 value={detalle.cantidad}
               />
             </label>
@@ -321,12 +348,11 @@ export function PuntoVentaPage() {
             <label className="pos-field floating">
               <span>Precio Unitario</span>
               <input
-                min="0.01"
+                inputMode="decimal"
                 name="precioUnitario"
                 onChange={updateDetalle}
                 placeholder="$ 0"
-                step="0.01"
-                type="number"
+                type="text"
                 value={detalle.precioUnitario}
               />
             </label>
