@@ -43,7 +43,9 @@ class AuthControllerTest {
                 "Carlos Ramirez Lopez",
                 "carlos@av.com",
                 RolConstants.ID_ADMINISTRADOR,
-                RolConstants.ADMINISTRADOR
+                RolConstants.ADMINISTRADOR,
+                1,
+                "Sucursal Centro"
         ));
 
         mockMvc.perform(post("/auth/login")

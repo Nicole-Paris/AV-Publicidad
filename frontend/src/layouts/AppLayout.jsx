@@ -2,16 +2,13 @@ import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext.jsx";
 
 const links = [
-  { to: "/dashboard", label: "Dashboard" },
-  { to: "/clientes", label: "Clientes" },
-  { to: "/pedidos", label: "Pedidos" },
-  { to: "/pagos", label: "Pagos" },
-  { to: "/inventario", label: "Inventario" },
-  { to: "/materiales", label: "Materiales" },
-  { to: "/servicios", label: "Servicios" },
-  { to: "/empleados", label: "Empleados" },
-  { to: "/cortes-caja", label: "Corte caja" },
-  { to: "/configuracion", label: "Configuracion" }
+  { to: "/punto-venta", label: "Punto de Venta", icon: "cart" },
+  { to: "/pedidos", label: "Pedidos", icon: "doc" },
+  { to: "/clientes", label: "Clientes", icon: "users" },
+  { to: "/inventario", label: "Inventario", icon: "box" },
+  { to: "/cortes-caja", label: "Caja y Reportes", icon: "money" },
+  { to: "/reportes", label: "Reportes", icon: "chart" },
+  { to: "/configuracion", label: "Configuración", icon: "gear" }
 ];
 
 export function AppLayout() {
@@ -21,16 +18,14 @@ export function AppLayout() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand">
-          <span className="brand-mark">AV</span>
-          <div>
-            <strong>AV Publicidad</strong>
-            <small>{session?.rol || "Usuario"}</small>
-          </div>
+          <span className="brand-mark">av</span>
+          <strong>AV Publicidad</strong>
         </div>
 
         <nav className="nav-list">
           {links.map((link) => (
             <NavLink key={link.to} to={link.to}>
+              <span className={`nav-icon ${link.icon}`} aria-hidden="true" />
               {link.label}
             </NavLink>
           ))}
@@ -39,13 +34,20 @@ export function AppLayout() {
 
       <div className="workspace">
         <header className="topbar">
-          <div>
-            <span className="eyebrow">Sesion activa</span>
-            <strong>{session?.nombre}</strong>
+          <div className="topbar-title">
+            <span aria-hidden="true">‹</span>
+            <strong>Punto de Venta</strong>
           </div>
-          <button className="ghost-button" type="button" onClick={logout}>
-            Cerrar sesion
-          </button>
+
+          <div className="topbar-actions">
+            <span className="branch-pill">
+              <span aria-hidden="true">▤</span>
+              {session?.sucursal || "Sucursal Centro - Coatzacoalcos"}
+            </span>
+            <button className="avatar-button" title="Cerrar sesión" type="button" onClick={logout}>
+              {(session?.nombre || "A").charAt(0)}
+            </button>
+          </div>
         </header>
 
         <main className="content">

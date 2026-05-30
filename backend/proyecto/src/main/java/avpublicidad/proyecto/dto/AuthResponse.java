@@ -14,4 +14,6 @@ public class AuthResponse {
     private String correo;
     private Integer rolId;
     private String rol;
+    private Integer sucursalIdSucursal;
+    private String sucursal;
 }

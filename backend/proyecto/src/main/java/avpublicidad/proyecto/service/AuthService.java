@@ -5,8 +5,10 @@ import avpublicidad.proyecto.dto.LoginRequest;
 import avpublicidad.proyecto.dto.LogoutResponse;
 import avpublicidad.proyecto.model.Empleado;
 import avpublicidad.proyecto.model.Rol;
+import avpublicidad.proyecto.model.Sucursal;
 import avpublicidad.proyecto.repository.EmpleadoRepository;
 import avpublicidad.proyecto.repository.RolRepository;
+import avpublicidad.proyecto.repository.SucursalRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -19,6 +21,7 @@ public class AuthService {
 
     private final EmpleadoRepository empleadoRepository;
     private final RolRepository rolRepository;
+    private final SucursalRepository sucursalRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
 
@@ -36,6 +39,9 @@ public class AuthService {
                 .filter(valor -> valor.getDeletedAt() == null)
                 .map(Rol::getNombre)
                 .orElse("Sin rol");
+        Sucursal sucursal = sucursalRepository.findById(empleado.getSucursalIdSucursal())
+                .filter(valor -> valor.getDeletedAt() == null)
+                .orElse(null);
 
         String token = jwtService.generarToken(empleado, rol);
         String nombreCompleto = construirNombreCompleto(empleado);
@@ -47,7 +53,9 @@ public class AuthService {
                 nombreCompleto,
                 empleado.getCorreo(),
                 empleado.getRolId(),
-                rol
+                rol,
+                empleado.getSucursalIdSucursal(),
+                sucursal == null ? null : sucursal.getNombre()
         );
     }
 
