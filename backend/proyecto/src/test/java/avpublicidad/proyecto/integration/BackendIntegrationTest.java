@@ -371,7 +371,8 @@ class BackendIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of(
                                 "correo", "admin@av.com",
-                                "contrasena", "Admin123"
+                                "contrasena", "Admin123",
+                                "sucursalIdSucursal", sucursal.getIdSucursal()
                         ))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.token").isString())
