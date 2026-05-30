@@ -4,6 +4,7 @@ import { AppLayout } from "../layouts/AppLayout.jsx";
 import { DashboardPage } from "../pages/DashboardPage.jsx";
 import { LoginPage } from "../pages/LoginPage.jsx";
 import { PlaceholderPage } from "../pages/PlaceholderPage.jsx";
+import { PuntoVentaPage } from "../pages/PuntoVentaPage.jsx";
 
 function ProtectedRoute({ children }) {
   const location = useLocation();
@@ -48,10 +49,12 @@ export function AppRoutes() {
       >
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<DashboardPage />} />
+        <Route path="punto-venta" element={<PuntoVentaPage />} />
         <Route path="clientes" element={<PlaceholderPage title="Clientes" />} />
         <Route path="pedidos" element={<PlaceholderPage title="Pedidos" />} />
         <Route path="pagos" element={<PlaceholderPage title="Pagos" />} />
         <Route path="inventario" element={<PlaceholderPage title="Inventario" />} />
+        <Route path="reportes" element={<PlaceholderPage title="Reportes" />} />
         <Route path="materiales" element={<PlaceholderPage title="Materiales" />} />
         <Route path="servicios" element={<PlaceholderPage title="Servicios" />} />
         <Route path="empleados" element={<PlaceholderPage title="Empleados" />} />
