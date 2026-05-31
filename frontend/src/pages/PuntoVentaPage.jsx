@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { listarClientes, listarServicios, listarSucursales } from "../api/catalogApi.js";
 import { actualizarPedido, crearDetallePedido, crearPedido } from "../api/pedidoApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
+import { AppIcon } from "../components/AppIcon.jsx";
 
 const IVA = 0.16;
 
@@ -27,9 +28,18 @@ function nombreCliente(cliente) {
   return [cliente.nombre, cliente.apellidoPaterno, cliente.apellidoMaterno].filter(Boolean).join(" ");
 }
 
+function normalizarTexto(value) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
 export function PuntoVentaPage() {
   const { session } = useAuth();
   const [clientes, setClientes] = useState([]);
+  const [clienteSearch, setClienteSearch] = useState("");
+  const [clienteSuggestionsOpen, setClienteSuggestionsOpen] = useState(false);
   const [servicios, setServicios] = useState([]);
   const [sucursales, setSucursales] = useState([]);
   const [loadingCatalogos, setLoadingCatalogos] = useState(true);
@@ -94,6 +104,17 @@ export function PuntoVentaPage() {
     return sucursales.find((sucursal) => sucursal.idSucursal === id) || sucursales[0];
   }, [session, sucursales]);
 
+  const clientesFiltrados = useMemo(() => {
+    const query = normalizarTexto(clienteSearch.trim());
+    if (!query) {
+      return [];
+    }
+
+    return clientes
+      .filter((cliente) => normalizarTexto(nombreCliente(cliente)).includes(query))
+      .slice(0, 6);
+  }, [clienteSearch, clientes]);
+
   const subtotal = useMemo(
     () => items.reduce((total, item) => total + item.subtotal, 0),
     [items]
@@ -116,6 +137,18 @@ export function PuntoVentaPage() {
   function updatePedido(event) {
     const { name, value } = event.target;
     setPedido((current) => ({ ...current, [name]: value }));
+  }
+
+  function updateClienteSearch(event) {
+    setClienteSearch(event.target.value);
+    setClienteSuggestionsOpen(true);
+    setPedido((current) => ({ ...current, clienteId: "" }));
+  }
+
+  function seleccionarCliente(cliente) {
+    setClienteSearch(nombreCliente(cliente));
+    setClienteSuggestionsOpen(false);
+    setPedido((current) => ({ ...current, clienteId: String(cliente.idCliente) }));
   }
 
   function updateDetalle(event) {
@@ -244,6 +277,7 @@ export function PuntoVentaPage() {
         formaPago: "Contado",
         fechaEntrega: localDate(1)
       });
+      setClienteSearch("");
       setItems([]);
     } catch (err) {
       setError(err.message);
@@ -255,7 +289,6 @@ export function PuntoVentaPage() {
   return (
     <section className="pos-page">
       <div className="pos-title">
-        <span className="title-cart" aria-hidden="true" />
         <h1>Nuevo Pedido</h1>
       </div>
 
@@ -267,20 +300,37 @@ export function PuntoVentaPage() {
         <section className="pos-card order-card">
           <h2>Información del Pedido</h2>
 
-          <label className="pos-field">
-            <select
+          <label className="pos-field search-field autocomplete-field">
+            <AppIcon name="search" size={18} />
+            <input
               disabled={loadingCatalogos}
-              name="clienteId"
-              onChange={updatePedido}
-              value={pedido.clienteId}
-            >
-              <option value="">Buscar Cliente</option>
-              {clientes.map((cliente) => (
-                <option key={cliente.idCliente} value={cliente.idCliente}>
-                  {nombreCliente(cliente)}
-                </option>
-              ))}
-            </select>
+              onBlur={() => setTimeout(() => setClienteSuggestionsOpen(false), 120)}
+              onChange={updateClienteSearch}
+              onFocus={() => setClienteSuggestionsOpen(true)}
+              placeholder="Buscar cliente por nombre"
+              type="search"
+              value={clienteSearch}
+            />
+            {clienteSuggestionsOpen && clienteSearch.trim() && (
+              <div className="client-suggestions" role="listbox">
+                {clientesFiltrados.length > 0 ? (
+                  clientesFiltrados.map((cliente) => (
+                    <button
+                      key={cliente.idCliente}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => seleccionarCliente(cliente)}
+                      role="option"
+                      type="button"
+                    >
+                      <strong>{nombreCliente(cliente)}</strong>
+                      <span>{cliente.telefono || "Sin telefono"}</span>
+                    </button>
+                  ))
+                ) : (
+                  <span className="client-suggestions-empty">Sin coincidencias</span>
+                )}
+              </div>
+            )}
           </label>
 
           <label className="pos-field floating">

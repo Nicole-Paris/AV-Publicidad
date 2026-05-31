@@ -47,9 +47,6 @@ public class AuthService {
                 .filter(valor -> valor.getDeletedAt() == null)
                 .map(Rol::getNombre)
                 .orElse("Sin rol");
-        Sucursal sucursal = sucursalRepository.findById(empleado.getSucursalIdSucursal())
-                .filter(valor -> valor.getDeletedAt() == null)
-                .orElse(null);
 
         String token = jwtService.generarToken(empleado, rol);
         String nombreCompleto = construirNombreCompleto(empleado);
