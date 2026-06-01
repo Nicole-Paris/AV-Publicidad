@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import {
   listarCategoriasMaterial,
   listarMateriales,
   crearMaterial,
+  crearCategoriaMaterial,
   listarInventarios,
   crearInventario,
   listarMovimientos,
@@ -18,7 +19,8 @@ function money(value) {
 }
 
 function normalizarTexto(value) {
-  return value
+  return (value || "")
+    .toString()
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
@@ -28,6 +30,86 @@ function nowLocalDateTime() {
   const d = new Date();
   d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
   return d.toISOString().slice(0, 16);
+}
+
+/* Componente interno: BuscadorMaterial */
+function BuscadorMaterial({ materiales, value, onChange, placeholder = "Escribe el nombre..." }) {
+  const [query, setQuery] = useState(value || "");
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    setQuery(value || "");
+  }, [value]);
+
+  useEffect(() => {
+    function onDoc(e) {
+      if (!ref.current) return;
+      if (!ref.current.contains(e.target)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("click", onDoc);
+    return () => document.removeEventListener("click", onDoc);
+  }, []);
+
+  const matches = useMemo(() => {
+    const q = normalizarTexto(query.trim());
+    if (!q) return [];
+    return materiales.filter((m) => normalizarTexto(m.nombre).includes(q));
+  }, [materiales, query]);
+
+  function handleChange(e) {
+    const v = e.target.value;
+    setQuery(v);
+    onChange(v);
+    setOpen(Boolean(v.trim() && matches.length > 0));
+  }
+
+  function handleSelect(name) {
+    setQuery(name);
+    onChange(name);
+    setOpen(false);
+  }
+
+  return (
+    <div style={{ position: "relative" }} ref={ref}>
+      <input
+        type="text"
+        placeholder={placeholder}
+        value={query}
+        onChange={handleChange}
+        onFocus={() => setOpen(Boolean(query.trim() && matches.length > 0))}
+      />
+      {open && matches.length > 0 && (
+        <div
+          style={{
+            position: "absolute",
+            zIndex: 10,
+            background: "#fff",
+            border: "1px solid #e2e2e2",
+            borderRadius: 8,
+            maxHeight: 200,
+            overflowY: "auto",
+            marginTop: 8,
+            left: 0,
+            right: 0,
+            boxShadow: "0 6px 20px rgba(2,6,23,0.08)"
+          }}
+        >
+          {matches.map((m) => (
+            <div
+              key={m.idMaterial || m.id}
+              onClick={() => handleSelect(m.nombre)}
+              style={{ padding: "10px 12px", cursor: "pointer", borderBottom: "1px solid #f4f4f4" }}
+            >
+              {m.nombre}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function InventarioPage() {
@@ -48,16 +130,24 @@ export function InventarioPage() {
   const [buscar, setBuscar] = useState("");
   const [categoriaFiltro, setCategoriaFiltro] = useState("");
 
+  const [nuevaCat, setNuevaCat] = useState({ visible: false, nombre: "", descripcion: "" });
+
+  // modal error
+  const [modalError, setModalError] = useState("");
+
+  // nueva unidad
+  const [nuevaUnidad, setNuevaUnidad] = useState({ visible: false, nombre: "" });
+  const [unidadesExtra, setUnidadesExtra] = useState([]);
+
   const [formulario, setFormulario] = useState({
     // materiales
+    sucursalId: "",
     nombre: "",
     unidad: "Metros",
     costoUnitario: "",
     categoriaMaterialId: "",
     estado: "Disponible",
-    // stock
-    materialId: "",
-    sucursalId: "",
+    // stock moved into material form
     stockActual: "",
     stockMinimo: "",
     // movimiento
@@ -65,8 +155,21 @@ export function InventarioPage() {
     tipo: "Entrada",
     cantidad: "",
     motivo: "",
-    fecha: nowLocalDateTime()
+    fecha: nowLocalDateTime(),
+    // shared
+    nombreMaterial: ""
   });
+
+  // helpers para notificaciones temporales
+  function mostrarError(msg) {
+    setError("");
+    setModalError(msg);
+  }
+  function mostrarSuccess(msg) {
+    setSuccess(msg);
+    setError("");
+    setTimeout(() => setSuccess(""), 2000);
+  }
 
   useEffect(() => {
     let active = true;
@@ -88,7 +191,7 @@ export function InventarioPage() {
         setMovimientos(movs);
         setSucursales(sucs);
       } catch (err) {
-        if (active) setError(err.message || String(err));
+        if (active) mostrarError(err.message || String(err));
       } finally {
         if (active) setLoading(false);
       }
@@ -113,65 +216,112 @@ export function InventarioPage() {
   }
 
   // acciones de guardado
-  async function guardarMaterial(e) {
-    e?.preventDefault();
-    setError("");
-    setSuccess("");
-    if (!formulario.nombre || !formulario.costoUnitario || !formulario.categoriaMaterialId) {
-      setError("Completa nombre, costo y categoría.");
+  async function guardarNuevaCategoria() {
+    if (!nuevaCat.nombre.trim()) {
+      mostrarError("Escribe un nombre para la categoría.");
       return;
     }
     setSaving(true);
+    setError("");
     try {
-      await crearMaterial({
-        nombre: formulario.nombre,
-        unidad: formulario.unidad,
-        costoUnitario: Number(formulario.costoUnitario),
-        categoriaMaterialId: Number(formulario.categoriaMaterialId),
-        estado: formulario.estado,
+      const creada = await crearCategoriaMaterial({
+        nombre: nuevaCat.nombre.trim(),
+        descripcion: nuevaCat.descripcion.trim(),
+        estado: "Activo",
         createdBy: session.empleadoId
       });
-      const mats = await listarMateriales();
-      setMateriales(mats);
-      setFormulario((f) => ({
-        ...f,
-        nombre: "",
-        unidad: "Metros",
-        costoUnitario: "",
-        categoriaMaterialId: "",
-        estado: "Disponible"
-      }));
-      setSuccess("Material creado correctamente.");
+      const cats = await listarCategoriasMaterial();
+      setCategorias(cats);
+      // seleccionar automáticamente la categoría recién creada
+      const nueva = cats.find(c => (c.nombre || "").trim() === nuevaCat.nombre.trim());
+      if (nueva) setFormulario(f => ({ ...f, categoriaMaterialId: nueva.idCategoriaMaterial || nueva.id }));
+      setNuevaCat({ visible: false, nombre: "", descripcion: "" });
+      mostrarSuccess("Categoría creada y seleccionada.");
     } catch (err) {
-      setError(err.message || String(err));
+      mostrarError(err.message || String(err));
     } finally {
       setSaving(false);
     }
   }
 
-  async function guardarInventario(e) {
+  function guardarNuevaUnidad() {
+    if (!nuevaUnidad.nombre.trim()) {
+      mostrarError("Escribe un nombre para la unidad.");
+      return;
+    }
+    const nombre = nuevaUnidad.nombre.trim();
+    setUnidadesExtra(u => [...u, nombre]);
+    setFormulario(f => ({ ...f, unidad: nombre }));
+    setNuevaUnidad({ visible: false, nombre: "" });
+  }
+
+  async function guardarMaterial(e) {
     e?.preventDefault();
     setError("");
     setSuccess("");
-    if (!formulario.materialId || !formulario.sucursalId) {
-      setError("Selecciona material y sucursal.");
+    if (!formulario.sucursalId) {
+      mostrarError("Selecciona una sucursal.");
+      return;
+    }
+    if (!formulario.nombre || !formulario.costoUnitario || !formulario.categoriaMaterialId) {
+      mostrarError("Completa nombre, costo y categoría.");
       return;
     }
     setSaving(true);
     try {
-      await crearInventario({
-        stockActual: Number(formulario.stockActual || 0),
-        stockMinimo: Number(formulario.stockMinimo || 0),
-        materialId: Number(formulario.materialId),
+      const creada = await crearMaterial({
+        nombre: formulario.nombre,
+        unidad: formulario.unidad,
+        costoUnitario: Number(formulario.costoUnitario),
+        categoriaMaterialId: Number(formulario.categoriaMaterialId),
+        estado: formulario.estado,
         sucursalId: Number(formulario.sucursalId),
         createdBy: session.empleadoId
       });
-      const invs = await listarInventarios();
+
+      // crear inventario inicial para el material recién creado
+      const idMaterialNuevo = creada.idMaterial || creada.id;
+      if (idMaterialNuevo) {
+        await crearInventario({
+          stockActual: Number(formulario.stockActual || 0),
+          stockMinimo: Number(formulario.stockMinimo || 0),
+          materialId: Number(idMaterialNuevo),
+          sucursalId: Number(formulario.sucursalId),
+          createdBy: session.empleadoId
+        });
+      }
+
+      // recargar todo en paralelo
+      const [cats, mats, invs, movs, sucs] = await Promise.all([
+        listarCategoriasMaterial(),
+        listarMateriales(),
+        listarInventarios(),
+        listarMovimientos(),
+        listarSucursales()
+      ]);
+      setCategorias(cats);
+      setMateriales(mats);
       setInventarios(invs);
-      setFormulario((f) => ({ ...f, materialId: "", sucursalId: "", stockActual: "", stockMinimo: "" }));
-      setSuccess("Inventario registrado correctamente.");
+      setMovimientos(movs);
+      setSucursales(sucs);
+
+      // limpiar y cerrar
+      setFormulario((f) => ({
+        ...f,
+        sucursalId: "",
+        nombre: "",
+        unidad: "Metros",
+        costoUnitario: "",
+        categoriaMaterialId: "",
+        estado: "Disponible",
+        nombreMaterial: "",
+        stockActual: "",
+        stockMinimo: ""
+      }));
+      setFormularioAbierto(false);
+      mostrarSuccess("Material creado correctamente.");
     } catch (err) {
-      setError(err.message || String(err));
+      mostrarError(err.message || String(err));
     } finally {
       setSaving(false);
     }
@@ -181,26 +331,72 @@ export function InventarioPage() {
     e?.preventDefault();
     setError("");
     setSuccess("");
-    if (!formulario.inventarioId || !formulario.cantidad) {
-      setError("Selecciona inventario y cantidad.");
+    if (!formulario.nombreMaterial || !formulario.cantidad || !formulario.sucursalId) {
+      mostrarError("Selecciona material, sucursal y cantidad.");
       return;
     }
+    if (!formulario.motivo || !formulario.motivo.trim()) {
+      mostrarError("El motivo es obligatorio.");
+      return;
+    }
+
+    // comprobar si el material se mide en piezas (sin decimales)
+    const matSeleccionado = materiales.find(m => normalizarTexto(m.nombre) === normalizarTexto((formulario.nombreMaterial || "").trim()));
+    const esPiezas = matSeleccionado && normalizarTexto(matSeleccionado.unidad || "").includes("piez");
+
+    if (esPiezas && String(formulario.cantidad).includes(".")) {
+      mostrarError("Este material se mide en piezas, no se permiten decimales.");
+      return;
+    }
+
     setSaving(true);
     try {
+      const mat = materiales.find(
+        (m) => normalizarTexto(m.nombre) === normalizarTexto((formulario.nombreMaterial || "").trim())
+      );
+      if (!mat) {
+        mostrarError("Material no encontrado.");
+        setSaving(false);
+        return;
+      }
+      const inv = inventarios.find(
+        (i) =>
+          Number(i.materialId) === Number(mat.idMaterial) &&
+          Number(i.sucursalId) === Number(formulario.sucursalId)
+      );
+      if (!inv) {
+        mostrarError("No hay inventario registrado para ese material en esa sucursal.");
+        setSaving(false);
+        return;
+      }
       await crearMovimiento({
         cantidad: Number(formulario.cantidad),
         fecha: formulario.fecha,
         tipo: formulario.tipo,
         motivo: formulario.motivo,
-        inventarioId: Number(formulario.inventarioId),
+        inventarioId: Number(inv.idInventario),
         createdBy: session.empleadoId
       });
-      const movs = await listarMovimientos();
+
+      // recargar todo en paralelo
+      const [cats, mats, invs, movs, sucs] = await Promise.all([
+        listarCategoriasMaterial(),
+        listarMateriales(),
+        listarInventarios(),
+        listarMovimientos(),
+        listarSucursales()
+      ]);
+      setCategorias(cats);
+      setMateriales(mats);
+      setInventarios(invs);
       setMovimientos(movs);
-      setFormulario((f) => ({ ...f, inventarioId: "", tipo: "Entrada", cantidad: "", motivo: "", fecha: nowLocalDateTime() }));
-      setSuccess("Movimiento registrado correctamente.");
+      setSucursales(sucs);
+
+      setFormulario((f) => ({ ...f, nombreMaterial: "", inventarioId: "", tipo: "Entrada", cantidad: "", motivo: "", fecha: nowLocalDateTime(), sucursalId: "" }));
+      setFormularioAbierto(false);
+      mostrarSuccess("Movimiento registrado correctamente.");
     } catch (err) {
-      setError(err.message || String(err));
+      mostrarError(err.message || String(err));
     } finally {
       setSaving(false);
     }
@@ -230,17 +426,16 @@ export function InventarioPage() {
           type="button"
           disabled={loading}
         >
-          {tabActivo === "materiales" ? "+ Nuevo Material" : tabActivo === "stock" ? "Registrar Stock" : "Registrar Movimiento"}
+          {tabActivo === "materiales" ? "+ Nuevo Material" : "Registrar Movimiento"}
         </button>
       </div>
 
-      {(error || success) && (
-        <div className={error ? "pos-alert error" : "pos-alert success"}>{error || success}</div>
+      {success && (
+        <div className="pos-alert success">{success}</div>
       )}
 
       <div className="inv-tabs">
         <button className={tabActivo === "materiales" ? "inv-tab active" : "inv-tab"} onClick={() => setTabActivo("materiales")} type="button">Materiales</button>
-        <button className={tabActivo === "stock" ? "inv-tab active" : "inv-tab"} onClick={() => setTabActivo("stock")} type="button">Stock</button>
         <button className={tabActivo === "movimientos" ? "inv-tab active" : "inv-tab"} onClick={() => setTabActivo("movimientos")} type="button">Movimientos</button>
       </div>
 
@@ -314,6 +509,14 @@ export function InventarioPage() {
               <h2>Nuevo Material</h2>
               <form onSubmit={guardarMaterial}>
                 <label className="pos-field floating">
+                  <span>Sucursal</span>
+                  <select value={formulario.sucursalId} onChange={(e) => setFormulario((f) => ({ ...f, sucursalId: e.target.value }))}>
+                    <option value="">Selecciona</option>
+                    {sucursales.map((s) => <option key={s.idSucursal} value={s.idSucursal}>{s.nombre}</option>)}
+                  </select>
+                </label>
+
+                <label className="pos-field floating">
                   <span>Nombre</span>
                   <input name="nombre" value={formulario.nombre} onChange={(e) => setFormulario((f) => ({ ...f, nombre: e.target.value }))} type="text" />
                 </label>
@@ -321,12 +524,21 @@ export function InventarioPage() {
                 <div className="pos-field-row">
                   <label className="pos-field floating">
                     <span>Unidad</span>
-                    <select name="unidad" value={formulario.unidad} onChange={(e) => setFormulario((f) => ({ ...f, unidad: e.target.value }))}>
+                    <select name="unidad" value={formulario.unidad} onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === "__nueva_unidad__") {
+                        setNuevaUnidad({ visible: true, nombre: "" });
+                        return;
+                      }
+                      setFormulario((f) => ({ ...f, unidad: v }));
+                    }}>
                       <option>Metros</option>
                       <option>Piezas</option>
                       <option>Litros</option>
                       <option>Kg</option>
                       <option>Rollos</option>
+                      {unidadesExtra.map(u => <option key={u} value={u}>{u}</option>)}
+                      <option value="__nueva_unidad__">+ Nueva unidad...</option>
                     </select>
                   </label>
 
@@ -339,11 +551,23 @@ export function InventarioPage() {
                 <div className="pos-field-row">
                   <label className="pos-field floating">
                     <span>Categoría</span>
-                    <select value={formulario.categoriaMaterialId} onChange={(e) => setFormulario((f) => ({ ...f, categoriaMaterialId: e.target.value }))}>
+                    <select
+                      value={formulario.categoriaMaterialId}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v === "__nueva__") {
+                          setNuevaCat(c => ({ ...c, visible: true }));
+                          setFormulario(f => ({ ...f, categoriaMaterialId: "" }));
+                          return;
+                        }
+                        setFormulario((f) => ({ ...f, categoriaMaterialId: v }));
+                      }}
+                    >
                       <option value="">Selecciona</option>
                       {categorias.map((c) => (
                         <option key={c.idCategoriaMaterial || c.id} value={c.idCategoriaMaterial || c.id}>{c.nombre || c.descripcion || c.name}</option>
                       ))}
+                      <option value="__nueva__">+ Nueva categoría...</option>
                     </select>
                   </label>
 
@@ -357,81 +581,14 @@ export function InventarioPage() {
                   </label>
                 </div>
 
-                <div style={{ display: "flex", gap: 12, marginTop: 12 }}>
-                  <button className="primary-button" type="submit" disabled={saving}>{saving ? "Guardando..." : "Guardar"}</button>
-                  <button className="ghost-button" type="button" onClick={cancelarFormulario}>Cancelar</button>
-                </div>
-              </form>
-            </section>
-          )}
-        </>
-      )}
-
-      {/* Stock */}
-      {tabActivo === "stock" && (
-        <>
-          <div className="inv-toolbar">
-            <div style={{ flex: 1 }} />
-          </div>
-
-          <div className="inv-table-wrap">
-            <table className="inv-table">
-              <thead>
-                <tr>
-                  <th>Material</th>
-                  <th>Sucursal</th>
-                  <th>Stock Actual</th>
-                  <th>Stock Mínimo</th>
-                  <th>Alerta</th>
-                </tr>
-              </thead>
-              <tbody>
-                {inventarios.map((i) => {
-                  const mat = materiales.find((m) => Number(m.idMaterial) === Number(i.materialId));
-                  const bajo = Number(i.stockActual) <= Number(i.stockMinimo);
-                  return (
-                    <tr key={i.idInventario || `${i.materialId}-${i.sucursalId}`}>
-                      <td>{mat ? mat.nombre : `ID ${i.materialId}`}</td>
-                      <td>{sucursales.find((s) => Number(s.idSucursal) === Number(i.sucursalId))?.nombre || `ID ${i.sucursalId}`}</td>
-                      <td style={bajo ? { color: "#c2410c", fontWeight: 700 } : undefined}>{i.stockActual}</td>
-                      <td>{i.stockMinimo}</td>
-                      <td>{bajo ? <span className="inv-badge warn">⚠ Bajo</span> : <span className="inv-badge ok">OK</span>}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          {formularioAbierto && (
-            <section className="pos-card" style={{ marginTop: 18 }}>
-              <h2>Registrar Stock</h2>
-              <form onSubmit={guardarInventario}>
-                <label className="pos-field floating">
-                  <span>Material</span>
-                  <select value={formulario.materialId} onChange={(e) => setFormulario((f) => ({ ...f, materialId: e.target.value }))}>
-                    <option value="">Selecciona</option>
-                    {materiales.map((m) => <option key={m.idMaterial} value={m.idMaterial}>{m.nombre}</option>)}
-                  </select>
-                </label>
-
-                <label className="pos-field floating">
-                  <span>Sucursal</span>
-                  <select value={formulario.sucursalId} onChange={(e) => setFormulario((f) => ({ ...f, sucursalId: e.target.value }))}>
-                    <option value="">Selecciona</option>
-                    {sucursales.map((s) => <option key={s.idSucursal} value={s.idSucursal}>{s.nombre || s.direccion || `Sucursal ${s.idSucursal}`}</option>)}
-                  </select>
-                </label>
-
                 <div className="pos-field-row">
                   <label className="pos-field floating">
                     <span>Stock Actual</span>
-                    <input type="number" value={formulario.stockActual} onChange={(e) => setFormulario((f) => ({ ...f, stockActual: e.target.value }))} />
+                    <input type="number" min="0" step="any" value={formulario.stockActual} onChange={e => setFormulario(f => ({ ...f, stockActual: e.target.value }))} />
                   </label>
-
                   <label className="pos-field floating">
                     <span>Stock Mínimo</span>
-                    <input type="number" value={formulario.stockMinimo} onChange={(e) => setFormulario((f) => ({ ...f, stockMinimo: e.target.value }))} />
+                    <input type="number" min="0" step="any" value={formulario.stockMinimo} onChange={e => setFormulario(f => ({ ...f, stockMinimo: e.target.value }))} />
                   </label>
                 </div>
 
@@ -482,14 +639,15 @@ export function InventarioPage() {
               <h2>Registrar Movimiento</h2>
               <form onSubmit={guardarMovimiento}>
                 <label className="pos-field floating">
-                  <span>Inventario</span>
-                  <select value={formulario.inventarioId} onChange={(e) => setFormulario((f) => ({ ...f, inventarioId: e.target.value }))}>
+                  <span>Nombre del Material</span>
+                  <BuscadorMaterial materiales={materiales} value={formulario.nombreMaterial} onChange={(v) => setFormulario((f) => ({ ...f, nombreMaterial: v }))} />
+                </label>
+
+                <label className="pos-field floating">
+                  <span>Sucursal</span>
+                  <select value={formulario.sucursalId} onChange={(e) => setFormulario((f) => ({ ...f, sucursalId: e.target.value }))}>
                     <option value="">Selecciona</option>
-                    {inventarios.map((i) => (
-                      <option key={i.idInventario} value={i.idInventario}>
-                        {`Material ID: ${i.materialId} - Sucursal ID: ${i.sucursalId}`}
-                      </option>
-                    ))}
+                    {sucursales.map((s) => <option key={s.idSucursal} value={s.idSucursal}>{s.nombre}</option>)}
                   </select>
                 </label>
 
@@ -499,13 +657,24 @@ export function InventarioPage() {
                     <select value={formulario.tipo} onChange={(e) => setFormulario((f) => ({ ...f, tipo: e.target.value }))}>
                       <option>Entrada</option>
                       <option>Salida</option>
-                      <option>Ajuste</option>
                     </select>
                   </label>
 
                   <label className="pos-field floating">
                     <span>Cantidad</span>
-                    <input type="number" value={formulario.cantidad} onChange={(e) => setFormulario((f) => ({ ...f, cantidad: e.target.value }))} />
+                    {(() => {
+                      const matSeleccionado = materiales.find(m => normalizarTexto(m.nombre) === normalizarTexto((formulario.nombreMaterial || "").trim()));
+                      const esPiezas = matSeleccionado && normalizarTexto(matSeleccionado.unidad || "").includes("piez");
+                      return (
+                        <input
+                          type="number"
+                          min="0"
+                          step={esPiezas ? "1" : "any"}
+                          value={formulario.cantidad}
+                          onChange={e => setFormulario(f => ({ ...f, cantidad: e.target.value }))}
+                        />
+                      );
+                    })()}
                   </label>
                 </div>
 
@@ -527,6 +696,55 @@ export function InventarioPage() {
             </section>
           )}
         </>
+      )}
+
+      {/* Modal flotante para nueva categoría */}
+      {nuevaCat.visible && (
+        <div className="modal-overlay" onClick={() => setNuevaCat({ visible: false, nombre: "", descripcion: "" })}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <h2>Nueva Categoría</h2>
+            <label className="pos-field floating">
+              <span>Nombre</span>
+              <input type="text" value={nuevaCat.nombre} onChange={e => setNuevaCat(c => ({ ...c, nombre: e.target.value }))} />
+            </label>
+            <label className="pos-field floating">
+              <span>Descripción</span>
+              <input type="text" value={nuevaCat.descripcion} onChange={e => setNuevaCat(c => ({ ...c, descripcion: e.target.value }))} />
+            </label>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 20 }}>
+              <button className="ghost-button" type="button" onClick={() => setNuevaCat({ visible: false, nombre: "", descripcion: "" })}>Cancelar</button>
+              <button className="primary-button" type="button" disabled={saving} onClick={guardarNuevaCategoria}>{saving ? "Guardando..." : "Guardar categoría"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal nueva unidad */}
+      {nuevaUnidad.visible && (
+        <div className="modal-overlay" onClick={() => setNuevaUnidad({ visible: false, nombre: "" })}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <h2>Nueva Unidad</h2>
+            <label className="pos-field floating">
+              <span>Nombre de la unidad</span>
+              <input type="text" value={nuevaUnidad.nombre} onChange={e => setNuevaUnidad(u => ({ ...u, nombre: e.target.value }))} />
+            </label>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 20 }}>
+              <button className="ghost-button" type="button" onClick={() => setNuevaUnidad({ visible: false, nombre: "" })}>Cancelar</button>
+              <button className="primary-button" type="button" onClick={guardarNuevaUnidad}>Guardar unidad</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de error */}
+      {modalError && (
+        <div className="modal-overlay" onClick={() => setModalError("")}>
+          <div className="modal-error-card" onClick={e => e.stopPropagation()}>
+            <p className="modal-error-icon">⚠</p>
+            <p className="modal-error-msg">{modalError}</p>
+            <button className="primary-button" onClick={() => setModalError("")}>Entendido</button>
+          </div>
+        </div>
       )}
     </section>
   );

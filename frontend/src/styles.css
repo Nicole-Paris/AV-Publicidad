@@ -161,23 +161,37 @@ a {
 }
 
 .primary-button {
-  background: #020012;
-  box-shadow: 0 3px 7px rgba(0, 0, 0, 0.35);
-  color: #ffffff;
-  font-size: 18px;
+  background: #fb5a35;
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 15px;
   font-weight: 700;
-  min-height: 64px;
-  margin-top: 10px;
+  padding: 10px 24px;
+  transition: background 0.15s;
 }
-
+.primary-button:hover:not(:disabled) {
+  background: #e04a27;
+}
 .primary-button:disabled {
-  cursor: wait;
-  opacity: 0.72;
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .ghost-button {
-  background: #edf2f7;
-  color: #253142;
+  background: #f1f5f9;
+  border: none;
+  border-radius: 8px;
+  color: #344252;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 600;
+  padding: 10px 24px;
+  transition: background 0.15s;
+}
+.ghost-button:hover {
+  background: #e2e8f0;
 }
 
 .brand-mark {
@@ -1186,4 +1200,48 @@ a {
   .summary-row {
     grid-template-columns: minmax(120px, 1fr) 60px 92px 110px;
   }
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.modal-card {
+  background: #ffffff;
+  border-radius: 14px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+  padding: 32px;
+  width: 100%;
+  max-width: 440px;
+}
+.modal-card h2 {
+  margin: 0 0 20px;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+/* Modal de error */
+.modal-error-card {
+  background: #ffffff;
+  border-radius: 14px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+  padding: 32px;
+  width: 100%;
+  max-width: 360px;
+  text-align: center;
+}
+.modal-error-icon {
+  font-size: 36px;
+  margin: 0 0 12px;
+}
+.modal-error-msg {
+  font-size: 16px;
+  font-weight: 600;
+  color: #344252;
+  margin: 0 0 20px;
 }
