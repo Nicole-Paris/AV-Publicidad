@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { listarPedidos, actualizarPedido, listarDetallesPedido } from "../api/pedidoApi.js";
 import { listarPagosPorPedido, listarTodosPagos, crearPago } from "../api/pagoApi.js";
-import { listarClientes } from "../api/catalogApi.js";
+// import listarServicios además de listarClientes
+import { listarClientes, listarServicios } from "../api/catalogApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
 
 export function PedidosPage() {
@@ -10,6 +11,8 @@ export function PedidosPage() {
   const [tab, setTab] = useState("pedidos");
   const [pedidos, setPedidos] = useState([]);
   const [clientes, setClientes] = useState([]);
+  // nuevo estado para servicios
+  const [servicios, setServicios] = useState([]);
   const [detallesPorPedido, setDetallesPorPedido] = useState({});
   const [pagosPorPedido, setPagosPorPedido] = useState({});
   const [todosLosPagos, setTodosLosPagos] = useState([]);
@@ -29,7 +32,8 @@ export function PedidosPage() {
   const [filtroEstado, setFiltroEstado] = useState("");
   const [buscarPago, setBuscarPago] = useState("");
   const [cambiandoEstado, setCambiandoEstado] = useState(null);
-
+  const [pedidoExpandidoPagos, setPedidoExpandidoPagos] = useState(null);
+  
   // Nuevo: estados para modal pago con buscador
   const [buscarPedidoModal, setBuscarPedidoModal] = useState("");
   const [pedidoSugerencias, setPedidoSugerencias] = useState([]);
@@ -52,16 +56,24 @@ export function PedidosPage() {
     return clientes.find(c => Number(c.idCliente) === Number(p.clienteId));
   }
 
+  // helper para resolver nombre de servicio desde catálogo
+  function nombreServicio(servicioId) {
+    const s = servicios.find(sv => Number(sv.idServicio) === Number(servicioId));
+    return s ? s.nombre : `Servicio ${servicioId}`;
+  }
+
   useEffect(() => {
     let active = true;
     async function cargar() {
       setLoading(true);
       try {
-        const [ps, cs, pagos] = await Promise.all([listarPedidos(), listarClientes(), listarTodosPagos()]);
+        // ahora también cargamos servicios
+        const [ps, cs, pagos, svcs] = await Promise.all([listarPedidos(), listarClientes(), listarTodosPagos(), listarServicios()]);
         if (!active) return;
         setPedidos((ps || []).slice().sort((a, b) => Number(b.idPedido) - Number(a.idPedido)));
         setClientes(cs || []);
         setTodosLosPagos(pagos || []);
+        setServicios(svcs || []);
       } catch (err) {
         if (active) mostrarError(err.message || String(err));
       } finally {
@@ -71,6 +83,20 @@ export function PedidosPage() {
     cargar();
     return () => { active = false; };
   }, []);
+
+  // Mantener fecha/hora del formulario de pago actualizada mientras el modal está abierto
+  useEffect(() => {
+    if (!modalPago) return;
+    const interval = setInterval(() => {
+      const now = new Date();
+      setFormPago(f => ({
+        ...f,
+        fecha: now.toISOString().slice(0, 10),
+        horaPago: now.toTimeString().slice(0, 8)
+      }));
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [modalPago]);
 
   function badgeEstado(estado) {
     if (estado === "Borrador") return <span className="inv-badge neutral">Borrador</span>;
@@ -98,10 +124,12 @@ export function PedidosPage() {
     }
     setLoadingDetalle(true);
     try {
-      const [dets] = await Promise.all([
-        listarDetallesPedido(idPedido)
-      ]);
-      setDetallesPorPedido(prev => ({ ...prev, [idPedido]: dets || [] }));
+      // listarDetallesPedido puede devolver todos los detalles; filtrar por pedidoId
+      const detsRaw = await listarDetallesPedido(idPedido);
+      const dets = Array.isArray(detsRaw)
+        ? detsRaw.filter(d => Number(d.pedidoId) === Number(idPedido))
+        : [];
+      setDetallesPorPedido(prev => ({ ...prev, [idPedido]: dets }));
       setPedidoExpandido(idPedido);
     } catch (err) {
       mostrarError(err.message || String(err));
@@ -142,8 +170,10 @@ export function PedidosPage() {
     if (!pedidoId) { mostrarError("Selecciona un pedido."); return; }
     if (!formPago.monto || Number(formPago.monto) <= 0) { mostrarError("Ingresa un monto válido."); return; }
 
-    const pagosActuales = pagosPorPedido[pedidoId] || [];
+    // usar todosLosPagos para calcular lo ya pagado (puede no estar en pagosPorPedido)
+    const pagosActuales = (todosLosPagos || []).filter(p => Number(p.pedidoId) === Number(pedidoId));
     const totalPagado = pagosActuales.reduce((s, p) => s + Number(p.monto), 0);
+
     const ped = pedidos.find(p => Number(p.idPedido) === pedidoId);
     const pendiente = ped ? Number(ped.total) - totalPagado : 0;
     if (Number(formPago.monto) > pendiente) { mostrarError(`El monto excede el pendiente (${money(pendiente)}).`); return; }
@@ -260,35 +290,36 @@ export function PedidosPage() {
                     </div>
                     <div className="pedido-header-right">
                       {pedido.pagoDividido && <span className="inv-badge neutral" style={{fontSize:12}}>Dividido</span>}
+                      <strong style={{fontSize:16}}>{money(pedido.total)}</strong>
                       <select
-                        value={pedido.estado}
-                        disabled={cambiandoEstado === pedido.idPedido}
-                        onChange={e => cambiarEstado(pedido, e.target.value)}
-                        style={{
-                          padding: "6px 12px",
-                          borderRadius: 20,
-                          border: "0",
-                          fontWeight: 700,
-                          fontSize: 13,
-                          background:
-                            pedido.estado === "Borrador" ? "#f4f4f4" :
-                            pedido.estado === "En proceso" ? "#eff6ff" :
-                            pedido.estado === "Terminado" ? "#fff7ed" :
-                            pedido.estado === "Entregado" ? "#f0fff4" : "#f4f4f4",
-                          color:
-                            pedido.estado === "Borrador" ? "#64748b" :
-                            pedido.estado === "En proceso" ? "#1d4ed8" :
-                            pedido.estado === "Terminado" ? "#c2410c" :
-                            pedido.estado === "Entregado" ? "#216e39" : "#64748b"
-                        }}
-                      >
-                        <option>Borrador</option>
-                        <option>En proceso</option>
-                        <option>Terminado</option>
-                        <option>Entregado</option>
-                      </select>
-                      <span className="pedido-chevron">{expandido ? "▲" : "▼"}</span>
-                    </div>
+                         value={pedido.estado}
+                         disabled={cambiandoEstado === pedido.idPedido}
+                         onChange={e => cambiarEstado(pedido, e.target.value)}
+                         style={{
+                           padding: "6px 12px",
+                           borderRadius: 20,
+                           border: "0",
+                           fontWeight: 700,
+                           fontSize: 13,
+                           background:
+                             pedido.estado === "Borrador" ? "#f4f4f4" :
+                             pedido.estado === "En proceso" ? "#eff6ff" :
+                             pedido.estado === "Terminado" ? "#fff7ed" :
+                             pedido.estado === "Entregado" ? "#f0fff4" : "#f4f4f4",
+                           color:
+                             pedido.estado === "Borrador" ? "#64748b" :
+                             pedido.estado === "En proceso" ? "#1d4ed8" :
+                             pedido.estado === "Terminado" ? "#c2410c" :
+                             pedido.estado === "Entregado" ? "#216e39" : "#64748b"
+                         }}
+                       >
+                         <option>Borrador</option>
+                         <option>En proceso</option>
+                         <option>Terminado</option>
+                         <option>Entregado</option>
+                       </select>
+                       <span className="pedido-chevron">{expandido ? "▲" : "▼"}</span>
+                     </div>
                   </div>
 
                   {expandido && (
@@ -302,19 +333,25 @@ export function PedidosPage() {
                       {loadingDetalle ? (
                         <p style={{color:"#64748b",fontSize:14}}>Cargando detalles...</p>
                       ) : (detallesPorPedido[pedido.idPedido] || []).length > 0 ? (
-                        <div className="inv-table-wrap" style={{marginTop:12}}>
+                        <div className="inv-table-wrap" style={{marginTop:8}}>
                           <table className="inv-table">
                             <thead>
-                              <tr><th>Servicio</th><th>Cantidad</th><th>Unidad</th><th>P. Unit.</th><th>Subtotal</th></tr>
+                              <tr>
+                                <th>Servicio</th>
+                                <th>Cantidad</th>
+                                <th>Unidad</th>
+                                <th>P. Unit.</th>
+                                <th>Subtotal</th>
+                              </tr>
                             </thead>
                             <tbody>
                               {(detallesPorPedido[pedido.idPedido] || []).map((d, i) => (
-                                <tr key={d.idDetallePedido || i}>
-                                  <td>{d.nombre || d.servicioNombre || "—"}</td>
-                                  <td>{d.cantidad}</td>
-                                  <td>{d.unidadDetalle}</td>
+                                <tr key={d.idDetallePedido || d.idDetalle || i}>
+                                  <td>{nombreServicio(d.servicioId)}</td>
+                                  <td>{Number(d.cantidad)}</td>
+                                  <td>{d.unidadDetalle || "—"}</td>
                                   <td>{money(Number(d.precioUnitario))}</td>
-                                  <td>{money(Number(d.subtotal))}</td>
+                                  <td>{money(Number(d.cantidad) * Number(d.precioUnitario))}</td>
                                 </tr>
                               ))}
                             </tbody>
@@ -346,39 +383,86 @@ export function PedidosPage() {
             </button>
           </div>
 
-          <div className="inv-table-wrap">
-            <table className="inv-table">
-              <thead>
-                <tr>
-                  <th>Pedido</th><th>Cliente</th><th>Fecha</th><th>Hora</th><th>Forma</th><th>Concepto</th><th>Monto</th><th>Referencia</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pagosFiltrados.map((p, i) => {
-                  const ped = pedidos.find(x => Number(x.idPedido) === Number(p.pedidoId));
-                  const cliente = ped ? clienteDePedido(ped) : null;
-                  return (
-                    <tr key={p.idPago || i}>
-                      <td>{p.pedidoId}</td>
-                      <td>{cliente ? nombreCliente(cliente) : `Cliente ${ped?.clienteId || "—"}`}</td>
-                      <td>{p.fecha || "—"}</td>
-                      <td>{p.horaPago || "—"}</td>
-                      <td>{p.formaPago}</td>
-                      <td>{p.conceptoPago}</td>
-                      <td>{money(p.monto)}</td>
-                      <td>{p.referencia || "—"}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          {(() => {
+            // Agrupar pagosFiltrados por pedidoId
+            const grupos = {};
+            (pagosFiltrados || []).forEach(pago => {
+              const id = String(pago.pedidoId);
+              if (!grupos[id]) grupos[id] = [];
+              grupos[id].push(pago);
+            });
+
+            const entradas = Object.entries(grupos);
+            if (entradas.length === 0) {
+              return <p style={{color:"#64748b"}}>No hay pagos registrados.</p>;
+            }
+
+            return entradas.map(([pedidoId, pagosGrupo]) => {
+              const ped = pedidos.find(p => Number(p.idPedido) === Number(pedidoId));
+              const cliente = ped ? clienteDePedido(ped) : null;
+              const totalPagado = pagosGrupo.reduce((s,p) => s + Number(p.monto), 0);
+              const pendiente = ped ? Number(ped.total) - totalPagado : 0;
+              const expandidoPago = pedidoExpandidoPagos === Number(pedidoId);
+
+              return (
+                <div key={pedidoId} className="pedido-card" style={{marginBottom:12}}>
+                  <div className="pedido-header" onClick={() => setPedidoExpandidoPagos(expandidoPago ? null : Number(pedidoId))}>
+                    <div className="pedido-header-left">
+                      <span className="pedido-num">{pedidoId}</span>
+                      <div>
+                        <p className="pedido-cliente">{cliente ? nombreCliente(cliente) : `Cliente ${ped?.clienteId || "—"}`}</p>
+                      </div>
+                    </div>
+                    <div className="pedido-header-right">
+                      <strong>{money(totalPagado)} pagado</strong>
+                      <span className="pedido-chevron">{expandidoPago ? "▲" : "▼"}</span>
+                    </div>
+                  </div>
+
+                  {expandidoPago && (
+                    <div className="pedido-detalle">
+                      <div className="pedido-info-grid" style={{marginBottom:16}}>
+                        {ped && <>
+                          <div><span>Pago dividido</span><strong>{ped.pagoDividido ? "Sí" : "No"}</strong></div>
+                          <div><span>Total pagado</span><strong style={{color:"#16a34a"}}>{money(totalPagado)}</strong></div>
+                          <div><span>Pendiente</span><strong style={{color: pendiente > 0 ? "#c2410c" : "#000000"}}>{money(pendiente)}</strong></div>
+                        </>}
+                      </div>
+
+                      <p style={{fontWeight:700, fontSize:14, margin:"0 0 8px"}}>Pagos registrados</p>
+                      <div className="inv-table-wrap">
+                        <table className="inv-table">
+                          <thead>
+                            <tr>
+                              <th>Fecha</th><th>Hora</th><th>Forma</th><th>Concepto</th><th>Monto</th><th>Referencia</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {pagosGrupo.map((pago, i) => (
+                              <tr key={pago.idPago || i}>
+                                <td>{pago.fecha ? new Date(pago.fecha).toLocaleDateString("es-MX") : "—"}</td>
+                                <td>{pago.horaPago ? pago.horaPago.slice(0,5) : "—"}</td>
+                                <td>{pago.formaPago}</td>
+                                <td>{pago.conceptoPago}</td>
+                                <td>{money(pago.monto)}</td>
+                                <td>{pago.referencia && pago.referencia !== "." ? pago.referencia : "—"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            });
+          })()}
         </>
       )}
 
       {/* Modal error */}
       {modalError && (
-        <div className="modal-overlay" onClick={() => setModalError("")}>
+        <div className="modal-error-overlay" onClick={() => setModalError("")}>
           <div className="modal-error-card" onClick={e => e.stopPropagation()}>
             <p className="modal-error-icon">⚠</p>
             <p className="modal-error-msg">{modalError}</p>
@@ -442,10 +526,20 @@ export function PedidosPage() {
             </label>
 
             {pedidoSeleccionado && (() => {
-              const pagosDelPed = pagosPorPedido[pedidoSeleccionado.idPedido] || [];
-              const totalPagado = pagosDelPed.reduce((s,p) => s+Number(p.monto), 0);
+              const pagosDelPed = (todosLosPagos || []).filter(
+                p => Number(p.pedidoId) === Number(pedidoSeleccionado.idPedido)
+              );
+              const totalPagado = pagosDelPed.reduce((s, p) => s + Number(p.monto), 0);
               const pendiente = Number(pedidoSeleccionado.total) - totalPagado;
-              return <p style={{color:"#64748b",fontSize:14,margin:"0 0 12px"}}>Pendiente: <strong style={{color:"#c2410c"}}>{money(pendiente)}</strong></p>;
+              return (
+                <p style={{color:"#64748b", fontSize:14, margin:"0 0 12px"}}>
+                  Total: <strong>{money(pedidoSeleccionado.total)}</strong>
+                  {" · "}
+                  Pagado: <strong style={{color:"#16a34a"}}>{money(totalPagado)}</strong>
+                  {" · "}
+                  Pendiente: <strong style={{color: pendiente > 0 ? "#c2410c" : "#16a34a"}}>{money(pendiente)}</strong>
+                </p>
+              );
             })()}
 
             <label className="pos-field floating">

@@ -287,43 +287,41 @@ export function PuntoVentaPage() {
     };
 
     try {
-      // Crear siempre como Borrador para permitir crear detalles
-      const crearPayload = { ...payloadBase, estado: "Borrador" };
-      const nuevo = await crearPedido(crearPayload);
+      // estado inicial según tipoPedido: Cotizacion -> Borrador, Pedido -> Pendiente
+      const estadoInicial = pedido.tipoPedido === "Cotizacion" ? "Borrador" : "Pendiente";
 
-      const pedidoId = Number(nuevo.idPedido || nuevo.id || nuevo.pedidoId);
+      const nuevoPedido = await crearPedido({
+        ...payloadBase,
+        estado: estadoInicial,
+        tipoPedido: pedido.tipoPedido
+      });
 
-      // Crear detalles del pedido
-      for (const it of items) {
-        try {
-          await crearDetallePedido({
+      const pedidoId = Number(nuevoPedido.idPedido || nuevoPedido.id || nuevoPedido.pedidoId);
+
+      // Crear detalles mientras el pedido está en Borrador o Pendiente
+      await Promise.all(
+        items.map((item) =>
+          crearDetallePedido({
+            cantidad: Number(item.cantidad).toFixed(2),
+            precioUnitario: Number(item.precioUnitario).toFixed(2),
+            subtotal: Number(item.subtotal).toFixed(2),
+            unidadDetalle: item.unidadDetalle,
             pedidoId,
-            servicioId: Number(it.servicioId || it.servicioId),
-            cantidad: Number(it.cantidad),
-            precioUnitario: Number(it.precioUnitario),
-            subtotal: Number(it.subtotal),
-            unidadDetalle: it.unidadDetalle,
+            servicioId: Number(item.servicioId),
             createdBy: session.empleadoId
-          });
-        } catch (errDetalle) {
-          // si falla un detalle, informar pero continuar intentando los demás
-          console.error("Error creando detalle:", errDetalle);
-          mostrarError(errDetalle.message || String(errDetalle));
-        }
+          })
+        )
+      );
+
+      // Solo si es Pedido (no Cotizacion), avanzar a "En proceso" DESPUÉS de los detalles
+      if (pedido.tipoPedido !== "Cotizacion") {
+        await actualizarPedido(pedidoId, {
+          ...payloadBase,
+          estado: "En proceso",
+          updatedBy: session.empleadoId
+        });
       }
 
-      // Si el usuario pidió un "Pedido", actualizar a "En proceso" después de crear detalles
-      if (pedido.tipoPedido === "Pedido") {
-        try {
-          await actualizarPedido(pedidoId, { ...nuevo, estado: "En proceso", updatedBy: session.empleadoId });
-        } catch (errUpd) {
-          // informar pero no bloquear: el pedido ya fue creado y los detalles también
-          console.error("Error actualizando estado a En proceso:", errUpd);
-          mostrarError(errUpd.message || String(errUpd));
-        }
-      }
-
-      // limpiar estado de UI
       setItems([]);
       setDetalle({ servicioId: "", cantidad: "1", precioUnitario: "", unidadDetalle: "Piezas" });
       setPedido({
@@ -334,12 +332,10 @@ export function PuntoVentaPage() {
         tipoPedido: "Pedido"
       });
 
-      mostrarSuccess("Pedido creado correctamente.");
+      setSuccess(`Pedido #${pedidoId} confirmado correctamente.`);
 
-      // Notificar al resto de la app que se creó un pedido para que otros componentes (p.ej. PedidosPage) refresquen
       try {
-        const createdId = pedidoId;
-        window.dispatchEvent(new CustomEvent("pedido:creado", { detail: { pedidoId: createdId } }));
+        window.dispatchEvent(new CustomEvent("pedido:creado", { detail: { pedidoId } }));
       } catch (e) {
         console.warn("No se pudo emitir evento pedido:creado", e);
       }
@@ -583,7 +579,7 @@ export function PuntoVentaPage() {
 
       {/* Modal de error flotante */}
       {modalError && (
-        <div className="modal-overlay" onClick={() => setModalError("")}>
+        <div className="modal-error-overlay" onClick={() => setModalError("")}>
           <div className="modal-error-card" onClick={e => e.stopPropagation()}>
             <p className="modal-error-icon">⚠</p>
             <p className="modal-error-msg">{modalError}</p>

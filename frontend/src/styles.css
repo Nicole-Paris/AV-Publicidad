@@ -1228,6 +1228,18 @@ a {
   justify-content: center;
   z-index: 1000;
 }
+
+/* overlay específico para errores: siempre encima de otros modales (z-index mayor) */
+.modal-error-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
 .modal-card {
   background: #ffffff;
   border-radius: 14px;
