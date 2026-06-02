@@ -55,4 +55,6 @@ public class PedidoRequest {
     private Integer updatedBy;
 
     private Integer deletedBy;
+
+    private Boolean confirmarEntregaConSaldoPendiente;
 }

@@ -446,7 +446,67 @@ a {
 .pedido-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; cursor:pointer; user-select:none; transition:background 0.15s; }
 .pedido-header:hover { background:#f8f8f8; }
 .pedido-header-left { display:flex; align-items:center; gap:14px; }
-.pedido-header-right { display:flex; align-items:center; gap:12px; }
+.pedido-header-right {
+  align-items: center;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 112px 150px 82px 18px;
+  justify-content: end;
+  margin-right: 18px;
+}
+.pedido-total {
+  font-size: 16px;
+  text-align: right;
+}
+.pedido-status-select {
+  border: 0;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  min-height: 38px;
+  padding: 6px 12px;
+}
+.pedido-status-select.draft {
+  background: #f4f4f4;
+  color: #64748b;
+}
+.pedido-status-select.pending {
+  background: #fff7ed;
+  color: #c2410c;
+}
+.pedido-status-select.process {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+.pedido-status-select.finished {
+  background: #fff7ed;
+  color: #c2410c;
+}
+.pedido-status-select.delivered {
+  background: #f0fff4;
+  color: #216e39;
+}
+.pedido-status-select.cancelled {
+  background: #fff1f0;
+  color: #a8071a;
+}
+.pedido-payment-button {
+  background: #050718;
+  border: 0;
+  border-radius: 20px;
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  min-height: 38px;
+  padding: 0 16px;
+}
+.pedido-payment-button:hover,
+.pedido-payment-button:focus {
+  background: #fb5a35;
+  outline: none;
+}
 .pedido-num { font-size:18px; font-weight:700; color:#fb5a35; min-width:48px; }
 .pedido-cliente { font-size:15px; font-weight:600; margin:0; color:#050816; }
 .pedido-fecha { font-size:13px; color:#64748b; margin:2px 0 0; }
@@ -457,6 +517,17 @@ a {
 .pedido-info-grid span { font-size:12px; color:#64748b; }
 .pedido-info-grid strong { font-size:14px; color:#050816; }
 .tab-section-header { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:16px; }
+.confirm-delivery-modal p {
+  color: #344252;
+  font-size: 16px;
+  line-height: 1.55;
+  margin: 0 0 18px;
+}
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
 
 @media (max-width: 900px) {
   .login-page {
@@ -1008,6 +1079,23 @@ a {
   position: absolute;
   top: -11px;
   z-index: 1;
+}
+
+.money-field::before {
+  color: #050816;
+  content: "$";
+  font-size: 24px;
+  font-weight: 700;
+  left: 18px;
+  line-height: 1;
+  pointer-events: none;
+  position: absolute;
+  top: 25px;
+  z-index: 1;
+}
+
+.money-field input {
+  padding-left: 42px;
 }
 
 .pos-field-row {

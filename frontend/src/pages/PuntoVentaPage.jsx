@@ -491,13 +491,13 @@ export function PuntoVentaPage() {
               />
             </label>
 
-            <label className="pos-field floating">
+            <label className="pos-field floating money-field">
               <span>Precio Unitario</span>
               <input
                 inputMode="decimal"
                 name="precioUnitario"
                 onChange={updateDetalle}
-                placeholder="$ 0"
+                placeholder="0"
                 type="text"
                 value={detalle.precioUnitario}
               />

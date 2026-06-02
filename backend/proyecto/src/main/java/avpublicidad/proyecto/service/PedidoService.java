@@ -72,7 +72,7 @@ public class PedidoService {
         String estadoNuevo = normalizarEstado(request.getEstado());
         validarFlujoEstado(pedido.getEstado(), estadoNuevo);
         validarPedidoEditable(pedido, request);
-        validarRequisitosEstado(pedido, estadoNuevo);
+        validarRequisitosEstado(pedido, request, estadoNuevo);
 
         pedido.setFechaPedido(request.getFechaPedido());
         pedido.setFechaEntrega(request.getFechaEntrega());
@@ -143,11 +143,9 @@ public class PedidoService {
                         && (PedidoConstants.ESTADO_PENDIENTE.equals(estadoNuevo)
                         || PedidoConstants.ESTADO_CANCELADO.equals(estadoNuevo)))
                         || (PedidoConstants.ESTADO_PENDIENTE.equals(estadoActual)
-                        && (PedidoConstants.ESTADO_EN_PROCESO.equals(estadoNuevo)
-                        || PedidoConstants.ESTADO_CANCELADO.equals(estadoNuevo)))
+                        && PedidoConstants.ESTADO_EN_PROCESO.equals(estadoNuevo))
                         || (PedidoConstants.ESTADO_EN_PROCESO.equals(estadoActual)
-                        && (PedidoConstants.ESTADO_TERMINADO.equals(estadoNuevo)
-                        || PedidoConstants.ESTADO_CANCELADO.equals(estadoNuevo)))
+                        && PedidoConstants.ESTADO_TERMINADO.equals(estadoNuevo))
                         || (PedidoConstants.ESTADO_TERMINADO.equals(estadoActual)
                         && PedidoConstants.ESTADO_ENTREGADO.equals(estadoNuevo));
 
@@ -171,14 +169,15 @@ public class PedidoService {
         }
     }
 
-    private void validarRequisitosEstado(Pedido pedido, String estadoNuevo) {
+    private void validarRequisitosEstado(Pedido pedido, PedidoRequest request, String estadoNuevo) {
         if (!PedidoConstants.ESTADO_BORRADOR.equals(estadoNuevo)
                 && detallePedidoRepository.findByPedidoIdAndDeletedAtIsNull(pedido.getIdPedido()).isEmpty()) {
             throw new ValidationException("El pedido debe tener al menos un detalle para avanzar de estado");
         }
 
         if (PedidoConstants.ESTADO_ENTREGADO.equals(estadoNuevo)
-                && calcularTotalPagado(pedido.getIdPedido()).compareTo(pedido.getTotal()) < 0) {
+                && calcularTotalPagado(pedido.getIdPedido()).compareTo(pedido.getTotal()) < 0
+                && !Boolean.TRUE.equals(request.getConfirmarEntregaConSaldoPendiente())) {
             throw new ValidationException("No se puede entregar un pedido con saldo pendiente");
         }
     }

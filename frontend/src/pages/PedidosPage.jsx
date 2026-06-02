@@ -5,6 +5,17 @@ import { listarPagosPorPedido, listarTodosPagos, crearPago } from "../api/pagoAp
 import { listarClientes, listarServicios } from "../api/catalogApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
 
+const ESTADOS_PEDIDO = ["Borrador", "Pendiente", "En proceso", "Terminado", "Entregado", "Cancelado"];
+
+const SIGUIENTES_ESTADOS = {
+  Borrador: ["Pendiente", "Cancelado"],
+  Pendiente: ["En proceso"],
+  "En proceso": ["Terminado"],
+  Terminado: ["Entregado"],
+  Entregado: [],
+  Cancelado: []
+};
+
 export function PedidosPage() {
   const { session } = useAuth();
 
@@ -25,7 +36,7 @@ export function PedidosPage() {
   const [modalPago, setModalPago] = useState(null);
   const [formPago, setFormPago] = useState({
     monto: "", formaPago: "Efectivo", referencia: "",
-    conceptoPago: "Pago_parcial", fecha: "", horaPago: "",
+    conceptoPago: "Anticipo", fecha: "", horaPago: "",
     pagoDividido: false, pedidoId: ""
   });
   const [buscarPedido, setBuscarPedido] = useState("");
@@ -38,6 +49,7 @@ export function PedidosPage() {
   const [buscarPedidoModal, setBuscarPedidoModal] = useState("");
   const [pedidoSugerencias, setPedidoSugerencias] = useState([]);
   const [pedidoSeleccionado, setPedidoSeleccionado] = useState(null);
+  const [confirmarEntregaPendiente, setConfirmarEntregaPendiente] = useState(null);
 
   function mostrarError(msg) {
     setModalError(msg);
@@ -54,6 +66,83 @@ export function PedidosPage() {
   }
   function clienteDePedido(p) {
     return clientes.find(c => Number(c.idCliente) === Number(p.clienteId));
+  }
+
+  function pagosDePedido(pedidoId) {
+    return (todosLosPagos || []).filter(pago => Number(pago.pedidoId) === Number(pedidoId));
+  }
+
+  function totalPagadoPedido(pedidoId) {
+    return pagosDePedido(pedidoId).reduce((total, pago) => total + Number(pago.monto || 0), 0);
+  }
+
+  function saldoPendientePedido(pedidoObj) {
+    return Math.max(0, Number(pedidoObj?.total || 0) - totalPagadoPedido(pedidoObj?.idPedido));
+  }
+
+  function montoPagoActual() {
+    if (pedidoSeleccionado?.formaPago === "Intercambio") {
+      return saldoPendientePedido(pedidoSeleccionado).toFixed(2);
+    }
+
+    return formPago.monto;
+  }
+
+  function puedeCambiarEstado(estadoActual, estadoNuevo) {
+    return estadoActual === estadoNuevo || (SIGUIENTES_ESTADOS[estadoActual] || []).includes(estadoNuevo);
+  }
+
+  function opcionesEstado(estadoActual) {
+    return ESTADOS_PEDIDO.map(estado => ({
+      estado,
+      disabled: !puedeCambiarEstado(estadoActual, estado)
+    }));
+  }
+
+  function claseEstado(estado) {
+    if (estado === "Pendiente") return "pending";
+    if (estado === "En proceso") return "process";
+    if (estado === "Terminado") return "finished";
+    if (estado === "Entregado") return "delivered";
+    if (estado === "Cancelado") return "cancelled";
+    return "draft";
+  }
+
+  function formaPagoInicial(pedidoObj) {
+    return pedidoObj?.formaPago === "Intercambio" ? "Intercambio" : "Efectivo";
+  }
+
+  function conceptoPagoInicial(pedidoObj) {
+    if (pedidoObj?.formaPago === "Intercambio") {
+      return "Pago_total";
+    }
+
+    return "Anticipo";
+  }
+
+  function opcionesConceptoPago(pedidoObj) {
+    if (pedidoObj?.formaPago === "Intercambio") {
+      return [{ value: "Pago_total", label: "Pago total" }];
+    }
+
+    const opciones = [
+      { value: "Anticipo", label: "Anticipo" },
+      { value: "Liquidacion", label: "Liquidacion" },
+      { value: "Pago_total", label: "Pago total" }
+    ];
+
+    if (pedidoObj?.formaPago === "Credito") {
+      opciones.splice(1, 0, { value: "Abono_credito", label: "Abono a credito" });
+    }
+
+    return opciones;
+  }
+
+  function actualizarMontoPago(value) {
+    const limpio = value.replace(/[^\d.]/g, "");
+    const partes = limpio.split(".");
+    const monto = partes.length > 1 ? `${partes[0]}.${partes.slice(1).join("")}` : limpio;
+    setFormPago(f => ({ ...f, monto }));
   }
 
   // helper para resolver nombre de servicio desde catálogo
@@ -143,7 +232,10 @@ export function PedidosPage() {
     const fecha = now.toISOString().slice(0,10);
     const horaPago = now.toTimeString().slice(0,8);
     setFormPago({
-      monto: "", formaPago: "Efectivo", referencia: "", conceptoPago: "Pago_parcial",
+      monto: "",
+      formaPago: formaPagoInicial(pedidoObj),
+      referencia: "",
+      conceptoPago: conceptoPagoInicial(pedidoObj),
       fecha, horaPago, pagoDividido: pedidoObj.pagoDividido || false, pedidoId: String(pedidoObj.idPedido)
     });
     // reset y preseleccionar pedido en modal buscador
@@ -157,7 +249,7 @@ export function PedidosPage() {
     const now = new Date();
     const fecha = now.toISOString().slice(0,10);
     const horaPago = now.toTimeString().slice(0,8);
-    setFormPago({ monto: "", formaPago: "Efectivo", referencia: "", conceptoPago: "Pago_parcial", fecha, horaPago, pagoDividido: false, pedidoId: "" });
+    setFormPago({ monto: "", formaPago: "Efectivo", referencia: "", conceptoPago: "Anticipo", fecha, horaPago, pagoDividido: false, pedidoId: "" });
     // reset buscador
     setBuscarPedidoModal("");
     setPedidoSugerencias([]);
@@ -167,21 +259,18 @@ export function PedidosPage() {
 
   async function guardarPago() {
     const pedidoId = Number(formPago.pedidoId);
+    const monto = montoPagoActual();
     if (!pedidoId) { mostrarError("Selecciona un pedido."); return; }
-    if (!formPago.monto || Number(formPago.monto) <= 0) { mostrarError("Ingresa un monto válido."); return; }
-
-    // usar todosLosPagos para calcular lo ya pagado (puede no estar en pagosPorPedido)
-    const pagosActuales = (todosLosPagos || []).filter(p => Number(p.pedidoId) === Number(pedidoId));
-    const totalPagado = pagosActuales.reduce((s, p) => s + Number(p.monto), 0);
+    if (!monto || Number(monto) <= 0) { mostrarError("Ingresa un monto válido."); return; }
 
     const ped = pedidos.find(p => Number(p.idPedido) === pedidoId);
-    const pendiente = ped ? Number(ped.total) - totalPagado : 0;
-    if (Number(formPago.monto) > pendiente) { mostrarError(`El monto excede el pendiente (${money(pendiente)}).`); return; }
+    const pendiente = ped ? saldoPendientePedido(ped) : 0;
+    if (Number(monto) > pendiente) { mostrarError(`El monto excede el pendiente (${money(pendiente)}).`); return; }
 
     setSaving(true);
     try {
       await crearPago({
-        monto: Number(formPago.monto).toFixed(2),
+        monto: Number(monto).toFixed(2),
         fecha: formPago.fecha,
         horaPago: formPago.horaPago,
         referencia: formPago.referencia,
@@ -199,13 +288,6 @@ export function PedidosPage() {
       setPagosPorPedido(prev => ({ ...prev, [pedidoId]: nuevosPagos || [] }));
       setTodosLosPagos(todosActualizados || []);
 
-      const nuevoTotal = (nuevosPagos || []).reduce((s,p) => s + Number(p.monto), 0);
-      if (ped && nuevoTotal >= Number(ped.total)) {
-        await actualizarPedido(pedidoId, { ...ped, estado: "Entregado", updatedBy: session.empleadoId });
-        const ps = await listarPedidos();
-        setPedidos((ps || []).slice().sort((a,b) => Number(b.idPedido) - Number(a.idPedido)));
-      }
-
       setModalPago(null);
       mostrarSuccess("Pago registrado correctamente.");
     } catch (err) {
@@ -216,9 +298,28 @@ export function PedidosPage() {
   }
 
   async function cambiarEstado(pedidoObj, nuevoEstado) {
+    if (!puedeCambiarEstado(pedidoObj.estado, nuevoEstado)) {
+      mostrarError(`El pedido no puede cambiar de ${pedidoObj.estado} a ${nuevoEstado}.`);
+      return;
+    }
+
+    if (nuevoEstado === "Entregado" && saldoPendientePedido(pedidoObj) > 0) {
+      setConfirmarEntregaPendiente(pedidoObj);
+      return;
+    }
+
+    await guardarEstadoPedido(pedidoObj, nuevoEstado);
+  }
+
+  async function guardarEstadoPedido(pedidoObj, nuevoEstado, confirmarEntregaConSaldoPendiente = false) {
     setCambiandoEstado(pedidoObj.idPedido);
     try {
-      await actualizarPedido(pedidoObj.idPedido, { ...pedidoObj, estado: nuevoEstado, updatedBy: session.empleadoId });
+      await actualizarPedido(pedidoObj.idPedido, {
+        ...pedidoObj,
+        estado: nuevoEstado,
+        updatedBy: session.empleadoId,
+        confirmarEntregaConSaldoPendiente
+      });
       const ps = await listarPedidos();
       setPedidos((ps || []).slice().sort((a,b) => Number(b.idPedido) - Number(a.idPedido)));
       mostrarSuccess("Estado actualizado.");
@@ -227,6 +328,16 @@ export function PedidosPage() {
     } finally {
       setCambiandoEstado(null);
     }
+  }
+
+  async function confirmarEntregaConSaldo() {
+    if (!confirmarEntregaPendiente) {
+      return;
+    }
+
+    const pedidoObj = confirmarEntregaPendiente;
+    setConfirmarEntregaPendiente(null);
+    await guardarEstadoPedido(pedidoObj, "Entregado", true);
   }
 
   const pagosFiltrados = useMemo(() => {
@@ -263,10 +374,7 @@ export function PedidosPage() {
             />
             <select value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)} disabled={loading}>
               <option value="">Todos los estados</option>
-              <option>Borrador</option>
-              <option>En proceso</option>
-              <option>Terminado</option>
-              <option>Entregado</option>
+              {ESTADOS_PEDIDO.map(estado => <option key={estado}>{estado}</option>)}
             </select>
           </div>
 
@@ -274,9 +382,8 @@ export function PedidosPage() {
             {pedidosFiltrados.map(pedido => {
               const cliente = clienteDePedido(pedido);
               const expandido = pedidoExpandido === pedido.idPedido;
-              const pagos = pagosPorPedido[pedido.idPedido] || [];
-              const totalPagado = pagos.reduce((s, p) => s + Number(p.monto), 0);
-              const pendiente = Number(pedido.total) - totalPagado;
+              const totalPagado = totalPagadoPedido(pedido.idPedido);
+              const pendiente = saldoPendientePedido(pedido);
 
               return (
                 <div key={pedido.idPedido} className="pedido-card">
@@ -290,34 +397,30 @@ export function PedidosPage() {
                     </div>
                     <div className="pedido-header-right">
                       {pedido.pagoDividido && <span className="inv-badge neutral" style={{fontSize:12}}>Dividido</span>}
-                      <strong style={{fontSize:16}}>{money(pedido.total)}</strong>
+                      <strong className="pedido-total">{money(pedido.total)}</strong>
                       <select
                          value={pedido.estado}
                          disabled={cambiandoEstado === pedido.idPedido}
+                         onClick={e => e.stopPropagation()}
                          onChange={e => cambiarEstado(pedido, e.target.value)}
-                         style={{
-                           padding: "6px 12px",
-                           borderRadius: 20,
-                           border: "0",
-                           fontWeight: 700,
-                           fontSize: 13,
-                           background:
-                             pedido.estado === "Borrador" ? "#f4f4f4" :
-                             pedido.estado === "En proceso" ? "#eff6ff" :
-                             pedido.estado === "Terminado" ? "#fff7ed" :
-                             pedido.estado === "Entregado" ? "#f0fff4" : "#f4f4f4",
-                           color:
-                             pedido.estado === "Borrador" ? "#64748b" :
-                             pedido.estado === "En proceso" ? "#1d4ed8" :
-                             pedido.estado === "Terminado" ? "#c2410c" :
-                             pedido.estado === "Entregado" ? "#216e39" : "#64748b"
+                         className={`pedido-status-select ${claseEstado(pedido.estado)}`}
+                       >
+                         {opcionesEstado(pedido.estado).map(({ estado, disabled }) => (
+                           <option key={estado} disabled={disabled}>
+                             {estado}
+                           </option>
+                         ))}
+                       </select>
+                       <button
+                         className="pedido-payment-button"
+                         type="button"
+                         onClick={e => {
+                           e.stopPropagation();
+                           abrirModalPagoDesdeExpandido(pedido);
                          }}
                        >
-                         <option>Borrador</option>
-                         <option>En proceso</option>
-                         <option>Terminado</option>
-                         <option>Entregado</option>
-                       </select>
+                         Pago
+                       </button>
                        <span className="pedido-chevron">{expandido ? "▲" : "▼"}</span>
                      </div>
                   </div>
@@ -327,6 +430,8 @@ export function PedidosPage() {
                       {/* Solo mostrar la fecha de entrega y la tabla de servicios */}
                       <p style={{fontSize:14, color:"#64748b", margin:"0 0 12px"}}>
                         Entrega: <strong>{pedido.fechaEntrega ? new Date(pedido.fechaEntrega).toLocaleDateString("es-MX") : "—"}</strong>
+                        {" · "}
+                        Forma de pago: <strong>{pedido.formaPago || "—"}</strong>
                       </p>
 
                       <h3>Servicios del pedido</h3>
@@ -471,6 +576,31 @@ export function PedidosPage() {
         </div>
       )}
 
+      {confirmarEntregaPendiente && (
+        <div className="modal-overlay" onClick={() => setConfirmarEntregaPendiente(null)}>
+          <div className="modal-card confirm-delivery-modal" onClick={e => e.stopPropagation()}>
+            <h2>Entregar con saldo pendiente</h2>
+            <p>
+              Este pedido tiene un saldo pendiente de{" "}
+              <strong>{money(saldoPendientePedido(confirmarEntregaPendiente))}</strong>.
+              Confirma si deseas marcarlo como entregado de todos modos.
+            </p>
+            <div className="modal-actions">
+              <button
+                className="ghost-button"
+                type="button"
+                onClick={() => setConfirmarEntregaPendiente(null)}
+              >
+                Cancelar
+              </button>
+              <button className="primary-button" type="button" onClick={confirmarEntregaConSaldo}>
+                Confirmar entrega
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal pago */}
       {modalPago && (
         <div className="modal-overlay" onClick={() => setModalPago(null)}>
@@ -487,7 +617,7 @@ export function PedidosPage() {
                   const v = e.target.value;
                   setBuscarPedidoModal(v);
                   setPedidoSeleccionado(null);
-                  setFormPago(f => ({ ...f, pedidoId: "" }));
+                  setFormPago(f => ({ ...f, pedidoId: "", formaPago: "Efectivo" }));
                   const q = v.trim().toLowerCase();
                   if (!q) { setPedidoSugerencias([]); return; }
                   const sugs = pedidos.filter(p => {
@@ -512,7 +642,12 @@ export function PedidosPage() {
                         onClick={() => {
                           setPedidoSeleccionado(p);
                           setBuscarPedidoModal(`${p.idPedido} — ${c ? nombreCliente(c) : `Cliente ${p.clienteId}`}`);
-                          setFormPago(f => ({ ...f, pedidoId: String(p.idPedido) }));
+                          setFormPago(f => ({
+                            ...f,
+                            pedidoId: String(p.idPedido),
+                            formaPago: formaPagoInicial(p),
+                            conceptoPago: conceptoPagoInicial(p)
+                          }));
                           setPedidoSugerencias([]);
                         }}
                       >
@@ -542,35 +677,42 @@ export function PedidosPage() {
               );
             })()}
 
-            <label className="pos-field floating">
+            <label className="pos-field floating money-field">
               <span>Monto</span>
-              <input type="number" min="0" step="0.01" value={formPago.monto} onChange={e => setFormPago(f => ({ ...f, monto: e.target.value }))} />
+              <input
+                inputMode="decimal"
+                type="text"
+                disabled={pedidoSeleccionado?.formaPago === "Intercambio"}
+                value={montoPagoActual()}
+                onChange={e => actualizarMontoPago(e.target.value)}
+              />
             </label>
 
             <label className="pos-field floating">
               <span>Forma de Pago</span>
-              <select value={formPago.formaPago} onChange={e => setFormPago(f => ({ ...f, formaPago: e.target.value }))}>
-                <option>Efectivo</option>
-                <option>Transferencia</option>
-                <option>Tarjeta</option>
-                <option>Credito</option>
+              <select
+                value={formPago.formaPago}
+                disabled={pedidoSeleccionado?.formaPago === "Intercambio"}
+                onChange={e => setFormPago(f => ({ ...f, formaPago: e.target.value }))}
+              >
+                {pedidoSeleccionado?.formaPago === "Intercambio" ? (
+                  <option>Intercambio</option>
+                ) : (
+                  <>
+                    <option>Efectivo</option>
+                    <option>Transferencia</option>
+                  </>
+                )}
               </select>
             </label>
-
-            <label className="pos-field floating">
-              <span>Tipo de Cobro</span>
-              <select value={String(formPago.pagoDividido)} onChange={e => setFormPago(f => ({ ...f, pagoDividido: e.target.value === "true" }))}>
-                <option value="false">Pago único</option>
-                <option value="true">Pago dividido</option>
-              </select>
-            </label>
-
             <label className="pos-field floating">
               <span>Concepto</span>
               <select value={formPago.conceptoPago} onChange={e => setFormPago(f => ({ ...f, conceptoPago: e.target.value }))}>
-                <option value="Pago_parcial">Pago parcial</option>
-                <option value="Pago_total">Pago total</option>
-                <option value="Anticipo">Anticipo</option>
+                {opcionesConceptoPago(pedidoSeleccionado).map(opcion => (
+                  <option key={opcion.value} value={opcion.value}>
+                    {opcion.label}
+                  </option>
+                ))}
               </select>
             </label>
 
@@ -591,3 +733,6 @@ export function PedidosPage() {
     </section>
   );
 }
+
+
+
