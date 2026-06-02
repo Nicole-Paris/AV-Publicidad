@@ -9,7 +9,7 @@ public final class PagoConstants {
     public static final String CONCEPTO_ANTICIPO = "Anticipo";
     public static final String CONCEPTO_ABONO_CREDITO = "Abono_credito";
     public static final String CONCEPTO_LIQUIDACION = "Liquidacion";
-    public static final String CONCEPTO_PAGO_TOTAL = "Pago_total";
+    public static final String CONCEPTO_ABONO = "Abono";
 
     private PagoConstants() {
     }

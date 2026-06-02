@@ -8,6 +8,17 @@ export function listarServicios() {
   return apiRequest("/servicios");
 }
 
+export function listarCategoriasServicio() {
+  return apiRequest("/categorias-servicio");
+}
+
+export function crearCategoriaServicio(payload) {
+  return apiRequest("/categorias-servicio", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
 export function listarSucursales() {
   return apiRequest("/sucursales");
 }

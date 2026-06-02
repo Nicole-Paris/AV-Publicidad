@@ -137,10 +137,14 @@ public class PagoService {
             throw new ValidationException("El anticipo solo puede registrarse como primer pago");
         }
 
-        if ((PagoConstants.CONCEPTO_LIQUIDACION.equals(concepto)
-                || PagoConstants.CONCEPTO_PAGO_TOTAL.equals(concepto))
+        if (PagoConstants.CONCEPTO_LIQUIDACION.equals(concepto)
                 && request.getMonto().compareTo(saldoPendiente) != 0) {
-            throw new ValidationException("La liquidacion o pago total debe cubrir exactamente el saldo pendiente");
+            throw new ValidationException("La liquidacion debe cubrir exactamente el saldo pendiente");
+        }
+
+        if (PagoConstants.CONCEPTO_ABONO.equals(concepto)
+                && request.getMonto().compareTo(saldoPendiente) >= 0) {
+            throw new ValidationException("El abono debe ser menor al saldo pendiente; usa liquidacion para cubrir el total");
         }
 
         if (PagoConstants.CONCEPTO_ABONO_CREDITO.equals(concepto)
@@ -183,8 +187,8 @@ public class PagoService {
         if (PagoConstants.CONCEPTO_LIQUIDACION.equalsIgnoreCase(valor)) {
             return PagoConstants.CONCEPTO_LIQUIDACION;
         }
-        if (PagoConstants.CONCEPTO_PAGO_TOTAL.equalsIgnoreCase(valor)) {
-            return PagoConstants.CONCEPTO_PAGO_TOTAL;
+        if (PagoConstants.CONCEPTO_ABONO.equalsIgnoreCase(valor)) {
+            return PagoConstants.CONCEPTO_ABONO;
         }
 
         throw new ValidationException("El concepto de pago no es valido");

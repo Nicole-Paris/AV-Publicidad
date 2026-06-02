@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { listarClientes, listarServicios, listarSucursales, obtenerCliente, crearServicio } from "../api/catalogApi.js";
+import {
+  crearCategoriaServicio,
+  crearServicio,
+  listarCategoriasServicio,
+  listarClientes,
+  listarServicios,
+  listarSucursales,
+  obtenerCliente
+} from "../api/catalogApi.js";
 import { actualizarPedido, crearDetallePedido, crearPedido } from "../api/pedidoApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { AppIcon } from "../components/AppIcon.jsx";
@@ -41,6 +49,7 @@ export function PuntoVentaPage() {
   const [clienteSearch, setClienteSearch] = useState("");
   const [clienteSuggestionsOpen, setClienteSuggestionsOpen] = useState(false);
   const [servicios, setServicios] = useState([]);
+  const [categoriasServicio, setCategoriasServicio] = useState([]);
   const [sucursales, setSucursales] = useState([]);
   const [loadingCatalogos, setLoadingCatalogos] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -67,8 +76,11 @@ export function PuntoVentaPage() {
 
   // Nuevo: modal de servicio
   const [modalServicio, setModalServicio] = useState(false);
-  const [formServicio, setFormServicio] = useState({ nombre: "", descripcion: "" });
+  const [formServicio, setFormServicio] = useState({ nombre: "", descripcion: "", categoriaServicioId: "" });
+  const [formCategoriaServicio, setFormCategoriaServicio] = useState({ nombre: "", descripcion: "" });
+  const [mostrarNuevaCategoria, setMostrarNuevaCategoria] = useState(false);
   const [savingServicio, setSavingServicio] = useState(false);
+  const [savingCategoriaServicio, setSavingCategoriaServicio] = useState(false);
 
   // helpers para notificaciones
   function mostrarError(msg) {
@@ -88,10 +100,11 @@ export function PuntoVentaPage() {
       setError("");
 
       try {
-        const [clientesData, serviciosData, sucursalesData] = await Promise.all([
+        const [clientesData, serviciosData, sucursalesData, categoriasServicioData] = await Promise.all([
           listarClientes(),
           listarServicios(),
-          listarSucursales()
+          listarSucursales(),
+          listarCategoriasServicio()
         ]);
 
         if (!active) {
@@ -101,6 +114,7 @@ export function PuntoVentaPage() {
         setClientes(clientesData);
         setServicios(serviciosData);
         setSucursales(sucursalesData);
+        setCategoriasServicio(categoriasServicioData);
       } catch (err) {
         if (active) {
           mostrarError(err.message || String(err));
@@ -348,24 +362,55 @@ export function PuntoVentaPage() {
 
   async function guardarServicio() {
     if (!formServicio.nombre.trim()) { mostrarError("Escribe el nombre del servicio."); return; }
+    if (!formServicio.categoriaServicioId) { mostrarError("Selecciona una categoria de servicio."); return; }
     setSavingServicio(true);
     try {
       const nuevo = await crearServicio({
         nombre: formServicio.nombre.trim(),
         descripcion: formServicio.descripcion.trim(),
         estado: "Activo",
-        categoriaServicioId: 1,
+        categoriaServicioId: Number(formServicio.categoriaServicioId),
         createdBy: session.empleadoId
       });
       const serviciosActualizados = await listarServicios();
       setServicios(serviciosActualizados);
       setDetalle(d => ({ ...d, servicioId: String(nuevo.idServicio || "") }));
       setModalServicio(false);
-      setFormServicio({ nombre: "", descripcion: "" });
+      setFormServicio({ nombre: "", descripcion: "", categoriaServicioId: "" });
+      setMostrarNuevaCategoria(false);
     } catch(err) {
       mostrarError(err.message || String(err));
     } finally {
       setSavingServicio(false);
+    }
+  }
+
+  async function guardarCategoriaServicio() {
+    if (!formCategoriaServicio.nombre.trim()) {
+      mostrarError("Escribe el nombre de la categoria.");
+      return;
+    }
+
+    setSavingCategoriaServicio(true);
+    try {
+      const nueva = await crearCategoriaServicio({
+        nombre: formCategoriaServicio.nombre.trim(),
+        descripcion: formCategoriaServicio.descripcion.trim(),
+        estado: "Activo",
+        createdBy: session.empleadoId
+      });
+      const categoriasActualizadas = await listarCategoriasServicio();
+      setCategoriasServicio(categoriasActualizadas);
+      setFormServicio((current) => ({
+        ...current,
+        categoriaServicioId: String(nueva.idCategoriaServicio || "")
+      }));
+      setFormCategoriaServicio({ nombre: "", descripcion: "" });
+      setMostrarNuevaCategoria(false);
+    } catch (err) {
+      mostrarError(err.message || String(err));
+    } finally {
+      setSavingCategoriaServicio(false);
     }
   }
 
@@ -608,7 +653,56 @@ export function PuntoVentaPage() {
                 onChange={e => setFormServicio(f => ({ ...f, descripcion: e.target.value }))}
               />
             </label>
-            <div style={{display:"flex", justifyContent:"flex-end", gap:12, marginTop:20}}>
+            <label className="pos-field floating">
+              <span>Categoria</span>
+              <select
+                value={formServicio.categoriaServicioId}
+                onChange={e => setFormServicio(f => ({ ...f, categoriaServicioId: e.target.value }))}
+              >
+                <option value="">Selecciona una categoria</option>
+                {categoriasServicio.map(categoria => (
+                  <option key={categoria.idCategoriaServicio} value={categoria.idCategoriaServicio}>
+                    {categoria.nombre}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              className="outline-action compact-action"
+              type="button"
+              onClick={() => setMostrarNuevaCategoria(current => !current)}
+            >
+              <span aria-hidden="true">+</span>
+              Nueva categoria
+            </button>
+            {mostrarNuevaCategoria && (
+              <div className="inline-create-panel">
+                <label className="pos-field floating">
+                  <span>Nombre de categoria</span>
+                  <input
+                    type="text"
+                    value={formCategoriaServicio.nombre}
+                    onChange={e => setFormCategoriaServicio(f => ({ ...f, nombre: e.target.value }))}
+                  />
+                </label>
+                <label className="pos-field floating">
+                  <span>Descripcion</span>
+                  <input
+                    type="text"
+                    value={formCategoriaServicio.descripcion}
+                    onChange={e => setFormCategoriaServicio(f => ({ ...f, descripcion: e.target.value }))}
+                  />
+                </label>
+                <button
+                  className="primary-button inline-create-button"
+                  disabled={savingCategoriaServicio}
+                  onClick={guardarCategoriaServicio}
+                  type="button"
+                >
+                  {savingCategoriaServicio ? "Guardando..." : "Guardar categoria"}
+                </button>
+              </div>
+            )}            <div style={{display:"flex", justifyContent:"flex-end", gap:12, marginTop:20}}>
               <button className="ghost-button" type="button" onClick={() => setModalServicio(false)}>Cancelar</button>
               <button className="primary-button" type="button" disabled={savingServicio} onClick={guardarServicio}>
                 {savingServicio ? "Guardando..." : "Guardar Servicio"}
@@ -620,3 +714,4 @@ export function PuntoVentaPage() {
     </section>
   );
 }
+

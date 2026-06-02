@@ -563,7 +563,7 @@ CREATE TABLE IF NOT EXISTS `AV`.`pago` (
   `hora_pago` TIME NOT NULL,
   `referencia` VARCHAR(50) NOT NULL,
   `forma_pago` ENUM('Efectivo', 'Transferencia', 'Intercambio') NOT NULL,
-  `concepto_pago` ENUM('Anticipo', 'Abono_credito', 'Liquidacion', 'Pago_total') NOT NULL,
+  `concepto_pago` ENUM('Anticipo', 'Abono_credito', 'Liquidacion', 'Abono') NOT NULL,
   `created_at` DATETIME NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` DATETIME NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `deleted_at` DATETIME NULL DEFAULT NULL,

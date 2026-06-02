@@ -3,6 +3,7 @@ import { listarPedidos, actualizarPedido, listarDetallesPedido } from "../api/pe
 import { listarPagosPorPedido, listarTodosPagos, crearPago } from "../api/pagoApi.js";
 // import listarServicios además de listarClientes
 import { listarClientes, listarServicios } from "../api/catalogApi.js";
+import { listarEmpleados } from "../api/empleadoApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
 
 const ESTADOS_PEDIDO = ["Borrador", "Pendiente", "En proceso", "Terminado", "Entregado", "Cancelado"];
@@ -22,6 +23,7 @@ export function PedidosPage() {
   const [tab, setTab] = useState("pedidos");
   const [pedidos, setPedidos] = useState([]);
   const [clientes, setClientes] = useState([]);
+  const [empleados, setEmpleados] = useState([]);
   // nuevo estado para servicios
   const [servicios, setServicios] = useState([]);
   const [detallesPorPedido, setDetallesPorPedido] = useState({});
@@ -68,6 +70,17 @@ export function PedidosPage() {
     return clientes.find(c => Number(c.idCliente) === Number(p.clienteId));
   }
 
+  function nombreEmpleado(id) {
+    const empleado = empleados.find(e => Number(e.idEmpleado) === Number(id));
+    if (!empleado) {
+      return `Empleado ${id || "-"}`;
+    }
+
+    return [empleado.nombre, empleado.apellidoPaterno, empleado.apellidoMaterno]
+      .filter(Boolean)
+      .join(" ");
+  }
+
   function pagosDePedido(pedidoId) {
     return (todosLosPagos || []).filter(pago => Number(pago.pedidoId) === Number(pedidoId));
   }
@@ -82,10 +95,18 @@ export function PedidosPage() {
 
   function montoPagoActual() {
     if (pedidoSeleccionado?.formaPago === "Intercambio") {
+      return Number(pedidoSeleccionado.total || 0).toFixed(2);
+    }
+
+    if (formPago.conceptoPago === "Liquidacion") {
       return saldoPendientePedido(pedidoSeleccionado).toFixed(2);
     }
 
     return formPago.monto;
+  }
+
+  function montoPagoBloqueado() {
+    return pedidoSeleccionado?.formaPago === "Intercambio" || formPago.conceptoPago === "Liquidacion";
   }
 
   function puedeCambiarEstado(estadoActual, estadoNuevo) {
@@ -114,7 +135,7 @@ export function PedidosPage() {
 
   function conceptoPagoInicial(pedidoObj) {
     if (pedidoObj?.formaPago === "Intercambio") {
-      return "Pago_total";
+      return "Liquidacion";
     }
 
     return "Anticipo";
@@ -122,13 +143,13 @@ export function PedidosPage() {
 
   function opcionesConceptoPago(pedidoObj) {
     if (pedidoObj?.formaPago === "Intercambio") {
-      return [{ value: "Pago_total", label: "Pago total" }];
+      return [{ value: "Liquidacion", label: "Liquidacion" }];
     }
 
     const opciones = [
       { value: "Anticipo", label: "Anticipo" },
       { value: "Liquidacion", label: "Liquidacion" },
-      { value: "Pago_total", label: "Pago total" }
+      { value: "Abono", label: "Abono" }
     ];
 
     if (pedidoObj?.formaPago === "Credito") {
@@ -157,12 +178,19 @@ export function PedidosPage() {
       setLoading(true);
       try {
         // ahora también cargamos servicios
-        const [ps, cs, pagos, svcs] = await Promise.all([listarPedidos(), listarClientes(), listarTodosPagos(), listarServicios()]);
+        const [ps, cs, pagos, svcs, emps] = await Promise.all([
+          listarPedidos(),
+          listarClientes(),
+          listarTodosPagos(),
+          listarServicios(),
+          listarEmpleados()
+        ]);
         if (!active) return;
         setPedidos((ps || []).slice().sort((a, b) => Number(b.idPedido) - Number(a.idPedido)));
         setClientes(cs || []);
         setTodosLosPagos(pagos || []);
         setServicios(svcs || []);
+        setEmpleados(emps || []);
       } catch (err) {
         if (active) mostrarError(err.message || String(err));
       } finally {
@@ -263,9 +291,11 @@ export function PedidosPage() {
     if (!pedidoId) { mostrarError("Selecciona un pedido."); return; }
     if (!monto || Number(monto) <= 0) { mostrarError("Ingresa un monto válido."); return; }
 
+    if (!formPago.referencia.trim()) { mostrarError("La referencia es obligatoria."); return; }
+
     const ped = pedidos.find(p => Number(p.idPedido) === pedidoId);
     const pendiente = ped ? saldoPendientePedido(ped) : 0;
-    if (Number(monto) > pendiente) { mostrarError(`El monto excede el pendiente (${money(pendiente)}).`); return; }
+    if (ped?.formaPago !== "Intercambio" && Number(monto) > pendiente) { mostrarError(`El monto excede el pendiente (${money(pendiente)}).`); return; }
 
     setSaving(true);
     try {
@@ -432,6 +462,8 @@ export function PedidosPage() {
                         Entrega: <strong>{pedido.fechaEntrega ? new Date(pedido.fechaEntrega).toLocaleDateString("es-MX") : "—"}</strong>
                         {" · "}
                         Forma de pago: <strong>{pedido.formaPago || "—"}</strong>
+                        {" · "}
+                        Creado por: <strong>{nombreEmpleado(pedido.createdBy || pedido.empleadoId)}</strong>
                       </p>
 
                       <h3>Servicios del pedido</h3>
@@ -539,7 +571,7 @@ export function PedidosPage() {
                         <table className="inv-table">
                           <thead>
                             <tr>
-                              <th>Fecha</th><th>Hora</th><th>Forma</th><th>Concepto</th><th>Monto</th><th>Referencia</th>
+                              <th>Fecha</th><th>Hora</th><th>Forma</th><th>Concepto</th><th>Monto</th><th>Recibio</th><th>Referencia</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -550,6 +582,7 @@ export function PedidosPage() {
                                 <td>{pago.formaPago}</td>
                                 <td>{pago.conceptoPago}</td>
                                 <td>{money(pago.monto)}</td>
+                                <td>{nombreEmpleado(pago.empleadoIdEmpleado || pago.createdBy)}</td>
                                 <td>{pago.referencia && pago.referencia !== "." ? pago.referencia : "—"}</td>
                               </tr>
                             ))}
@@ -682,7 +715,7 @@ export function PedidosPage() {
               <input
                 inputMode="decimal"
                 type="text"
-                disabled={pedidoSeleccionado?.formaPago === "Intercambio"}
+                disabled={montoPagoBloqueado()}
                 value={montoPagoActual()}
                 onChange={e => actualizarMontoPago(e.target.value)}
               />
@@ -707,7 +740,11 @@ export function PedidosPage() {
             </label>
             <label className="pos-field floating">
               <span>Concepto</span>
-              <select value={formPago.conceptoPago} onChange={e => setFormPago(f => ({ ...f, conceptoPago: e.target.value }))}>
+              <select
+                value={formPago.conceptoPago}
+                disabled={pedidoSeleccionado?.formaPago === "Intercambio"}
+                onChange={e => setFormPago(f => ({ ...f, conceptoPago: e.target.value }))}
+              >
                 {opcionesConceptoPago(pedidoSeleccionado).map(opcion => (
                   <option key={opcion.value} value={opcion.value}>
                     {opcion.label}
@@ -717,7 +754,7 @@ export function PedidosPage() {
             </label>
 
             <label className="pos-field floating">
-              <span>Referencia (opcional)</span>
+              <span>Referencia</span>
               <input type="text" value={formPago.referencia} onChange={e => setFormPago(f => ({ ...f, referencia: e.target.value }))} />
             </label>
 
@@ -733,6 +770,10 @@ export function PedidosPage() {
     </section>
   );
 }
+
+
+
+
 
 
 
