@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { listarClientes, listarServicios, listarSucursales } from "../api/catalogApi.js";
+import { listarClientes, listarServicios, listarSucursales, obtenerCliente, crearServicio } from "../api/catalogApi.js";
 import { actualizarPedido, crearDetallePedido, crearPedido } from "../api/pedidoApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { AppIcon } from "../components/AppIcon.jsx";
@@ -46,11 +46,16 @@ export function PuntoVentaPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
+  // modal de error flotante
+  const [modalError, setModalError] = useState("");
+
   const [pedido, setPedido] = useState({
     clienteId: "",
     origen: "Presencial",
     formaPago: "Contado",
-    fechaEntrega: localDate(1)
+    fechaEntrega: localDate(1),
+    tipoPedido: "Pedido"
   });
   const [detalle, setDetalle] = useState({
     servicioId: "",
@@ -59,6 +64,21 @@ export function PuntoVentaPage() {
     unidadDetalle: "Piezas"
   });
   const [items, setItems] = useState([]);
+
+  // Nuevo: modal de servicio
+  const [modalServicio, setModalServicio] = useState(false);
+  const [formServicio, setFormServicio] = useState({ nombre: "", descripcion: "" });
+  const [savingServicio, setSavingServicio] = useState(false);
+
+  // helpers para notificaciones
+  function mostrarError(msg) {
+    setModalError(msg);
+  }
+  function mostrarSuccess(msg) {
+    setSuccess(msg);
+    setError("");
+    setTimeout(() => setSuccess(""), 2000);
+  }
 
   useEffect(() => {
     let active = true;
@@ -83,7 +103,7 @@ export function PuntoVentaPage() {
         setSucursales(sucursalesData);
       } catch (err) {
         if (active) {
-          setError(err.message);
+          mostrarError(err.message || String(err));
         }
       } finally {
         if (active) {
@@ -153,6 +173,12 @@ export function PuntoVentaPage() {
 
   function updateDetalle(event) {
     const { name, value } = event.target;
+    // Nuevo: detectar opción nuevo servicio
+    if (name === "servicioId" && value === "__nuevo__") {
+      setModalServicio(true);
+      return;
+    }
+
     setDetalle((current) => {
       if (name === "cantidad" && current.unidadDetalle === "Piezas") {
         return { ...current, cantidad: value.replace(/\D/g, "") };
@@ -184,7 +210,7 @@ export function PuntoVentaPage() {
     setSuccess("");
 
     if (!canAdd) {
-      setError(
+      mostrarError(
         detalle.unidadDetalle === "Piezas"
           ? "Para piezas, la cantidad debe ser un numero entero."
           : "Selecciona un servicio, cantidad y precio unitario validos."
@@ -225,8 +251,24 @@ export function PuntoVentaPage() {
     setSuccess("");
 
     if (!canConfirm) {
-      setError("Selecciona cliente, sucursal y al menos un servicio antes de confirmar.");
+      mostrarError("Selecciona cliente, sucursal y al menos un servicio antes de confirmar.");
       return;
+    }
+
+    // Validación de crédito si aplica
+    if (pedido.formaPago === "Credito") {
+      try {
+        const clienteData = await obtenerCliente(Number(pedido.clienteId));
+        const creditoDisponible =
+          Number(clienteData.limiteCredito || 0) - Number(clienteData.creditoActual || 0);
+        if (total > creditoDisponible) {
+          mostrarError(`Crédito insuficiente. Disponible: ${money(creditoDisponible)}`);
+          return;
+        }
+      } catch (err) {
+        mostrarError(err.message || String(err));
+        return;
+      }
     }
 
     setSaving(true);
@@ -236,7 +278,7 @@ export function PuntoVentaPage() {
       fechaEntrega: `${pedido.fechaEntrega}T18:00:00`,
       total: total.toFixed(2),
       descripcion: pedido.origen,
-      tipoPedido: "Pedido",
+      tipoPedido: pedido.tipoPedido,
       formaPago: pedido.formaPago,
       clienteId: Number(pedido.clienteId),
       empleadoId: session.empleadoId,
@@ -245,44 +287,89 @@ export function PuntoVentaPage() {
     };
 
     try {
-      const nuevoPedido = await crearPedido({
-        ...payloadBase,
-        estado: "Borrador"
-      });
+      // Crear siempre como Borrador para permitir crear detalles
+      const crearPayload = { ...payloadBase, estado: "Borrador" };
+      const nuevo = await crearPedido(crearPayload);
 
-      await Promise.all(
-        items.map((item) =>
-          crearDetallePedido({
-            cantidad: item.cantidad.toFixed(2),
-            precioUnitario: item.precioUnitario.toFixed(2),
-            subtotal: item.subtotal.toFixed(2),
-            unidadDetalle: item.unidadDetalle,
-            pedidoId: nuevoPedido.idPedido,
-            servicioId: item.servicioId,
+      const pedidoId = Number(nuevo.idPedido || nuevo.id || nuevo.pedidoId);
+
+      // Crear detalles del pedido
+      for (const it of items) {
+        try {
+          await crearDetallePedido({
+            pedidoId,
+            servicioId: Number(it.servicioId || it.servicioId),
+            cantidad: Number(it.cantidad),
+            precioUnitario: Number(it.precioUnitario),
+            subtotal: Number(it.subtotal),
+            unidadDetalle: it.unidadDetalle,
             createdBy: session.empleadoId
-          })
-        )
-      );
+          });
+        } catch (errDetalle) {
+          // si falla un detalle, informar pero continuar intentando los demás
+          console.error("Error creando detalle:", errDetalle);
+          mostrarError(errDetalle.message || String(errDetalle));
+        }
+      }
 
-      await actualizarPedido(nuevoPedido.idPedido, {
-        ...payloadBase,
-        estado: "Pendiente",
-        updatedBy: session.empleadoId
-      });
+      // Si el usuario pidió un "Pedido", actualizar a "En proceso" después de crear detalles
+      if (pedido.tipoPedido === "Pedido") {
+        try {
+          await actualizarPedido(pedidoId, { ...nuevo, estado: "En proceso", updatedBy: session.empleadoId });
+        } catch (errUpd) {
+          // informar pero no bloquear: el pedido ya fue creado y los detalles también
+          console.error("Error actualizando estado a En proceso:", errUpd);
+          mostrarError(errUpd.message || String(errUpd));
+        }
+      }
 
-      setSuccess(`Pedido #${nuevoPedido.idPedido} confirmado correctamente.`);
+      // limpiar estado de UI
+      setItems([]);
+      setDetalle({ servicioId: "", cantidad: "1", precioUnitario: "", unidadDetalle: "Piezas" });
       setPedido({
         clienteId: "",
         origen: "Presencial",
         formaPago: "Contado",
-        fechaEntrega: localDate(1)
+        fechaEntrega: localDate(1),
+        tipoPedido: "Pedido"
       });
-      setClienteSearch("");
-      setItems([]);
+
+      mostrarSuccess("Pedido creado correctamente.");
+
+      // Notificar al resto de la app que se creó un pedido para que otros componentes (p.ej. PedidosPage) refresquen
+      try {
+        const createdId = pedidoId;
+        window.dispatchEvent(new CustomEvent("pedido:creado", { detail: { pedidoId: createdId } }));
+      } catch (e) {
+        console.warn("No se pudo emitir evento pedido:creado", e);
+      }
     } catch (err) {
-      setError(err.message);
+      mostrarError(err.message || String(err));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function guardarServicio() {
+    if (!formServicio.nombre.trim()) { mostrarError("Escribe el nombre del servicio."); return; }
+    setSavingServicio(true);
+    try {
+      const nuevo = await crearServicio({
+        nombre: formServicio.nombre.trim(),
+        descripcion: formServicio.descripcion.trim(),
+        estado: "Activo",
+        categoriaServicioId: 1,
+        createdBy: session.empleadoId
+      });
+      const serviciosActualizados = await listarServicios();
+      setServicios(serviciosActualizados);
+      setDetalle(d => ({ ...d, servicioId: String(nuevo.idServicio || "") }));
+      setModalServicio(false);
+      setFormServicio({ nombre: "", descripcion: "" });
+    } catch(err) {
+      mostrarError(err.message || String(err));
+    } finally {
+      setSavingServicio(false);
     }
   }
 
@@ -290,6 +377,10 @@ export function PuntoVentaPage() {
     <section className="pos-page">
       <div className="pos-title">
         <h1>Nuevo Pedido</h1>
+        {sucursalActiva && (
+          <p style={{ color: "#64748b", fontSize: 14, margin: "0 0 16px" }}>
+          </p>
+        )}
       </div>
 
       {(error || success) && (
@@ -364,6 +455,14 @@ export function PuntoVentaPage() {
             </label>
           </div>
 
+          <label className="pos-field floating">
+            <span>Tipo de Pedido</span>
+            <select name="tipoPedido" onChange={updatePedido} value={pedido.tipoPedido}>
+              <option value="Pedido">Pedido</option>
+              <option value="Cotizacion">Cotización</option>
+            </select>
+          </label>
+
           <h3>Agregar Servicio</h3>
 
           <label className="pos-field">
@@ -379,6 +478,7 @@ export function PuntoVentaPage() {
                   {servicio.nombre}
                 </option>
               ))}
+              <option value="__nuevo__">+ Agregar nuevo servicio...</option>
             </select>
           </label>
 
@@ -476,10 +576,51 @@ export function PuntoVentaPage() {
           </div>
 
           <button className="confirm-order" disabled={!canConfirm} onClick={confirmarPedido} type="button">
-            {saving ? "Confirmando..." : "Confirmar Pedido"}
+            {saving ? "Confirmando..." : (pedido.tipoPedido === "Cotizacion" ? "Crear Cotización" : "Confirmar Pedido")}
           </button>
         </section>
       </div>
+
+      {/* Modal de error flotante */}
+      {modalError && (
+        <div className="modal-overlay" onClick={() => setModalError("")}>
+          <div className="modal-error-card" onClick={e => e.stopPropagation()}>
+            <p className="modal-error-icon">⚠</p>
+            <p className="modal-error-msg">{modalError}</p>
+            <button className="primary-button" onClick={() => setModalError("")}>Entendido</button>
+          </div>
+        </div>
+      )}
+
+      {modalServicio && (
+        <div className="modal-overlay" onClick={() => setModalServicio(false)}>
+          <div className="modal-card" onClick={e => e.stopPropagation()}>
+            <h2>Nuevo Servicio</h2>
+            <label className="pos-field floating">
+              <span>Nombre</span>
+              <input
+                type="text"
+                value={formServicio.nombre}
+                onChange={e => setFormServicio(f => ({ ...f, nombre: e.target.value }))}
+              />
+            </label>
+            <label className="pos-field floating">
+              <span>Descripción</span>
+              <input
+                type="text"
+                value={formServicio.descripcion}
+                onChange={e => setFormServicio(f => ({ ...f, descripcion: e.target.value }))}
+              />
+            </label>
+            <div style={{display:"flex", justifyContent:"flex-end", gap:12, marginTop:20}}>
+              <button className="ghost-button" type="button" onClick={() => setModalServicio(false)}>Cancelar</button>
+              <button className="primary-button" type="button" disabled={savingServicio} onClick={guardarServicio}>
+                {savingServicio ? "Guardando..." : "Guardar Servicio"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

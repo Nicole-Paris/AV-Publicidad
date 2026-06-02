@@ -20,3 +20,15 @@ export function crearDetallePedido(payload) {
     body: JSON.stringify(payload)
   });
 }
+
+export function listarPedidos() {
+  return apiRequest("/pedidos");
+}
+
+export function obtenerPedido(id) {
+  return apiRequest(`/pedidos/${id}`);
+}
+
+export function listarDetallesPedido(pedidoId) {
+  return apiRequest(`/detalles-pedido?pedidoId=${pedidoId}`);
+}
