@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import {
   listarSucursales, crearSucursal,
-  listarGlobalValues, crearGlobalValue
+  listarGlobalValues, crearGlobalValue,
+  actualizarGlobalValue
 } from "../api/configuracionApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
 
@@ -22,7 +23,8 @@ export function ConfiguracionPage() {
   const [formEmpresa, setFormEmpresa] = useState({
     nombreEmpresa: "", razonSocial: "", rfc: "",
     regimenFiscal: "", direccionFiscal: "",
-    telefono: "", correo: ""
+    telefono: "", correo: "",
+    logoUrl: ""
   });
 
   function mostrarError(msg) { setModalError(msg); }
@@ -58,7 +60,9 @@ export function ConfiguracionPage() {
           regimenFiscal: gvsArr.find(g => g.nombre === "regimenFiscal")?.valor || "",
           direccionFiscal: gvsArr.find(g => g.nombre === "direccionFiscal")?.valor || "",
           telefono: gvsArr.find(g => g.nombre === "telefono")?.valor || "",
-          correo: gvsArr.find(g => g.nombre === "correo")?.valor || ""
+          correo: gvsArr.find(g => g.nombre === "correo")?.valor || "",
+          // si no hay valor en globalValues, tomar el logo guardado en localStorage (vincula con AppLayout)
+          logoUrl: gvsArr.find(g => g.nombre === "logoUrl")?.valor || localStorage.getItem("av_logo_url") || ""
         });
       } catch (err) {
         if (active) mostrarError(err.message || String(err));
@@ -73,26 +77,57 @@ export function ConfiguracionPage() {
   async function guardarEmpresa() {
     setSaving(true);
     try {
-      const campos = [
-        "nombreEmpresa", "razonSocial", "rfc",
-        "regimenFiscal", "direccionFiscal", "telefono", "correo"
-      ];
-      // validar RFC: 12 caracteres alfanuméricos (letras y números)
-      const rfc = (formEmpresa.rfc || "").trim();
-      if (!/^[A-Z0-9]{12}$/.test(rfc.toUpperCase())) {
-        mostrarError("El RFC debe tener 12 caracteres alfanuméricos (letras y números).");
+      // Guardar solo campos (no logoUrl) que tengan valor no vacío
+      const camposConValor = Object.entries(formEmpresa).filter(
+        ([nombre, valor]) =>
+          nombre !== "logoUrl" &&
+          valor &&
+          valor.toString().trim() !== ""
+      );
+
+      if (camposConValor.length === 0) {
+        mostrarSuccess("No hay datos que guardar.");
         setSaving(false);
         return;
       }
-      await Promise.all(campos.map(nombre =>
-        crearGlobalValue({
-          tipo: "empresa",
-          nombre,
-          valor: nombre === "rfc" ? (formEmpresa[nombre] || "").toUpperCase() : (formEmpresa[nombre] || ""),
-          createdBy: session.empleadoId
-        })
-      ));
-      mostrarSuccess("Datos de empresa guardados.");
+
+      for (const [nombre, valor] of camposConValor) {
+        const existente = globalValues.find(g => g.nombre === nombre);
+        if (existente) {
+          const id = existente.idGlobalValue || existente.id;
+          await actualizarGlobalValue(id, {
+            tipo: existente.tipo || "empresa",
+            nombre,
+            valor: valor.toString().trim(),
+            updatedBy: session.empleadoId
+          });
+        } else {
+          await crearGlobalValue({
+            tipo: "empresa",
+            nombre,
+            valor: valor.toString().trim(),
+            createdBy: session.empleadoId
+          });
+        }
+      }
+
+      // Refrescar valores desde backend
+      const gvsRefreshed = await listarGlobalValues();
+      const gvsArr = safe(gvsRefreshed);
+      setGlobalValues(gvsArr);
+      setFormEmpresa(f => ({
+        ...f,
+        nombreEmpresa: gvsArr.find(g => g.nombre === "nombreEmpresa")?.valor || f.nombreEmpresa,
+        razonSocial: gvsArr.find(g => g.nombre === "razonSocial")?.valor || f.razonSocial,
+        rfc: gvsArr.find(g => g.nombre === "rfc")?.valor || f.rfc,
+        regimenFiscal: gvsArr.find(g => g.nombre === "regimenFiscal")?.valor || f.regimenFiscal,
+        direccionFiscal: gvsArr.find(g => g.nombre === "direccionFiscal")?.valor || f.direccionFiscal,
+        telefono: gvsArr.find(g => g.nombre === "telefono")?.valor || f.telefono,
+        correo: gvsArr.find(g => g.nombre === "correo")?.valor || f.correo,
+        logoUrl: gvsArr.find(g => g.nombre === "logoUrl")?.valor || localStorage.getItem("av_logo_url") || f.logoUrl
+      }));
+
+      mostrarSuccess("Datos guardados correctamente.");
     } catch (err) {
       mostrarError(err.message || String(err));
     } finally {
@@ -140,6 +175,47 @@ export function ConfiguracionPage() {
     }
   }
 
+  async function guardarSoloLogo() {
+    if (!formEmpresa.logoUrl || !formEmpresa.logoUrl.toString().trim()) {
+      mostrarError("Escribe una URL de logotipo válida.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const nombre = "logoUrl";
+      const valor = formEmpresa.logoUrl.toString().trim();
+      const existente = globalValues.find(g => g.nombre === nombre);
+      if (existente) {
+        const id = existente.idGlobalValue || existente.id;
+        await actualizarGlobalValue(id, {
+          tipo: "empresa",
+          nombre,
+          valor,
+          updatedBy: session.empleadoId
+        });
+      } else {
+        await crearGlobalValue({
+          tipo: "empresa",
+          nombre,
+          valor,
+          createdBy: session.empleadoId
+        });
+      }
+      localStorage.setItem("av_logo_url", valor);
+      window.dispatchEvent(new Event("av_logo_changed"));
+      mostrarSuccess("Logo actualizado correctamente.");
+      // refrescar globalValues localmente
+      const gvsRefreshed = await listarGlobalValues();
+      const gvsArr = safe(gvsRefreshed);
+      setGlobalValues(gvsArr);
+      setFormEmpresa(f => ({ ...f, logoUrl: gvsArr.find(g => g.nombre === "logoUrl")?.valor || valor }));
+    } catch (err) {
+      mostrarError(err.message || String(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <section className="page-stack">
       <div className="page-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -179,94 +255,160 @@ export function ConfiguracionPage() {
       </div>
 
       {tab === "empresa" && (
-        <section className="pos-card" style={{maxWidth: 800}}>
-          <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:24}}>
-            <h2 style={{margin:0}}>Datos Fiscales</h2>
-          </div>
+        <div style={{display:"grid", gridTemplateColumns:"1fr 320px", gap:24, alignItems:"start"}}>
+          <section className="pos-card">
+            <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:24}}>
+              <h2 style={{margin:0}}>Datos Fiscales</h2>
+            </div>
 
-          <div className="pos-field-row">
+            <div className="pos-field-row">
+              <label className="pos-field floating">
+                <span>Nombre de la Empresa</span>
+                <input
+                  type="text"
+                  value={formEmpresa.nombreEmpresa}
+                  onChange={e => setFormEmpresa(f => ({...f, nombreEmpresa: e.target.value}))}
+                />
+              </label>
+              <label className="pos-field floating">
+                <span>Razón Social</span>
+                <input
+                  type="text"
+                  value={formEmpresa.razonSocial}
+                  onChange={e => setFormEmpresa(f => ({...f, razonSocial: e.target.value}))}
+                />
+              </label>
+            </div>
+
+            <div className="pos-field-row">
+              <label className="pos-field floating">
+                <span>RFC</span>
+                <input
+                  type="text"
+                  maxLength={12}
+                  value={formEmpresa.rfc}
+                  onChange={e => setFormEmpresa(f => ({
+                    ...f,
+                    rfc: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0,12)
+                  }))}
+                />
+              </label>
+              <label className="pos-field floating">
+                <span>Régimen Fiscal</span>
+                <input
+                  type="text"
+                  value={formEmpresa.regimenFiscal}
+                  onChange={e => setFormEmpresa(f => ({...f, regimenFiscal: e.target.value}))}
+                />
+              </label>
+            </div>
+
+            <h2 style={{margin:"24px 0 16px"}}>Datos de Contacto</h2>
+
             <label className="pos-field floating">
-              <span>Nombre de la Empresa</span>
+              <span>Dirección Fiscal</span>
               <input
                 type="text"
-                value={formEmpresa.nombreEmpresa}
-                onChange={e => setFormEmpresa(f => ({...f, nombreEmpresa: e.target.value}))}
+                value={formEmpresa.direccionFiscal}
+                onChange={e => setFormEmpresa(f => ({...f, direccionFiscal: e.target.value}))}
               />
             </label>
+
+            <div className="pos-field-row">
+              <label className="pos-field floating">
+                <span>Teléfono</span>
+                <input
+                  type="text"
+                  value={formEmpresa.telefono}
+                  onChange={e => setFormEmpresa(f => ({...f, telefono: e.target.value}))}
+                />
+              </label>
+              <label className="pos-field floating">
+                <span>Correo Electrónico</span>
+                <input
+                  type="email"
+                  value={formEmpresa.correo}
+                  onChange={e => setFormEmpresa(f => ({...f, correo: e.target.value}))}
+                />
+              </label>
+            </div>
+
+            <div style={{display:"flex", justifyContent:"flex-end", marginTop:24}}>
+              <button
+                className="primary-button"
+                type="button"
+                disabled={saving || loading}
+                onClick={guardarEmpresa}
+              >
+                {saving ? "Guardando..." : "Guardar Cambios"}
+              </button>
+            </div>
+          </section>
+
+          <section className="pos-card" style={{textAlign:"center"}}>
+            <h2 style={{marginBottom:16}}>Logotipo</h2>
+
+            <div style={{
+              width:120, height:120, borderRadius:16,
+              background: formEmpresa.logoUrl ? "transparent" : "#fb5a35",
+              display:"flex", alignItems:"center", justifyContent:"center",
+              margin:"0 auto 16px", overflow:"hidden",
+              border: formEmpresa.logoUrl ? "2px dashed #e2e2e2" : "none"
+            }}>
+              {formEmpresa.logoUrl ? (
+                <img
+                  src={formEmpresa.logoUrl}
+                  alt="Logo"
+                  style={{
+                    width:"100%", height:"100%", objectFit:"contain",
+                    borderRadius:16
+                  }}
+                  onError={e => { e.target.style.display="none"; }}
+                />
+              ) : (
+                // misma marca que AppLayout cuando no hay logo personalizado
+                <span className="brand-mark" style={{
+                  display:"inline-flex",
+                  width:72, height:72,
+                  alignItems:"center", justifyContent:"center",
+                  borderRadius:12, background:"#fb5a35",
+                  color:"#fff", fontSize:28, fontWeight:700
+                }}>
+                  av
+                </span>
+              )}
+            </div>
+
             <label className="pos-field floating">
-              <span>Razón Social</span>
+              <span>URL del Logotipo</span>
               <input
                 type="text"
-                value={formEmpresa.razonSocial}
-                onChange={e => setFormEmpresa(f => ({...f, razonSocial: e.target.value}))}
+                value={formEmpresa.logoUrl}
+                onChange={e => setFormEmpresa(f => ({...f, logoUrl: e.target.value}))}
+                placeholder="https://ejemplo.com/logo.png"
               />
             </label>
-          </div>
 
-          <div className="pos-field-row">
-            <label className="pos-field floating">
-              <span>RFC</span>
-              <input
-                type="text"
-                maxLength={12}
-                value={formEmpresa.rfc}
-                onChange={e => setFormEmpresa(f => ({
-                  ...f,
-                  rfc: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0,12)
-                }))}
-              />
-            </label>
-            <label className="pos-field floating">
-              <span>Régimen Fiscal</span>
-              <input
-                type="text"
-                value={formEmpresa.regimenFiscal}
-                onChange={e => setFormEmpresa(f => ({...f, regimenFiscal: e.target.value}))}
-              />
-            </label>
-          </div>
-
-          <h2 style={{margin:"24px 0 16px"}}>Datos de Contacto</h2>
-
-          <label className="pos-field floating">
-            <span>Dirección Fiscal</span>
-            <input
-              type="text"
-              value={formEmpresa.direccionFiscal}
-              onChange={e => setFormEmpresa(f => ({...f, direccionFiscal: e.target.value}))}
-            />
-          </label>
-
-          <div className="pos-field-row">
-            <label className="pos-field floating">
-              <span>Teléfono</span>
-              <input
-                type="text"
-                value={formEmpresa.telefono}
-                onChange={e => setFormEmpresa(f => ({...f, telefono: e.target.value}))}
-              />
-            </label>
-            <label className="pos-field floating">
-              <span>Correo Electrónico</span>
-              <input
-                type="email"
-                value={formEmpresa.correo}
-                onChange={e => setFormEmpresa(f => ({...f, correo: e.target.value}))}
-              />
-            </label>
-          </div>
-
-          <div style={{display:"flex", justifyContent:"flex-end", marginTop:24}}>
             <button
               className="primary-button"
               type="button"
-              disabled={saving || loading}
-              onClick={guardarEmpresa}
+              disabled={saving}
+              style={{width:"100%", marginTop:12}}
+              onClick={guardarSoloLogo}
             >
-              {saving ? "Guardando..." : "Guardar Cambios"}
+              {saving ? "Guardando..." : "Guardar Logo"}
             </button>
-          </div>
-        </section>
+
+            <div style={{marginTop:12, color:"#6b7280", fontSize:14, lineHeight:1.4}}>
+              <p>
+                El logotipo se mostrará en la pantalla de inicio y en los recibos.
+              </p>
+              <p>
+                Formatos recomendados: PNG, JPG, JPEG. Tamaño máximo: 2MB.
+              </p>
+            </div>
+          </section>
+        </div>
       )}
 
       {tab === "sucursales" && (

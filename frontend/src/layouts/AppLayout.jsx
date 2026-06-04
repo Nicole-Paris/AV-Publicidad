@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { AppIcon } from "../components/AppIcon.jsx";
@@ -18,6 +18,16 @@ export function AppLayout() {
   const { session, logout, cambiarSucursal } = useAuth();
   const navigate = useNavigate();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [logoUrl, setLogoUrl] = useState(localStorage.getItem("av_logo_url") || "");
+
+  useEffect(() => {
+    function onLogoChange() {
+      setLogoUrl(localStorage.getItem("av_logo_url") || "");
+    }
+    window.addEventListener("av_logo_changed", onLogoChange);
+    return () => window.removeEventListener("av_logo_changed", onLogoChange);
+  }, []);
+
   const sucursalesSesion = session?.sucursales || [];
 
   function goBack() {
@@ -38,7 +48,19 @@ export function AppLayout() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand">
-          <span className="brand-mark">av</span>
+          {logoUrl ? (
+            <img
+              src={logoUrl}
+              alt="Logo"
+              style={{
+                width:40, height:40, borderRadius:10,
+                objectFit:"contain", background:"#fff"
+              }}
+              onError={e => { e.target.style.display="none"; }}
+            />
+          ) : (
+            <span className="brand-mark">av</span>
+          )}
           <strong>AV Publicidad</strong>
         </div>
 
