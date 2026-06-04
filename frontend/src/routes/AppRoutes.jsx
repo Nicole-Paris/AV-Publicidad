@@ -10,6 +10,7 @@ import { PedidosPage } from "../pages/PedidosPage.jsx";
 import { CorteCajaPage } from "../pages/CorteCajaPage.jsx";
 import { ServiciosPage } from "../pages/ServiciosPage.jsx";
 import { ClientesPage } from "../pages/ClientesPage.jsx";
+import { ConfiguracionPage } from "../pages/ConfiguracionPage.jsx";
 
 function ProtectedRoute({ children }) {
   const location = useLocation();
@@ -64,7 +65,7 @@ export function AppRoutes() {
         <Route path="servicios" element={<ServiciosPage />} />
         <Route path="empleados" element={<PlaceholderPage title="Empleados" />} />
         <Route path="cortes-caja" element={<CorteCajaPage />} />
-        <Route path="configuracion" element={<PlaceholderPage title="Configuracion" />} />
+        <Route path="configuracion" element={<ConfiguracionPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
