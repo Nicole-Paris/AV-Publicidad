@@ -146,7 +146,7 @@ export function InventarioPage() {
     unidad: "Metros",
     costoUnitario: "",
     categoriaMaterialId: "",
-    estado: "Disponible",
+    estado: "Activo",
     // stock moved into material form
     stockActual: "",
     stockMinimo: "",
@@ -574,9 +574,8 @@ export function InventarioPage() {
                   <label className="pos-field floating">
                     <span>Estado</span>
                     <select value={formulario.estado} onChange={(e) => setFormulario((f) => ({ ...f, estado: e.target.value }))}>
-                      <option>Disponible</option>
-                      <option>Agotado</option>
-                      <option>Descontinuado</option>
+                      <option>Activo</option>
+                      <option>Inactivo</option>
                     </select>
                   </label>
                 </div>

@@ -22,5 +22,8 @@ export function listarMovimientos() {
   return apiRequest("/movimientos-inventario");
 }
 export function crearMovimiento(payload) {
-  return apiRequest("/movimientos-inventario", { method: "POST", body: JSON.stringify(payload) });
+  return apiRequest("/movimientos-inventario", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
 }

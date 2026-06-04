@@ -3,13 +3,15 @@ import {
   crearCategoriaServicio,
   crearCliente,
   crearServicio,
-  listarCategoriasServicio,
+  listarCategoriaServicio,
   listarClientes,
   listarServicios,
   listarSucursales,
+  listarServiciosMateriales,
   obtenerCliente
 } from "../api/catalogApi.js";
 import { actualizarPedido, crearDetallePedido, crearPedido } from "../api/pedidoApi.js";
+import { listarInventarios, crearMovimiento } from "../api/inventarioApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { AppIcon } from "../components/AppIcon.jsx";
 
@@ -122,7 +124,7 @@ export function PuntoVentaPage() {
           listarClientes(),
           listarServicios(),
           listarSucursales(),
-          listarCategoriasServicio()
+          listarCategoriaServicio()
         ]);
 
         if (!active) {
@@ -481,6 +483,39 @@ export function PuntoVentaPage() {
         });
       }
 
+      // Reducir stock en inventario según materiales asociados a los servicios
+      try {
+        const [svMats, invs] = await Promise.all([listarServiciosMateriales(), listarInventarios()]);
+
+        await Promise.all(items.map(async (item) => {
+          const mats = (svMats || []).filter(sm => Number(sm.servicioId) === Number(item.servicioId));
+          if (!mats.length) return;
+          await Promise.all(mats.map(async (sm) => {
+            const cantidadPorUnidad = Number(sm.cantidadUsada ?? sm.cantidad ?? 0);
+            const cantidadTotal = Number(item.cantidad) * cantidadPorUnidad;
+            if (!cantidadTotal || cantidadTotal <= 0) return;
+            const inv = (invs || []).find(i =>
+              Number(i.materialId) === Number(sm.materialId) &&
+              Number(i.sucursalId) === Number(sucursalActiva.idSucursal)
+            );
+            if (!inv) {
+              console.warn(`No se encontró inventario para material ${sm.materialId} en sucursal ${sucursalActiva.idSucursal}`);
+              return;
+            }
+            await crearMovimiento({
+              cantidad: Number(cantidadTotal),
+              fecha: localDateTime(0),
+              tipo: "Salida",
+              motivo: `Consumo por pedido ${pedidoId}`,
+              inventarioId: Number(inv.idInventario || inv.id),
+              createdBy: session.empleadoId
+            });
+          }));
+        }));
+      } catch (errInv) {
+        console.warn("No se pudo actualizar inventario automáticamente:", errInv);
+      }
+
       setItems([]);
       setDetalle({ servicioId: "", cantidad: "1", precioUnitario: "", unidadDetalle: "Piezas" });
       setPedido({
@@ -544,7 +579,7 @@ export function PuntoVentaPage() {
         estado: "Activo",
         createdBy: session.empleadoId
       });
-      const categoriasActualizadas = await listarCategoriasServicio();
+      const categoriasActualizadas = await listarCategoriaServicio();
       setCategoriasServicio(categoriasActualizadas);
       setFormServicio((current) => ({
         ...current,
