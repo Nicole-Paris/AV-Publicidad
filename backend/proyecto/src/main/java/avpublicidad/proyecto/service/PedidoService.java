@@ -32,13 +32,16 @@ public class PedidoService {
     private final DetallePedidoRepository detallePedidoRepository;
 
     public List<Pedido> listar() {
-        return pedidoRepository.findByDeletedAtIsNull();
+        return pedidoRepository.findByDeletedAtIsNull().stream()
+                .map(this::agregarEstadoPago)
+                .toList();
     }
 
     public Pedido obtenerPorId(Integer id) {
-        return pedidoRepository.findById(id)
-                .filter(pedido -> pedido.getDeletedAt() == null)
+        Pedido pedido = pedidoRepository.findById(id)
+                .filter(pedidoEncontrado -> pedidoEncontrado.getDeletedAt() == null)
                 .orElseThrow(() -> new ResourceNotFoundException("Pedido no encontrado"));
+        return agregarEstadoPago(pedido);
     }
 
     public Pedido crear(PedidoRequest request) {
@@ -62,7 +65,7 @@ public class PedidoService {
                 .deletedBy(request.getDeletedBy())
                 .build();
 
-        return pedidoRepository.save(pedido);
+        return agregarEstadoPago(pedidoRepository.save(pedido));
     }
 
     public Pedido actualizar(Integer id, PedidoRequest request) {
@@ -89,7 +92,7 @@ public class PedidoService {
         pedido.setUpdatedBy(request.getUpdatedBy());
         pedido.setDeletedBy(request.getDeletedBy());
 
-        return pedidoRepository.save(pedido);
+        return agregarEstadoPago(pedidoRepository.save(pedido));
     }
 
     public void eliminar(Integer id) {
@@ -186,6 +189,22 @@ public class PedidoService {
         return pagoRepository.findByPedidoIdAndDeletedAtIsNull(pedidoId).stream()
                 .map(pago -> pago.getMonto() == null ? BigDecimal.ZERO : pago.getMonto())
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private Pedido agregarEstadoPago(Pedido pedido) {
+        BigDecimal totalPedido = pedido.getTotal() == null ? BigDecimal.ZERO : pedido.getTotal();
+        BigDecimal totalPagado = calcularTotalPagado(pedido.getIdPedido());
+        BigDecimal saldoPendiente = totalPedido.subtract(totalPagado);
+
+        if (saldoPendiente.compareTo(BigDecimal.ZERO) < 0) {
+            saldoPendiente = BigDecimal.ZERO;
+        }
+
+        pedido.setTotalPagado(totalPagado);
+        pedido.setSaldoPendiente(saldoPendiente);
+        pedido.setEstadoPago(totalPagado.compareTo(totalPedido) >= 0 ? "Pagado" : "Pendiente pago");
+
+        return pedido;
     }
 
     private String normalizarEstado(String estado) {

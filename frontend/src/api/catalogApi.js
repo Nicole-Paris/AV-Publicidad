@@ -4,6 +4,13 @@ export function listarClientes() {
   return apiRequest("/clientes");
 }
 
+export function crearCliente(payload) {
+  return apiRequest("/clientes", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
 export function listarServicios() {
   return apiRequest("/servicios");
 }

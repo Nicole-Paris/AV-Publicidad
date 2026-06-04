@@ -21,7 +21,13 @@ export function AuthProvider({ children }) {
         rolId: auth.rolId,
         rol: auth.rol,
         sucursalIdSucursal: auth.sucursalIdSucursal,
-        sucursal: auth.sucursal
+        sucursal: auth.sucursal,
+        sucursales: auth.sucursales || [
+          {
+            idSucursal: auth.sucursalIdSucursal,
+            nombre: auth.sucursal
+          }
+        ].filter((sucursal) => sucursal.idSucursal)
       };
 
       storeSession(nextSession);
@@ -41,13 +47,39 @@ export function AuthProvider({ children }) {
     }
   }
 
+  function cambiarSucursal(sucursalId) {
+    setSession((current) => {
+      if (!current) {
+        return current;
+      }
+
+      const sucursal = (current.sucursales || []).find(
+        (item) => Number(item.idSucursal) === Number(sucursalId)
+      );
+
+      if (!sucursal) {
+        return current;
+      }
+
+      const nextSession = {
+        ...current,
+        sucursalIdSucursal: sucursal.idSucursal,
+        sucursalId: sucursal.idSucursal,
+        sucursal: sucursal.nombre
+      };
+      storeSession(nextSession);
+      return nextSession;
+    });
+  }
+
   const value = useMemo(
     () => ({
       session,
       loading,
       isAuthenticated: Boolean(session?.token),
       login,
-      logout
+      logout,
+      cambiarSucursal
     }),
     [session, loading]
   );

@@ -7,6 +7,7 @@ import { listarEmpleados } from "../api/empleadoApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
 
 const ESTADOS_PEDIDO = ["Borrador", "Pendiente", "En proceso", "Terminado", "Entregado", "Cancelado"];
+const ESTADOS_PAGO = ["Pendiente pago", "Pagado"];
 
 const SIGUIENTES_ESTADOS = {
   Borrador: ["Pendiente", "Cancelado"],
@@ -43,6 +44,7 @@ export function PedidosPage() {
   });
   const [buscarPedido, setBuscarPedido] = useState("");
   const [filtroEstado, setFiltroEstado] = useState("");
+  const [filtroEstadoPago, setFiltroEstadoPago] = useState("");
   const [buscarPago, setBuscarPago] = useState("");
   const [cambiandoEstado, setCambiandoEstado] = useState(null);
   const [pedidoExpandidoPagos, setPedidoExpandidoPagos] = useState(null);
@@ -91,6 +93,14 @@ export function PedidosPage() {
 
   function saldoPendientePedido(pedidoObj) {
     return Math.max(0, Number(pedidoObj?.total || 0) - totalPagadoPedido(pedidoObj?.idPedido));
+  }
+
+  function estadoPagoPedido(pedidoObj) {
+    if (pedidoObj?.estadoPago) {
+      return pedidoObj.estadoPago;
+    }
+
+    return saldoPendientePedido(pedidoObj) <= 0 ? "Pagado" : "Pendiente pago";
   }
 
   function montoPagoActual() {
@@ -230,9 +240,10 @@ export function PedidosPage() {
       const nombre = cliente ? nombreCliente(cliente).toLowerCase() : "";
       const matchBuscar = !q || nombre.includes(q) || String(p.idPedido).includes(q);
       const matchEstado = !filtroEstado || p.estado === filtroEstado;
-      return matchBuscar && matchEstado;
+      const matchEstadoPago = !filtroEstadoPago || estadoPagoPedido(p) === filtroEstadoPago;
+      return matchBuscar && matchEstado && matchEstadoPago;
     });
-  }, [pedidos, buscarPedido, filtroEstado, clientes]);
+  }, [pedidos, buscarPedido, filtroEstado, filtroEstadoPago, clientes, todosLosPagos]);
 
   async function expandirPedido(idPedido) {
     if (pedidoExpandido === idPedido) {
@@ -406,6 +417,10 @@ export function PedidosPage() {
               <option value="">Todos los estados</option>
               {ESTADOS_PEDIDO.map(estado => <option key={estado}>{estado}</option>)}
             </select>
+            <select value={filtroEstadoPago} onChange={e => setFiltroEstadoPago(e.target.value)} disabled={loading}>
+              <option value="">Todos los pagos</option>
+              {ESTADOS_PAGO.map(estado => <option key={estado}>{estado}</option>)}
+            </select>
           </div>
 
           <div className="pedidos-lista">
@@ -414,6 +429,8 @@ export function PedidosPage() {
               const expandido = pedidoExpandido === pedido.idPedido;
               const totalPagado = totalPagadoPedido(pedido.idPedido);
               const pendiente = saldoPendientePedido(pedido);
+              const estadoPago = estadoPagoPedido(pedido);
+              const pagosDelPedido = pagosDePedido(pedido.idPedido);
 
               return (
                 <div key={pedido.idPedido} className="pedido-card">
@@ -427,6 +444,9 @@ export function PedidosPage() {
                     </div>
                     <div className="pedido-header-right">
                       {pedido.pagoDividido && <span className="inv-badge neutral" style={{fontSize:12}}>Dividido</span>}
+                      <span className={estadoPago === "Pagado" ? "inv-badge ok" : "inv-badge warn"} style={{fontSize:12}}>
+                        {estadoPago}
+                      </span>
                       <strong className="pedido-total">{money(pedido.total)}</strong>
                       <select
                          value={pedido.estado}
@@ -496,6 +516,46 @@ export function PedidosPage() {
                         </div>
                       ) : (
                         <p style={{color:"#64748b",fontSize:14}}>Sin servicios registrados.</p>
+                      )}
+
+                      <div className="pedido-payments-header">
+                        <h3>Pagos realizados</h3>
+                        <div className="pedido-payment-totals">
+                          <span>Pagado: <strong>{money(totalPagado)}</strong></span>
+                          <span>Pendiente: <strong className={pendiente > 0 ? "debt" : "paid"}>{money(pendiente)}</strong></span>
+                        </div>
+                      </div>
+                      {pagosDelPedido.length > 0 ? (
+                        <div className="inv-table-wrap" style={{marginTop:8}}>
+                          <table className="inv-table">
+                            <thead>
+                              <tr>
+                                <th>Fecha</th>
+                                <th>Hora</th>
+                                <th>Forma</th>
+                                <th>Concepto</th>
+                                <th>Monto</th>
+                                <th>Recibio</th>
+                                <th>Referencia</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {pagosDelPedido.map((pago, i) => (
+                                <tr key={pago.idPago || i}>
+                                  <td>{pago.fecha ? new Date(pago.fecha).toLocaleDateString("es-MX") : "—"}</td>
+                                  <td>{pago.horaPago ? pago.horaPago.slice(0, 5) : "—"}</td>
+                                  <td>{pago.formaPago || "—"}</td>
+                                  <td>{pago.conceptoPago || "—"}</td>
+                                  <td>{money(pago.monto)}</td>
+                                  <td>{nombreEmpleado(pago.empleadoIdEmpleado || pago.createdBy)}</td>
+                                  <td>{pago.referencia || "—"}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <p style={{color:"#64748b",fontSize:14}}>Todavia no hay pagos registrados para este pedido.</p>
                       )}
                     </div>
                   )}

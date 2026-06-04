@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { listarSucursales } from "../api/sucursalApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
+import { AppIcon } from "../components/AppIcon.jsx";
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -9,45 +9,10 @@ export function LoginPage() {
   const { login, loading } = useAuth();
   const [form, setForm] = useState({
     correo: "",
-    contrasena: "",
-    sucursalIdSucursal: ""
+    contrasena: ""
   });
-  const [sucursales, setSucursales] = useState([]);
-  const [loadingSucursales, setLoadingSucursales] = useState(true);
   const [error, setError] = useState("");
-
-  useEffect(() => {
-    let active = true;
-
-    async function cargarSucursales() {
-      try {
-        const data = await listarSucursales();
-        if (!active) {
-          return;
-        }
-
-        setSucursales(data);
-        setForm((current) => ({
-          ...current,
-          sucursalIdSucursal: current.sucursalIdSucursal || String(data[0]?.idSucursal || "")
-        }));
-      } catch (err) {
-        if (active) {
-          setError(err.message);
-        }
-      } finally {
-        if (active) {
-          setLoadingSucursales(false);
-        }
-      }
-    }
-
-    cargarSucursales();
-
-    return () => {
-      active = false;
-    };
-  }, []);
+  const [showPassword, setShowPassword] = useState(false);
 
   function handleChange(event) {
     const { name, value } = event.target;
@@ -61,8 +26,7 @@ export function LoginPage() {
     try {
       await login({
         correo: form.correo,
-        contrasena: form.contrasena,
-        sucursalIdSucursal: Number(form.sucursalIdSucursal)
+        contrasena: form.contrasena
       });
       const destination = location.state?.from?.pathname || "/dashboard";
       navigate(destination, { replace: true });
@@ -77,7 +41,7 @@ export function LoginPage() {
         <div className="login-copy">
           <span className="login-logo">av</span>
           <h1>AV Publicidad</h1>
-          <p>Sistema de Gestión POS/ERP</p>
+          <p>Sistema de Gestion POS/ERP</p>
         </div>
 
         <form className="login-form" onSubmit={handleSubmit}>
@@ -86,55 +50,41 @@ export function LoginPage() {
           <label className="login-field">
             <input
               autoComplete="email"
-              aria-label="Correo Electrónico"
+              aria-label="Correo Electronico"
               name="correo"
               onChange={handleChange}
-              placeholder="Correo Electrónico *"
+              placeholder="Correo Electronico *"
               type="email"
               value={form.correo}
             />
           </label>
 
-          <label className="login-field">
+          <label className="login-field password-field">
             <input
               autoComplete="current-password"
-              aria-label="Contraseña"
+              aria-label="Contrasena"
               name="contrasena"
               onChange={handleChange}
-              placeholder="Contraseña *"
-              type="password"
+              placeholder="Contrasena *"
+              type={showPassword ? "text" : "password"}
               value={form.contrasena}
             />
-          </label>
-
-          <label className="login-field select-field">
-            <span>Sucursal *</span>
-            <select
-              aria-label="Sucursal"
-              disabled={loadingSucursales || !sucursales.length}
-              name="sucursalIdSucursal"
-              onChange={handleChange}
-              value={form.sucursalIdSucursal}
+            <button
+              aria-label={showPassword ? "Ocultar contrasena" : "Mostrar contrasena"}
+              className="password-toggle"
+              onClick={() => setShowPassword((current) => !current)}
+              type="button"
             >
-              {!sucursales.length && (
-                <option value="">
-                  {loadingSucursales ? "Cargando sucursales..." : "Sin sucursales disponibles"}
-                </option>
-              )}
-              {sucursales.map((sucursal) => (
-                <option key={sucursal.idSucursal} value={sucursal.idSucursal}>
-                  {sucursal.nombre}
-                </option>
-              ))}
-            </select>
+              <AppIcon name={showPassword ? "eyeOff" : "eye"} size={22} />
+            </button>
           </label>
 
-          <button className="primary-button" disabled={loading || loadingSucursales} type="submit">
-            {loading ? "Entrando..." : "Iniciar Sesión"}
+          <button className="primary-button" disabled={loading} type="submit">
+            {loading ? "Entrando..." : "Iniciar Sesion"}
           </button>
 
           <a className="forgot-password" href="/login">
-            ¿Olvidaste tu contraseña?
+            Olvidaste tu contrasena?
           </a>
         </form>
       </section>

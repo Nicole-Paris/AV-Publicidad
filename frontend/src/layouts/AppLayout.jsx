@@ -14,9 +14,10 @@ const links = [
 ];
 
 export function AppLayout() {
-  const { session, logout } = useAuth();
+  const { session, logout, cambiarSucursal } = useAuth();
   const navigate = useNavigate();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const sucursalesSesion = session?.sucursales || [];
 
   function goBack() {
     navigate("/dashboard");
@@ -64,7 +65,21 @@ export function AppLayout() {
           <div className="topbar-actions">
             <span className="branch-pill">
               <AppIcon name="store" />
-              {session?.sucursal || "Sucursal Centro - Coatzacoalcos"}
+              {sucursalesSesion.length > 1 ? (
+                <select
+                  aria-label="Sucursal activa"
+                  onChange={(event) => cambiarSucursal(Number(event.target.value))}
+                  value={session?.sucursalIdSucursal || session?.sucursalId || ""}
+                >
+                  {sucursalesSesion.map((sucursal) => (
+                    <option key={sucursal.idSucursal} value={sucursal.idSucursal}>
+                      {sucursal.nombre}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                session?.sucursal || "Sucursal Centro"
+              )}
             </span>
             <div className="user-menu-wrap">
               <button

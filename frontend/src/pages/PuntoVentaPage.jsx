@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   crearCategoriaServicio,
+  crearCliente,
   crearServicio,
   listarCategoriasServicio,
   listarClientes,
@@ -73,6 +74,23 @@ export function PuntoVentaPage() {
     unidadDetalle: "Piezas"
   });
   const [items, setItems] = useState([]);
+
+  const [modalCliente, setModalCliente] = useState(false);
+  const [savingCliente, setSavingCliente] = useState(false);
+  const [formCliente, setFormCliente] = useState({
+    nombre: "",
+    apellidoPaterno: "",
+    apellidoMaterno: "",
+    telefono: "",
+    tipo: "No frecuente",
+    tieneCredito: false,
+    creditoActual: "0.00",
+    limiteCredito: "0.00",
+    direccion: "",
+    rfc: "",
+    codigoPostal: "",
+    razonSocial: ""
+  });
 
   // Nuevo: modal de servicio
   const [modalServicio, setModalServicio] = useState(false);
@@ -185,6 +203,99 @@ export function PuntoVentaPage() {
     setPedido((current) => ({ ...current, clienteId: String(cliente.idCliente) }));
   }
 
+  function abrirModalCliente() {
+    const partes = clienteSearch.trim().split(/\s+/).filter(Boolean);
+    setFormCliente((current) => ({
+      ...current,
+      nombre: current.nombre || partes[0] || "",
+      apellidoPaterno: current.apellidoPaterno || partes[1] || "",
+      apellidoMaterno: current.apellidoMaterno || partes.slice(2).join(" ") || ""
+    }));
+    setClienteSuggestionsOpen(false);
+    setModalCliente(true);
+  }
+
+  function updateClienteForm(event) {
+    const { name, type, checked, value } = event.target;
+    const nextValue = name === "limiteCredito" || name === "creditoActual"
+      ? limpiarMontoPositivo(value)
+      : value;
+    setFormCliente((current) => ({
+      ...current,
+      [name]: type === "checkbox" ? checked : nextValue
+    }));
+  }
+
+  async function guardarCliente() {
+    if (!formCliente.nombre.trim()) {
+      mostrarError("Escribe el nombre del cliente.");
+      return;
+    }
+    if (!formCliente.apellidoPaterno.trim()) {
+      mostrarError("Escribe el apellido paterno del cliente.");
+      return;
+    }
+    if (!formCliente.apellidoMaterno.trim()) {
+      mostrarError("Escribe el apellido materno del cliente.");
+      return;
+    }
+    if (!formCliente.telefono.trim()) {
+      mostrarError("Escribe el telefono del cliente.");
+      return;
+    }
+    if (Number(formCliente.limiteCredito || 0) < 0) {
+      mostrarError("El limite de credito no puede ser negativo.");
+      return;
+    }
+
+    setSavingCliente(true);
+    try {
+      const razonSocial = formCliente.razonSocial.trim() || [
+        formCliente.nombre,
+        formCliente.apellidoPaterno,
+        formCliente.apellidoMaterno
+      ].filter(Boolean).join(" ");
+      const nuevo = await crearCliente({
+        nombre: formCliente.nombre.trim(),
+        apellidoPaterno: formCliente.apellidoPaterno.trim(),
+        apellidoMaterno: formCliente.apellidoMaterno.trim(),
+        telefono: formCliente.telefono.trim(),
+        tipo: formCliente.tipo,
+        tieneCredito: Boolean(formCliente.tieneCredito),
+        creditoActual: Number(formCliente.creditoActual || 0).toFixed(2),
+        limiteCredito: Number(formCliente.limiteCredito || 0).toFixed(2),
+        direccion: formCliente.direccion.trim(),
+        rfc: formCliente.rfc.trim() || null,
+        codigoPostal: formCliente.codigoPostal.trim(),
+        razonSocial: razonSocial.slice(0, 30),
+        createdBy: session.empleadoId
+      });
+      const clientesActualizados = await listarClientes();
+      setClientes(clientesActualizados);
+      seleccionarCliente(nuevo);
+      setFormCliente({
+        nombre: "",
+        apellidoPaterno: "",
+        apellidoMaterno: "",
+        telefono: "",
+        tipo: "No frecuente",
+        tieneCredito: false,
+        creditoActual: "0.00",
+        limiteCredito: "0.00",
+        direccion: "",
+        rfc: "",
+        codigoPostal: "",
+        razonSocial: ""
+      });
+      setModalCliente(false);
+      mostrarSuccess("Cliente agregado correctamente.");
+    } catch (err) {
+      mostrarError(err.message || String(err));
+    } finally {
+      setSavingCliente(false);
+    }
+  }
+
   function updateDetalle(event) {
     const { name, value } = event.target;
     // Nuevo: detectar opción nuevo servicio
@@ -204,6 +315,10 @@ export function PuntoVentaPage() {
           unidadDetalle: value,
           cantidad: current.cantidad ? String(Math.max(1, Math.trunc(Number(current.cantidad)))) : ""
         };
+      }
+
+      if (name === "precioUnitario") {
+        return { ...current, precioUnitario: limpiarMontoPositivo(value) };
       }
 
       return { ...current, [name]: value };
@@ -258,6 +373,36 @@ export function PuntoVentaPage() {
 
   function quitarServicio(key) {
     setItems((current) => current.filter((item) => item.key !== key));
+  }
+
+  function limpiarMontoPositivo(value) {
+    const limpio = value.replace(/[^\d.]/g, "");
+    const partes = limpio.split(".");
+    return partes.length > 1 ? `${partes[0]}.${partes.slice(1).join("")}` : limpio;
+  }
+
+  function actualizarItem(key, field, value) {
+    setItems((current) => current.map((item) => {
+      if (item.key !== key) {
+        return item;
+      }
+
+      let nextValue = value;
+      if (field === "cantidad" && item.unidadDetalle === "Piezas") {
+        nextValue = value.replace(/\D/g, "");
+      }
+      if (field === "precioUnitario") {
+        nextValue = limpiarMontoPositivo(value);
+      }
+
+      const actualizado = { ...item, [field]: nextValue };
+      const cantidad = Number(actualizado.cantidad || 0);
+      const precioUnitario = Number(actualizado.precioUnitario || 0);
+      return {
+        ...actualizado,
+        subtotal: cantidad * precioUnitario
+      };
+    }));
   }
 
   async function confirmarPedido() {
@@ -443,23 +588,45 @@ export function PuntoVentaPage() {
               type="search"
               value={clienteSearch}
             />
-            {clienteSuggestionsOpen && clienteSearch.trim() && (
+            {clienteSuggestionsOpen && (
               <div className="client-suggestions" role="listbox">
                 {clientesFiltrados.length > 0 ? (
-                  clientesFiltrados.map((cliente) => (
+                  <>
+                    {clientesFiltrados.map((cliente) => (
+                      <button
+                        key={cliente.idCliente}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => seleccionarCliente(cliente)}
+                        role="option"
+                        type="button"
+                      >
+                        <strong>{nombreCliente(cliente)}</strong>
+                        <span>{cliente.telefono || "Sin telefono"}</span>
+                      </button>
+                    ))}
                     <button
-                      key={cliente.idCliente}
+                      className="client-suggestions-action"
                       onMouseDown={(event) => event.preventDefault()}
-                      onClick={() => seleccionarCliente(cliente)}
-                      role="option"
+                      onClick={abrirModalCliente}
                       type="button"
                     >
-                      <strong>{nombreCliente(cliente)}</strong>
-                      <span>{cliente.telefono || "Sin telefono"}</span>
+                      + Agregar nuevo cliente
                     </button>
-                  ))
+                  </>
                 ) : (
-                  <span className="client-suggestions-empty">Sin coincidencias</span>
+                  <>
+                    <span className="client-suggestions-empty">
+                      {clienteSearch.trim() ? "Sin coincidencias" : "Busca un cliente o agrega uno nuevo"}
+                    </span>
+                    <button
+                      className="client-suggestions-action"
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={abrirModalCliente}
+                      type="button"
+                    >
+                      + Agregar nuevo cliente
+                    </button>
+                  </>
                 )}
               </div>
             )}
@@ -541,6 +708,7 @@ export function PuntoVentaPage() {
               <input
                 inputMode="decimal"
                 name="precioUnitario"
+                min="0"
                 onChange={updateDetalle}
                 placeholder="0"
                 type="text"
@@ -582,8 +750,27 @@ export function PuntoVentaPage() {
                 {items.map((item) => (
                   <div className="summary-row" key={item.key}>
                     <span>{item.nombre}</span>
-                    <span>{item.cantidad}</span>
-                    <span>{money(item.precioUnitario)}</span>
+                    <span>
+                      <input
+                        aria-label={`Cantidad de ${item.nombre}`}
+                        className="summary-edit-input"
+                        inputMode={item.unidadDetalle === "Piezas" ? "numeric" : "decimal"}
+                        onChange={(event) => actualizarItem(item.key, "cantidad", event.target.value)}
+                        type="text"
+                        value={item.cantidad}
+                      />
+                    </span>
+                    <span className="summary-money-edit">
+                      <input
+                        aria-label={`Precio unitario de ${item.nombre}`}
+                        className="summary-edit-input"
+                        inputMode="decimal"
+                        min="0"
+                        onChange={(event) => actualizarItem(item.key, "precioUnitario", event.target.value)}
+                        type="text"
+                        value={item.precioUnitario}
+                      />
+                    </span>
                     <span>
                       {money(item.subtotal)}
                       <button
@@ -629,6 +816,83 @@ export function PuntoVentaPage() {
             <p className="modal-error-icon">⚠</p>
             <p className="modal-error-msg">{modalError}</p>
             <button className="primary-button" onClick={() => setModalError("")}>Entendido</button>
+          </div>
+        </div>
+      )}
+
+      {modalCliente && (
+        <div className="modal-overlay" onClick={() => setModalCliente(false)}>
+          <div className="modal-card customer-modal" onClick={e => e.stopPropagation()}>
+            <h2>Nuevo Cliente</h2>
+            <div className="modal-grid">
+              <label className="pos-field floating">
+                <span>Nombre</span>
+                <input name="nombre" onChange={updateClienteForm} type="text" value={formCliente.nombre} />
+              </label>
+              <label className="pos-field floating">
+                <span>Apellido paterno</span>
+                <input name="apellidoPaterno" onChange={updateClienteForm} type="text" value={formCliente.apellidoPaterno} />
+              </label>
+              <label className="pos-field floating">
+                <span>Apellido materno</span>
+                <input name="apellidoMaterno" onChange={updateClienteForm} type="text" value={formCliente.apellidoMaterno} />
+              </label>
+              <label className="pos-field floating">
+                <span>Telefono</span>
+                <input name="telefono" onChange={updateClienteForm} type="text" value={formCliente.telefono} />
+              </label>
+              <label className="pos-field floating">
+                <span>Tipo</span>
+                <select name="tipo" onChange={updateClienteForm} value={formCliente.tipo}>
+                  <option>Frecuente</option>
+                  <option>No frecuente</option>
+                </select>
+              </label>
+              <label className="pos-field floating">
+                <span>RFC</span>
+                <input name="rfc" onChange={updateClienteForm} type="text" value={formCliente.rfc} />
+              </label>
+              <label className="pos-field floating">
+                <span>Codigo postal</span>
+                <input name="codigoPostal" onChange={updateClienteForm} type="text" value={formCliente.codigoPostal} />
+              </label>
+              <label className="pos-field floating">
+                <span>Direccion</span>
+                <input name="direccion" onChange={updateClienteForm} type="text" value={formCliente.direccion} />
+              </label>
+              <label className="pos-field floating modal-grid-wide">
+                <span>Razon social</span>
+                <input name="razonSocial" onChange={updateClienteForm} type="text" value={formCliente.razonSocial} />
+              </label>
+              <label className="inline-check modal-grid-wide">
+                <input
+                  checked={formCliente.tieneCredito}
+                  name="tieneCredito"
+                  onChange={updateClienteForm}
+                  type="checkbox"
+                />
+                <span>Tiene credito</span>
+              </label>
+              {formCliente.tieneCredito && (
+                <label className="pos-field floating money-field modal-grid-wide">
+                  <span>Limite de credito</span>
+                  <input
+                    inputMode="decimal"
+                    name="limiteCredito"
+                    min="0"
+                    onChange={updateClienteForm}
+                    type="text"
+                    value={formCliente.limiteCredito}
+                  />
+                </label>
+              )}
+            </div>
+            <div style={{display:"flex", justifyContent:"flex-end", gap:12, marginTop:4}}>
+              <button className="ghost-button" type="button" onClick={() => setModalCliente(false)}>Cancelar</button>
+              <button className="primary-button" type="button" disabled={savingCliente} onClick={guardarCliente}>
+                {savingCliente ? "Guardando..." : "Guardar Cliente"}
+              </button>
+            </div>
           </div>
         </div>
       )}

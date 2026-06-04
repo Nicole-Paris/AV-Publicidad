@@ -35,11 +35,7 @@ public class AuthService {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Credenciales invalidas");
         }
 
-        if (!request.getSucursalIdSucursal().equals(empleado.getSucursalIdSucursal())) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "El empleado no pertenece a la sucursal seleccionada");
-        }
-
-        Sucursal sucursal = sucursalRepository.findById(request.getSucursalIdSucursal())
+        Sucursal sucursal = sucursalRepository.findById(empleado.getSucursalIdSucursal())
                 .filter(valor -> valor.getDeletedAt() == null)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Sucursal invalida"));
 

@@ -3,6 +3,8 @@ import ajustesIcon from "../assets/icons/ajustes.webp";
 import carritoIcon from "../assets/icons/carrito.webp";
 import clienteIcon from "../assets/icons/cliente.webp";
 import corteIcon from "../assets/icons/corte.webp";
+import eyeIcon from "../assets/icons/eye.svg";
+import eyeOffIcon from "../assets/icons/eye-off.svg";
 import inventarioIcon from "../assets/icons/inventario.webp";
 import logoutIcon from "../assets/icons/logout.svg";
 import pedidosIcon from "../assets/icons/pedidos.webp";
@@ -17,6 +19,8 @@ const iconFiles = {
   cart: carritoIcon,
   chart: reporteIcon,
   doc: pedidosIcon,
+  eye: eyeIcon,
+  eyeOff: eyeOffIcon,
   gear: ajustesIcon,
   logout: logoutIcon,
   money: corteIcon,

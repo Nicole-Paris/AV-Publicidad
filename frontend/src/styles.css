@@ -92,6 +92,10 @@ a {
   display: block;
 }
 
+.login-field.password-field {
+  position: relative;
+}
+
 .login-form input,
 .login-form select {
   background: #ffffff;
@@ -384,9 +388,10 @@ a {
   color: #050816;
 }
 .inv-toolbar {
-  display: flex;
+  display: grid;
   gap: 16px;
   align-items: center;
+  grid-template-columns: minmax(280px, 1fr) 184px 184px;
   margin-bottom: 20px;
 }
 .inv-table-wrap {
@@ -443,20 +448,22 @@ a {
 
 .pedidos-lista { display:flex; flex-direction:column; gap:12px; }
 .pedido-card { background:#fff; border:1px solid #e2e2e2; border-radius:12px; overflow:hidden; }
-.pedido-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; cursor:pointer; user-select:none; transition:background 0.15s; }
+.pedido-header { display:grid; align-items:center; grid-template-columns:minmax(260px, 1fr) auto; gap:20px; padding:16px 20px; cursor:pointer; user-select:none; transition:background 0.15s; }
 .pedido-header:hover { background:#f8f8f8; }
-.pedido-header-left { display:flex; align-items:center; gap:14px; }
+.pedido-header-left { display:flex; align-items:center; gap:14px; min-width:0; }
+.pedido-header-left > div { min-width:0; }
 .pedido-header-right {
   align-items: center;
   display: grid;
-  gap: 12px;
-  grid-template-columns: 112px 150px 82px 18px;
+  gap: 10px;
+  grid-template-columns: 132px 118px 136px 74px 18px;
   justify-content: end;
-  margin-right: 18px;
+  margin-right: 0;
 }
 .pedido-total {
   font-size: 16px;
   text-align: right;
+  white-space: nowrap;
 }
 .pedido-status-select {
   border: 0;
@@ -466,6 +473,32 @@ a {
   font-weight: 700;
   min-height: 38px;
   padding: 6px 12px;
+  width: 100%;
+}
+
+.login-field.password-field input {
+  padding-right: 58px;
+}
+
+.password-toggle {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  height: 40px;
+  justify-content: center;
+  position: absolute;
+  right: 14px;
+  top: 15px;
+  width: 40px;
+}
+
+.password-toggle:hover,
+.password-toggle:focus {
+  background: #f1f5f9;
+  outline: none;
 }
 .pedido-status-select.draft {
   background: #f4f4f4;
@@ -501,6 +534,7 @@ a {
   font-weight: 700;
   min-height: 38px;
   padding: 0 16px;
+  width: 100%;
 }
 .pedido-payment-button:hover,
 .pedido-payment-button:focus {
@@ -508,9 +542,9 @@ a {
   outline: none;
 }
 .pedido-num { font-size:18px; font-weight:700; color:#fb5a35; min-width:48px; }
-.pedido-cliente { font-size:15px; font-weight:600; margin:0; color:#050816; }
+.pedido-cliente { color:#050816; font-size:15px; font-weight:600; margin:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .pedido-fecha { font-size:13px; color:#64748b; margin:2px 0 0; }
-.pedido-chevron { font-size:12px; color:#64748b; }
+.pedido-chevron { color:#64748b; font-size:12px; text-align:center; }
 .pedido-detalle { border-top:1px solid #f0f0f0; padding:20px; background:#fafafa; }
 .pedido-info-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(160px,1fr)); gap:12px; margin-bottom:16px; }
 .pedido-info-grid div { display:flex; flex-direction:column; gap:2px; }
@@ -527,6 +561,39 @@ a {
   display: flex;
   gap: 12px;
   justify-content: flex-end;
+}
+
+.pedido-payments-header {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  margin-top: 24px;
+}
+
+.pedido-payments-header h3 {
+  margin-bottom: 0;
+}
+
+.pedido-payment-totals {
+  align-items: center;
+  color: #64748b;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 14px;
+  gap: 12px;
+}
+
+.pedido-payment-totals strong {
+  color: #16a34a;
+}
+
+.pedido-payment-totals strong.debt {
+  color: #c2410c;
+}
+
+.pedido-payment-totals strong.paid {
+  color: #16a34a;
 }
 
 .page-subtitle {
@@ -956,6 +1023,18 @@ a {
   padding: 0 13px;
 }
 
+.branch-pill select {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: #050816;
+  cursor: pointer;
+  font-size: 16px;
+  min-height: 38px;
+  outline: none;
+  padding: 0 22px 0 0;
+}
+
 .avatar-button {
   background: #050718;
   border: 0;
@@ -1214,6 +1293,16 @@ a {
   outline: none;
 }
 
+.client-suggestions-action {
+  border-bottom: 0 !important;
+  color: #050816 !important;
+  display: block !important;
+  font-size: 18px;
+  font-weight: 400;
+  min-height: 54px;
+  padding: 12px 18px !important;
+}
+
 .client-suggestions strong {
   font-size: 18px;
   font-weight: 700;
@@ -1388,6 +1477,42 @@ a {
   justify-content: space-between;
 }
 
+.summary-edit-input {
+  background: #ffffff;
+  border: 1px solid #d7dde5;
+  border-radius: 6px;
+  color: #050816;
+  font-size: 15px;
+  min-height: 36px;
+  padding: 0 10px;
+  width: 84px;
+}
+
+.summary-edit-input:focus {
+  border-color: #050816;
+  box-shadow: 0 0 0 3px rgba(5, 8, 22, 0.08);
+  outline: none;
+}
+
+.summary-money-edit {
+  position: relative;
+}
+
+.summary-money-edit::before {
+  color: #050816;
+  content: "$";
+  font-weight: 700;
+  left: 10px;
+  position: absolute;
+  top: 8px;
+  z-index: 1;
+}
+
+.summary-money-edit .summary-edit-input {
+  padding-left: 24px;
+  width: 104px;
+}
+
 .remove-line {
   background: transparent;
   border: 0;
@@ -1462,6 +1587,16 @@ a {
   .pos-grid {
     grid-template-columns: 1fr;
   }
+
+  .pedido-header {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .pedido-header-right {
+    grid-template-columns: 132px minmax(100px, 1fr) 136px 74px 18px;
+    justify-content: stretch;
+  }
 }
 
 @media (max-width: 760px) {
@@ -1500,6 +1635,23 @@ a {
   .summary-row {
     grid-template-columns: minmax(120px, 1fr) 60px 92px 110px;
   }
+
+  .inv-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .pedido-header-right {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .pedido-chevron {
+    grid-column: 1 / -1;
+  }
+
+  .pedido-payments-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 
 .modal-overlay {
@@ -1530,6 +1682,34 @@ a {
   padding: 32px;
   width: 100%;
   max-width: 440px;
+}
+
+.customer-modal {
+  max-width: 760px;
+}
+
+.modal-grid {
+  display: grid;
+  gap: 0 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.modal-grid-wide {
+  grid-column: 1 / -1;
+}
+
+.inline-check {
+  align-items: center;
+  color: #344252;
+  display: flex;
+  font-weight: 700;
+  gap: 10px;
+  margin: -8px 0 18px;
+}
+
+.inline-check input {
+  height: 18px;
+  width: 18px;
 }
 .modal-card h2 {
   margin: 0 0 20px;
