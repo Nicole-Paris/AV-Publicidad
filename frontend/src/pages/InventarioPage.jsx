@@ -32,6 +32,14 @@ function nowLocalDateTime() {
   return d.toISOString().slice(0, 16);
 }
 
+function estadoMaterialParaBackend(estado) {
+  return estado === "Inactivo" ? "No disponible" : "Disponible";
+}
+
+function estadoMaterialParaVista(estado) {
+  return estado === "No disponible" ? "Inactivo" : "Activo";
+}
+
 /* Componente interno: BuscadorMaterial */
 function BuscadorMaterial({ materiales, value, onChange, placeholder = "Escribe el nombre..." }) {
   const [query, setQuery] = useState(value || "");
@@ -274,7 +282,7 @@ export function InventarioPage() {
         unidad: formulario.unidad,
         costoUnitario: Number(formulario.costoUnitario),
         categoriaMaterialId: Number(formulario.categoriaMaterialId),
-        estado: formulario.estado,
+        estado: estadoMaterialParaBackend(formulario.estado),
         sucursalId: Number(formulario.sucursalId),
         createdBy: session.empleadoId
       });
@@ -313,7 +321,7 @@ export function InventarioPage() {
         unidad: "Metros",
         costoUnitario: "",
         categoriaMaterialId: "",
-        estado: "Disponible",
+        estado: "Activo",
         nombreMaterial: "",
         stockActual: "",
         stockMinimo: ""

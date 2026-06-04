@@ -105,6 +105,17 @@ export function ServiciosPage() {
     );
   }, [servicios, buscar, categorias]);
 
+  const serviciosDisponibles = useMemo(() => {
+    return servicios.filter((servicio) => (servicio.estado || "Activo") === "Activo");
+  }, [servicios]);
+
+  const materialesDisponibles = useMemo(() => {
+    return materiales.filter((material) => {
+      const estado = String(material.estado || "").toLowerCase();
+      return estado === "disponible" || estado === "activo";
+    });
+  }, [materiales]);
+
   async function guardarServicio() {
     if (!formServicio.nombre.trim()) {
       mostrarError("Escribe el nombre del servicio."); return;
@@ -452,8 +463,7 @@ export function ServiciosPage() {
                 }))}
               >
                 <option value="">Selecciona un material</option>
-                {materiales
-                  .filter(m => String(m.estado || "").toLowerCase() === "activo")
+                {materialesDisponibles
                   .map(m => (
                     <option key={m.idMaterial || m.id} value={m.idMaterial || m.id}>
                       {m.nombre} ({m.unidad})
