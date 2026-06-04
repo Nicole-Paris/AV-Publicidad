@@ -1,11 +1,14 @@
 package avpublicidad.proyecto.service;
 
+import avpublicidad.proyecto.constants.MaterialConstants;
 import avpublicidad.proyecto.constants.MovimientoInventarioConstants;
 import avpublicidad.proyecto.dto.MovimientoInventarioRequest;
 import avpublicidad.proyecto.exception.ResourceNotFoundException;
 import avpublicidad.proyecto.model.Inventario;
+import avpublicidad.proyecto.model.Material;
 import avpublicidad.proyecto.model.MovimientoInventario;
 import avpublicidad.proyecto.repository.InventarioRepository;
+import avpublicidad.proyecto.repository.MaterialRepository;
 import avpublicidad.proyecto.repository.MovimientoInventarioRepository;
 import jakarta.validation.ValidationException;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +26,7 @@ public class MovimientoInventarioService {
 
     private final MovimientoInventarioRepository movimientoInventarioRepository;
     private final InventarioRepository inventarioRepository;
+    private final MaterialRepository materialRepository;
 
     public List<MovimientoInventario> listar() {
         return movimientoInventarioRepository.findAll();
@@ -90,8 +94,10 @@ public class MovimientoInventarioService {
     }
 
     private void aplicarMovimiento(Inventario inventario, String tipo, BigDecimal cantidad) {
-        if (cantidad == null) {
-            return;
+        validarMaterialActivo(inventario.getMaterialId());
+
+        if (cantidad == null || cantidad.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ValidationException("La cantidad del movimiento debe ser mayor a cero");
         }
 
         if (MovimientoInventarioConstants.TIPO_ENTRADA.equals(tipo)) {
@@ -117,6 +123,16 @@ public class MovimientoInventarioService {
         }
 
         inventario.setStockActual(inventario.getStockActual().add(cantidad));
+    }
+
+    private void validarMaterialActivo(Integer materialId) {
+        Material material = materialRepository.findById(materialId)
+                .filter(valor -> valor.getDeletedAt() == null)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Material no encontrado"));
+
+        if (!MaterialConstants.ESTADO_DISPONIBLE.equals(material.getEstado())) {
+            throw new ValidationException("No se pueden registrar movimientos de un material inactivo");
+        }
     }
 
     private String normalizarTipo(String tipo) {

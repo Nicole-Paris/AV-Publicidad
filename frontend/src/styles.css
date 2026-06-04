@@ -545,6 +545,52 @@ a {
 .pedido-cliente { color:#050816; font-size:15px; font-weight:600; margin:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .pedido-fecha { font-size:13px; color:#64748b; margin:2px 0 0; }
 .pedido-chevron { color:#64748b; font-size:12px; text-align:center; }
+.audit-toggle {
+  background: transparent;
+  border: 0;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  min-height: 30px;
+  padding: 4px 8px;
+}
+.audit-toggle:hover,
+.audit-toggle:focus {
+  color: #050816;
+  outline: none;
+}
+.audit-row td {
+  background: #fafafa;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 14px;
+}
+.audit-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+.audit-grid div {
+  background: #f8fafc;
+  border: 1px solid #edf2f7;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+}
+.audit-grid span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+.audit-grid strong {
+  color: #050816;
+  font-size: 14px;
+}
+.modal-audit-grid {
+  margin-bottom: 20px;
+}
 .pedido-detalle { border-top:1px solid #f0f0f0; padding:20px; background:#fafafa; }
 .pedido-info-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(160px,1fr)); gap:12px; margin-bottom:16px; }
 .pedido-info-grid div { display:flex; flex-direction:column; gap:2px; }
@@ -594,6 +640,23 @@ a {
 
 .pedido-payment-totals strong.paid {
   color: #16a34a;
+}
+
+.clients-toolbar {
+  grid-template-columns: minmax(320px, 1fr) 180px 180px;
+}
+
+.client-credit-cell {
+  align-items: flex-start;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.client-credit-cell small {
+  color: #64748b;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .page-subtitle {
@@ -1366,6 +1429,23 @@ a {
   display: grid;
   gap: 20px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.order-meta-row {
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.order-meta-row .pos-field input,
+.order-meta-row .pos-field select {
+  font-size: 18px;
+  padding-right: 32px;
+}
+
+.date-field input {
+  font-size: 16px;
+  padding-left: 17px;
+  padding-right: 8px;
 }
 
 .compact-field {

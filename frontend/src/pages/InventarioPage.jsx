@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef } from "react";
+import { Fragment, useEffect, useMemo, useState, useRef } from "react";
 import {
   listarCategoriasMaterial,
   listarMateriales,
@@ -10,6 +10,7 @@ import {
   crearMovimiento
 } from "../api/inventarioApi.js";
 import { listarSucursales } from "../api/catalogApi.js";
+import { listarEmpleados } from "../api/empleadoApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
 
 const CURRENCY = new Intl.NumberFormat("es-MX", { currency: "MXN", style: "currency" });
@@ -38,6 +39,16 @@ function estadoMaterialParaBackend(estado) {
 
 function estadoMaterialParaVista(estado) {
   return estado === "No disponible" ? "Inactivo" : "Activo";
+}
+
+function materialActivo(material) {
+  return estadoMaterialParaVista(material?.estado) === "Activo";
+}
+
+function limpiarCantidadMovimiento(value) {
+  const limpio = String(value || "").replace(/[+-]/g, "").replace(/[^\d.]/g, "");
+  const partes = limpio.split(".");
+  return partes.length > 1 ? `${partes[0]}.${partes.slice(1).join("")}` : limpio;
 }
 
 /* Componente interno: BuscadorMaterial */
@@ -134,6 +145,10 @@ export function InventarioPage() {
   const [inventarios, setInventarios] = useState([]);
   const [movimientos, setMovimientos] = useState([]);
   const [sucursales, setSucursales] = useState([]);
+  const [empleados, setEmpleados] = useState([]);
+  const [materialExpandido, setMaterialExpandido] = useState(null);
+  const [movimientoExpandido, setMovimientoExpandido] = useState(null);
+  const [auditModal, setAuditModal] = useState(null);
 
   const [buscar, setBuscar] = useState("");
   const [categoriaFiltro, setCategoriaFiltro] = useState("");
@@ -185,12 +200,13 @@ export function InventarioPage() {
       setLoading(true);
       setError("");
       try {
-        const [cats, mats, invs, movs, sucs] = await Promise.all([
+        const [cats, mats, invs, movs, sucs, emps] = await Promise.all([
           listarCategoriasMaterial(),
           listarMateriales(),
           listarInventarios(),
           listarMovimientos(),
-          listarSucursales()
+          listarSucursales(),
+          listarEmpleados()
         ]);
         if (!active) return;
         setCategorias(cats);
@@ -198,6 +214,7 @@ export function InventarioPage() {
         setInventarios(invs);
         setMovimientos(movs);
         setSucursales(sucs);
+        setEmpleados(Array.isArray(emps) ? emps : []);
       } catch (err) {
         if (active) mostrarError(err.message || String(err));
       } finally {
@@ -222,6 +239,41 @@ export function InventarioPage() {
   function inventarioParaMaterial(materialId) {
     return inventarios.find((i) => Number(i.materialId) === Number(materialId));
   }
+
+  function nombreEmpleado(id) {
+    const empleado = empleados.find((item) => Number(item.idEmpleado) === Number(id));
+    if (!id) {
+      return "-";
+    }
+    if (!empleado) {
+      return `Empleado ${id}`;
+    }
+    return [empleado.nombre, empleado.apellidoPaterno, empleado.apellidoMaterno].filter(Boolean).join(" ");
+  }
+
+  function fechaHora(value) {
+    return value ? new Date(value).toLocaleString("es-MX") : "-";
+  }
+
+  function abrirAuditoria(titulo, registro, extra = []) {
+    setAuditModal({
+      titulo,
+      items: [
+        ["Registrado por", nombreEmpleado(registro.createdBy)],
+        ["Registro", fechaHora(registro.createdAt || registro.fecha)],
+        ["Editado por", nombreEmpleado(registro.updatedBy)],
+        ["Ultima edicion", fechaHora(registro.updatedAt)],
+        ["Eliminado por", nombreEmpleado(registro.deletedBy)],
+        ["Eliminacion", fechaHora(registro.deletedAt)],
+        ...extra
+      ]
+    });
+  }
+
+  const materialesActivos = useMemo(
+    () => materiales.filter((material) => materialActivo(material)),
+    [materiales]
+  );
 
   // acciones de guardado
   async function guardarNuevaCategoria() {
@@ -357,6 +409,11 @@ export function InventarioPage() {
       return;
     }
 
+    if (matSeleccionado && !materialActivo(matSeleccionado)) {
+      mostrarError("No se pueden hacer movimientos de un material inactivo.");
+      return;
+    }
+
     setSaving(true);
     try {
       const mat = materiales.find(
@@ -374,6 +431,11 @@ export function InventarioPage() {
       );
       if (!inv) {
         mostrarError("No hay inventario registrado para ese material en esa sucursal.");
+        setSaving(false);
+        return;
+      }
+      if (formulario.tipo === "Salida" && Number(formulario.cantidad) > Number(inv.stockActual || 0)) {
+        mostrarError(`No hay piezas suficientes. Stock disponible: ${Number(inv.stockActual || 0)}.`);
         setSaving(false);
         return;
       }
@@ -425,7 +487,6 @@ export function InventarioPage() {
     <section className="page-stack">
       <div className="page-header">
         <div>
-          <span className="eyebrow">Modulo</span>
           <h1>Inventario</h1>
         </div>
         <button
@@ -479,6 +540,7 @@ export function InventarioPage() {
                   <th>Stock Actual</th>
                   <th>Stock Mínimo</th>
                   <th>Estado</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
@@ -504,6 +566,16 @@ export function InventarioPage() {
                         ) : (
                           <span className="inv-badge neutral">Sin stock</span>
                         )}
+                      </td>
+                      <td>
+                        <button
+                          aria-label="Ver auditoria del material"
+                          className="audit-toggle"
+                          onClick={() => abrirAuditoria(`Material ${m.idMaterial}`, m)}
+                          type="button"
+                        >
+                          ?
+                        </button>
                       </td>
                     </tr>
                   );
@@ -625,6 +697,7 @@ export function InventarioPage() {
                   <th>Tipo</th>
                   <th>Cantidad</th>
                   <th>Motivo</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
@@ -635,6 +708,16 @@ export function InventarioPage() {
                     <td>{m.tipo}</td>
                     <td>{m.cantidad}</td>
                     <td>{m.motivo}</td>
+                    <td>
+                      <button
+                        aria-label="Ver auditoria del movimiento"
+                        className="audit-toggle"
+                        onClick={() => abrirAuditoria(`Movimiento ${m.idMovimiento || m.id}`, m, [["Inventario", m.inventarioId || "-"]])}
+                        type="button"
+                      >
+                        ▼
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -647,7 +730,7 @@ export function InventarioPage() {
               <form onSubmit={guardarMovimiento}>
                 <label className="pos-field floating">
                   <span>Nombre del Material</span>
-                  <BuscadorMaterial materiales={materiales} value={formulario.nombreMaterial} onChange={(v) => setFormulario((f) => ({ ...f, nombreMaterial: v }))} />
+                  <BuscadorMaterial materiales={materialesActivos} value={formulario.nombreMaterial} onChange={(v) => setFormulario((f) => ({ ...f, nombreMaterial: v }))} />
                 </label>
 
                 <label className="pos-field floating">
@@ -674,11 +757,10 @@ export function InventarioPage() {
                       const esPiezas = matSeleccionado && normalizarTexto(matSeleccionado.unidad || "").includes("piez");
                       return (
                         <input
-                          type="number"
-                          min="0"
-                          step={esPiezas ? "1" : "any"}
+                          inputMode={esPiezas ? "numeric" : "decimal"}
+                          type="text"
                           value={formulario.cantidad}
-                          onChange={e => setFormulario(f => ({ ...f, cantidad: e.target.value }))}
+                          onChange={e => setFormulario(f => ({ ...f, cantidad: limpiarCantidadMovimiento(e.target.value) }))}
                         />
                       );
                     })()}
@@ -738,6 +820,27 @@ export function InventarioPage() {
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 20 }}>
               <button className="ghost-button" type="button" onClick={() => setNuevaUnidad({ visible: false, nombre: "" })}>Cancelar</button>
               <button className="primary-button" type="button" onClick={guardarNuevaUnidad}>Guardar unidad</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {auditModal && (
+        <div className="modal-overlay" onClick={() => setAuditModal(null)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <h2>{auditModal.titulo}</h2>
+            <div className="audit-grid modal-audit-grid">
+              {auditModal.items.map(([label, value]) => (
+                <div key={label}>
+                  <span>{label}</span>
+                  <strong>{value || "-"}</strong>
+                </div>
+              ))}
+            </div>
+            <div className="modal-actions">
+              <button className="primary-button" onClick={() => setAuditModal(null)} type="button">
+                Cerrar
+              </button>
             </div>
           </div>
         </div>

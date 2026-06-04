@@ -6,6 +6,7 @@ import {
   actualizarServicio
 } from "../api/catalogApi.js";
 import { listarMateriales } from "../api/inventarioApi.js";
+import { listarEmpleados } from "../api/empleadoApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
 
 export function ServiciosPage() {
@@ -14,6 +15,7 @@ export function ServiciosPage() {
   const [servicios, setServicios] = useState([]);
   const [categorias, setCategorias] = useState([]);
   const [materiales, setMateriales] = useState([]);
+  const [empleados, setEmpleados] = useState([]);
   const [serviciosMateriales, setServiciosMateriales] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -36,6 +38,7 @@ export function ServiciosPage() {
   });
 
   const [updatingEstadoId, setUpdatingEstadoId] = useState(null);
+  const [auditModal, setAuditModal] = useState(null);
 
   function mostrarError(msg) { setModalError(msg); }
   function mostrarSuccess(msg) {
@@ -69,22 +72,65 @@ export function ServiciosPage() {
     return m ? m.nombre : `Material ${id}`;
   }
 
+  function nombreEmpleado(id) {
+    const empleado = empleados.find((item) => Number(item.idEmpleado) === Number(id));
+    if (!id) {
+      return "-";
+    }
+    if (!empleado) {
+      return `Empleado ${id}`;
+    }
+    return [empleado.nombre, empleado.apellidoPaterno, empleado.apellidoMaterno].filter(Boolean).join(" ");
+  }
+
+  function fechaHora(value) {
+    return value ? new Date(value).toLocaleString("es-MX") : "-";
+  }
+
+  function abrirAuditoria(titulo, registro, extra = []) {
+    setAuditModal({
+      titulo,
+      items: [
+        ["Registrado por", nombreEmpleado(registro.createdBy)],
+        ["Registro", fechaHora(registro.createdAt)],
+        ["Editado por", nombreEmpleado(registro.updatedBy)],
+        ["Ultima edicion", fechaHora(registro.updatedAt)],
+        ["Eliminado por", nombreEmpleado(registro.deletedBy)],
+        ["Eliminacion", fechaHora(registro.deletedAt)],
+        ...extra
+      ]
+    });
+  }
+
+  function materialActivo(material) {
+    const estado = String(material?.estado || "").toLowerCase();
+    return estado === "disponible" || estado === "activo";
+  }
+
+  function limpiarCantidadPositiva(value) {
+    const limpio = String(value || "").replace(/[+-]/g, "").replace(/[^\d.]/g, "");
+    const partes = limpio.split(".");
+    return partes.length > 1 ? `${partes[0]}.${partes.slice(1).join("")}` : limpio;
+  }
+
   useEffect(() => {
     let active = true;
     async function cargar() {
       setLoading(true);
       try {
-        const [svs, cats, mats, svMats] = await Promise.all([
+        const [svs, cats, mats, svMats, emps] = await Promise.all([
           listarServicios(),
           listarCategoriaServicio(),
           listarMateriales(),
-          listarServiciosMateriales()
+          listarServiciosMateriales(),
+          listarEmpleados()
         ]);
         if (!active) return;
         setServicios(safe(svs));
         setCategorias(safe(cats));
         setMateriales(safe(mats));
         setServiciosMateriales(safe(svMats));
+        setEmpleados(safe(emps));
       } catch (err) {
         if (active) mostrarError(err.message || String(err));
       } finally {
@@ -110,10 +156,7 @@ export function ServiciosPage() {
   }, [servicios]);
 
   const materialesDisponibles = useMemo(() => {
-    return materiales.filter((material) => {
-      const estado = String(material.estado || "").toLowerCase();
-      return estado === "disponible" || estado === "activo";
-    });
+    return materiales.filter((material) => materialActivo(material));
   }, [materiales]);
 
   async function guardarServicio() {
@@ -153,6 +196,10 @@ export function ServiciosPage() {
     }
     if (!formMaterial.cantidadUsada || Number(formMaterial.cantidadUsada) <= 0) {
       mostrarError("Ingresa una cantidad válida."); return;
+    }
+    const material = materiales.find((item) => Number(item.idMaterial || item.id) === Number(formMaterial.materialId));
+    if (!materialActivo(material)) {
+      mostrarError("No se puede asignar un material inactivo a un servicio."); return;
     }
     setSaving(true);
     try {
@@ -212,8 +259,16 @@ export function ServiciosPage() {
     setServicios(prevList => prevList.map(s => (Number(s.idServicio || s.id) === id ? { ...s, estado: nuevoEstado } : s)));
     setUpdatingEstadoId(id);
     try {
-      console.log("PUT /servicios/", id, { estado: nuevoEstado, updatedBy: session.empleadoId });
-      const res = await actualizarServicio(id, { estado: nuevoEstado, updatedBy: session.empleadoId });
+      const payload = {
+        nombre: serv.nombre,
+        descripcion: serv.descripcion || "",
+        estado: nuevoEstado,
+        categoriaServicioId: Number(serv.categoriaServicioId),
+        createdBy: serv.createdBy || session.empleadoId,
+        updatedBy: session.empleadoId
+      };
+      console.log("PUT /servicios/", id, payload);
+      const res = await actualizarServicio(id, payload);
       console.log("respuesta actualizarServicio:", res);
       const svs = await listarServicios();
       setServicios(safe(svs));
@@ -232,7 +287,6 @@ export function ServiciosPage() {
     <section className="page-stack">
       <div className="page-header">
         <div>
-          <span className="eyebrow">Modulo</span>
           <h1>Servicios</h1>
         </div>
         <button
@@ -273,6 +327,7 @@ export function ServiciosPage() {
               <th>Materiales</th>
               <th>Categoría</th>
               <th>Estado</th>
+              <th></th>
               <th></th> {/* acción: agregar material */}
             </tr>
           </thead>
@@ -317,6 +372,16 @@ export function ServiciosPage() {
                   </td>
                   <td>
                     <button
+                      aria-label="Ver auditoria del servicio"
+                      className="audit-toggle"
+                      onClick={() => abrirAuditoria(`Servicio ${s.idServicio || s.id}`, s, [["Cambio de estado", s.estado || "-"]])}
+                      type="button"
+                    >
+                      ▼
+                    </button>
+                  </td>
+                  <td>
+                    <button
                       className="primary-button"
                       type="button"
                       onClick={() => {
@@ -334,7 +399,7 @@ export function ServiciosPage() {
             })}
             {serviciosFiltrados.length === 0 && !loading && (
               <tr>
-                <td colSpan={7} style={{
+                <td colSpan={8} style={{
                   textAlign: "center",
                   color: "#64748b",
                   padding: 24
@@ -474,12 +539,11 @@ export function ServiciosPage() {
             <label className="pos-field floating">
               <span>Cantidad Usada</span>
               <input
-                type="number"
-                min="0"
-                step="any"
+                inputMode="decimal"
+                type="text"
                 value={formMaterial.cantidadUsada}
                 onChange={e => setFormMaterial(f => ({
-                  ...f, cantidadUsada: e.target.value
+                  ...f, cantidadUsada: limpiarCantidadPositiva(e.target.value)
                 }))}
               />
             </label>
@@ -555,6 +619,27 @@ export function ServiciosPage() {
                 onClick={guardarNuevaCategoria}
               >
                 {saving ? "Guardando..." : "Guardar categoría"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {auditModal && (
+        <div className="modal-overlay" onClick={() => setAuditModal(null)}>
+          <div className="modal-card" onClick={e => e.stopPropagation()}>
+            <h2>{auditModal.titulo}</h2>
+            <div className="audit-grid modal-audit-grid">
+              {auditModal.items.map(([label, value]) => (
+                <div key={label}>
+                  <span>{label}</span>
+                  <strong>{value || "-"}</strong>
+                </div>
+              ))}
+            </div>
+            <div className="modal-actions">
+              <button className="primary-button" onClick={() => setAuditModal(null)} type="button">
+                Cerrar
               </button>
             </div>
           </div>

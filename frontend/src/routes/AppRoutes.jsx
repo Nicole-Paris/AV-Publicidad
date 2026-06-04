@@ -9,6 +9,7 @@ import { InventarioPage } from "../pages/InventarioPage.jsx";
 import { PedidosPage } from "../pages/PedidosPage.jsx";
 import { CorteCajaPage } from "../pages/CorteCajaPage.jsx";
 import { ServiciosPage } from "../pages/ServiciosPage.jsx";
+import { ClientesPage } from "../pages/ClientesPage.jsx";
 
 function ProtectedRoute({ children }) {
   const location = useLocation();
@@ -54,7 +55,7 @@ export function AppRoutes() {
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<DashboardPage />} />
         <Route path="punto-venta" element={<PuntoVentaPage />} />
-        <Route path="clientes" element={<PlaceholderPage title="Clientes" />} />
+        <Route path="clientes" element={<ClientesPage />} />
         <Route path="pedidos" element={<PedidosPage />} />
         <Route path="pagos" element={<PlaceholderPage title="Pagos" />} />
         <Route path="inventario" element={<InventarioPage />} />

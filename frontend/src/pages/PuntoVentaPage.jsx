@@ -11,7 +11,7 @@ import {
   obtenerCliente
 } from "../api/catalogApi.js";
 import { actualizarPedido, crearDetallePedido, crearPedido } from "../api/pedidoApi.js";
-import { listarInventarios, crearMovimiento } from "../api/inventarioApi.js";
+import { listarInventarios, listarMateriales, crearMovimiento } from "../api/inventarioApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { AppIcon } from "../components/AppIcon.jsx";
 
@@ -40,10 +40,19 @@ function nombreCliente(cliente) {
 }
 
 function normalizarTexto(value) {
-  return value
+  return (value || "")
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
+}
+
+function materialActivo(material) {
+  const estado = String(material?.estado || "").toLowerCase();
+  return estado === "disponible" || estado === "activo";
+}
+
+function servicioActivo(servicio) {
+  return String(servicio?.estado || "Activo").toLowerCase() === "activo";
 }
 
 export function PuntoVentaPage() {
@@ -168,6 +177,11 @@ export function PuntoVentaPage() {
       .filter((cliente) => normalizarTexto(nombreCliente(cliente)).includes(query))
       .slice(0, 6);
   }, [clienteSearch, clientes]);
+
+  const serviciosActivos = useMemo(
+    () => servicios.filter((servicio) => servicioActivo(servicio)),
+    [servicios]
+  );
 
   const subtotal = useMemo(
     () => items.reduce((total, item) => total + item.subtotal, 0),
@@ -350,6 +364,11 @@ export function PuntoVentaPage() {
     }
 
     const servicio = servicios.find((current) => current.idServicio === Number(detalle.servicioId));
+    if (!servicio || !servicioActivo(servicio)) {
+      mostrarError("No se puede agregar un servicio inactivo al pedido.");
+      return;
+    }
+
     const cantidad = Number(detalle.cantidad);
     const precioUnitario = Number(detalle.precioUnitario);
 
@@ -416,6 +435,15 @@ export function PuntoVentaPage() {
       return;
     }
 
+    const servicioInactivo = items
+      .map((item) => servicios.find((servicio) => Number(servicio.idServicio) === Number(item.servicioId)))
+      .find((servicio) => !servicioActivo(servicio));
+
+    if (servicioInactivo) {
+      mostrarError(`El servicio ${servicioInactivo.nombre} esta inactivo y no se puede agregar a un pedido.`);
+      return;
+    }
+
     // Validación de crédito si aplica
     if (pedido.formaPago === "Credito") {
       try {
@@ -430,6 +458,62 @@ export function PuntoVentaPage() {
         mostrarError(err.message || String(err));
         return;
       }
+    }
+
+    let inventarioValidado = { serviciosMateriales: [], inventarios: [] };
+    try {
+      const [serviciosMaterialesData, inventariosData, materialesData] = await Promise.all([
+        listarServiciosMateriales(),
+        listarInventarios(),
+        listarMateriales()
+      ]);
+
+      const requerimientos = new Map();
+
+      items.forEach((item) => {
+        const materialesServicio = (serviciosMaterialesData || [])
+          .filter((sm) => Number(sm.servicioId) === Number(item.servicioId));
+
+        materialesServicio.forEach((sm) => {
+          const material = (materialesData || [])
+            .find((mat) => Number(mat.idMaterial || mat.id) === Number(sm.materialId));
+
+          if (!materialActivo(material)) {
+            throw new Error(`El material ${material?.nombre || sm.materialId} esta inactivo y no se puede usar en pedidos.`);
+          }
+
+          const cantidadPorUnidad = Number(sm.cantidadUsada ?? sm.cantidad ?? 0);
+          const cantidadTotal = Number(item.cantidad) * cantidadPorUnidad;
+
+          if (!cantidadTotal || cantidadTotal <= 0) {
+            return;
+          }
+
+          const materialId = Number(sm.materialId);
+          requerimientos.set(materialId, (requerimientos.get(materialId) || 0) + cantidadTotal);
+        });
+      });
+
+      requerimientos.forEach((cantidadNecesaria, materialId) => {
+        const inventario = (inventariosData || []).find((inv) =>
+          Number(inv.materialId) === Number(materialId) &&
+          Number(inv.sucursalId) === Number(sucursalActiva.idSucursal)
+        );
+        const material = (materialesData || []).find((mat) => Number(mat.idMaterial || mat.id) === Number(materialId));
+        const stockActual = Number(inventario?.stockActual || 0);
+
+        if (!inventario || stockActual < cantidadNecesaria) {
+          throw new Error(`No hay piezas suficientes de ${material?.nombre || `material ${materialId}`}. Stock disponible: ${stockActual}.`);
+        }
+      });
+
+      inventarioValidado = {
+        serviciosMateriales: serviciosMaterialesData || [],
+        inventarios: inventariosData || []
+      };
+    } catch (err) {
+      mostrarError(err.message || String(err));
+      return;
     }
 
     setSaving(true);
@@ -485,7 +569,8 @@ export function PuntoVentaPage() {
 
       // Reducir stock en inventario según materiales asociados a los servicios
       try {
-        const [svMats, invs] = await Promise.all([listarServiciosMateriales(), listarInventarios()]);
+        const svMats = inventarioValidado.serviciosMateriales;
+        const invs = inventarioValidado.inventarios;
 
         await Promise.all(items.map(async (item) => {
           const mats = (svMats || []).filter(sm => Number(sm.servicioId) === Number(item.servicioId));
@@ -677,7 +762,7 @@ export function PuntoVentaPage() {
             </select>
           </label>
 
-          <div className="pos-field-row">
+          <div className="pos-field-row order-meta-row">
             <label className="pos-field floating">
               <span>Forma de Pago</span>
               <select name="formaPago" onChange={updatePedido} value={pedido.formaPago}>
@@ -687,7 +772,7 @@ export function PuntoVentaPage() {
               </select>
             </label>
 
-            <label className="pos-field floating">
+            <label className="pos-field floating date-field">
               <span>Entrega</span>
               <input
                 name="fechaEntrega"
@@ -716,7 +801,7 @@ export function PuntoVentaPage() {
               value={detalle.servicioId}
             >
               <option value="">Servicio o Trabajo</option>
-              {servicios.map((servicio) => (
+              {serviciosActivos.map((servicio) => (
                 <option key={servicio.idServicio} value={servicio.idServicio}>
                   {servicio.nombre}
                 </option>

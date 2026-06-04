@@ -3,7 +3,6 @@ export function PlaceholderPage({ title }) {
     <section className="page-stack">
       <div className="page-header">
         <div>
-          <span className="eyebrow">Modulo</span>
           <h1>{title}</h1>
         </div>
       </div>
