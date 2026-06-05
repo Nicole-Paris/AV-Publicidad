@@ -11,6 +11,19 @@ export function crearCliente(payload) {
   });
 }
 
+export function actualizarCliente(id, payload) {
+  return apiRequest(`/clientes/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function eliminarCliente(id) {
+  return apiRequest(`/clientes/${id}`, {
+    method: "DELETE"
+  });
+}
+
 export function listarServicios() {
   return apiRequest("/servicios");
 }

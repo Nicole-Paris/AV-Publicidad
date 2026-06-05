@@ -11,6 +11,26 @@ export function crearEmpleado(payload) {
   });
 }
 
+export function actualizarEmpleado(id, payload) {
+  return apiRequest(`/empleados/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function eliminarEmpleado(id) {
+  return apiRequest(`/empleados/${id}`, {
+    method: "DELETE"
+  });
+}
+
 export function listarRoles() {
   return apiRequest("/roles");
+}
+
+export function crearRol(payload) {
+  return apiRequest("/roles", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
 }

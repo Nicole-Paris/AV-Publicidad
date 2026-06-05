@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { crearCliente, listarClientes } from "../api/catalogApi.js";
+import { actualizarCliente, crearCliente, eliminarCliente, listarClientes } from "../api/catalogApi.js";
 import { listarEmpleados } from "../api/empleadoApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
 
@@ -36,6 +36,7 @@ export function ClientesPage() {
   const [filtroTipo, setFiltroTipo] = useState("");
   const [filtroCredito, setFiltroCredito] = useState("");
   const [modalCliente, setModalCliente] = useState(false);
+  const [clienteEditando, setClienteEditando] = useState(null);
   const [clienteExpandido, setClienteExpandido] = useState(null);
   const [formCliente, setFormCliente] = useState({
     nombre: "",
@@ -127,6 +128,7 @@ export function ClientesPage() {
   }
 
   function resetClienteForm() {
+    setClienteEditando(null);
     setFormCliente({
       nombre: "",
       apellidoPaterno: "",
@@ -141,6 +143,30 @@ export function ClientesPage() {
       codigoPostal: "",
       razonSocial: ""
     });
+  }
+
+  function abrirNuevoCliente() {
+    resetClienteForm();
+    setModalCliente(true);
+  }
+
+  function abrirEditarCliente(cliente) {
+    setClienteEditando(cliente);
+    setFormCliente({
+      nombre: cliente.nombre || "",
+      apellidoPaterno: cliente.apellidoPaterno || "",
+      apellidoMaterno: cliente.apellidoMaterno || "",
+      telefono: cliente.telefono || "",
+      tipo: cliente.tipo || "No frecuente",
+      tieneCredito: Boolean(cliente.tieneCredito),
+      creditoActual: String(cliente.creditoActual ?? "0.00"),
+      limiteCredito: String(cliente.limiteCredito ?? "0.00"),
+      direccion: cliente.direccion || "",
+      rfc: cliente.rfc || "",
+      codigoPostal: cliente.codigoPostal || "",
+      razonSocial: cliente.razonSocial || ""
+    });
+    setModalCliente(true);
   }
 
   async function guardarCliente() {
@@ -163,13 +189,14 @@ export function ClientesPage() {
 
     setSaving(true);
     try {
+      const esEdicion = Boolean(clienteEditando);
       const razonSocial = formCliente.razonSocial.trim() || [
         formCliente.nombre,
         formCliente.apellidoPaterno,
         formCliente.apellidoMaterno
       ].filter(Boolean).join(" ");
 
-      await crearCliente({
+      const payload = {
         nombre: formCliente.nombre.trim(),
         apellidoPaterno: formCliente.apellidoPaterno.trim(),
         apellidoMaterno: formCliente.apellidoMaterno.trim(),
@@ -182,13 +209,38 @@ export function ClientesPage() {
         rfc: formCliente.rfc.trim() || null,
         codigoPostal: formCliente.codigoPostal.trim(),
         razonSocial: razonSocial.slice(0, 30),
-        createdBy: session.empleadoId
-      });
+        createdBy: clienteEditando?.createdBy || session.empleadoId,
+        updatedBy: clienteEditando ? session.empleadoId : null
+      };
+
+      if (esEdicion) {
+        await actualizarCliente(clienteEditando.idCliente, payload);
+      } else {
+        await crearCliente(payload);
+      }
 
       await cargarClientes();
       resetClienteForm();
       setModalCliente(false);
-      setSuccess("Cliente agregado correctamente.");
+      setSuccess(esEdicion ? "Cliente actualizado correctamente." : "Cliente agregado correctamente.");
+      setTimeout(() => setSuccess(""), 2500);
+    } catch (err) {
+      setModalError(err.message || String(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function borrarCliente(cliente) {
+    const confirmar = window.confirm(`¿Eliminar a ${nombreCliente(cliente)}?`);
+    if (!confirmar) return;
+
+    setSaving(true);
+    try {
+      await eliminarCliente(cliente.idCliente);
+      await cargarClientes();
+      setClienteExpandido(null);
+      setSuccess("Cliente eliminado correctamente.");
       setTimeout(() => setSuccess(""), 2500);
     } catch (err) {
       setModalError(err.message || String(err));
@@ -235,7 +287,7 @@ export function ClientesPage() {
         </div>
         <div style={{ alignItems: "center", display: "flex", gap: 12 }}>
           <span className="cash-count">{clientesFiltrados.length} clientes</span>
-          <button className="primary-button" disabled={loading} onClick={() => setModalCliente(true)} type="button">
+          <button className="primary-button" disabled={loading} onClick={abrirNuevoCliente} type="button">
             + Nuevo Cliente
           </button>
         </div>
@@ -274,6 +326,7 @@ export function ClientesPage() {
               <th>RFC</th>
               <th>Razon social</th>
               <th>Direccion</th>
+              <th>Acciones</th>
               <th></th>
             </tr>
           </thead>
@@ -311,6 +364,16 @@ export function ClientesPage() {
                   <td>{cliente.razonSocial || "-"}</td>
                   <td>{cliente.direccion || "-"}</td>
                   <td>
+                    <div className="table-actions">
+                      <button className="ghost-button" onClick={() => abrirEditarCliente(cliente)} type="button">
+                        Editar
+                      </button>
+                      <button className="danger-button" disabled={saving} onClick={() => borrarCliente(cliente)} type="button">
+                        Eliminar
+                      </button>
+                    </div>
+                  </td>
+                  <td>
                     <button
                       aria-label="Ver auditoria del cliente"
                       className="audit-toggle"
@@ -323,7 +386,7 @@ export function ClientesPage() {
                 </tr>
                 {clienteExpandido === cliente.idCliente && (
                   <tr className="audit-row" key={`${cliente.idCliente}-audit`}>
-                    <td colSpan={9}>
+                    <td colSpan={10}>
                       <div className="audit-grid">
                         <div><span>Registrado por</span><strong>{nombreEmpleado(cliente.createdBy)}</strong></div>
                         <div><span>Registro</span><strong>{fechaHora(cliente.createdAt)}</strong></div>
@@ -339,14 +402,14 @@ export function ClientesPage() {
             ))}
             {!loading && clientesFiltrados.length === 0 && (
               <tr>
-                <td colSpan={8} style={{ color: "#64748b", padding: 24, textAlign: "center" }}>
+                <td colSpan={10} style={{ color: "#64748b", padding: 24, textAlign: "center" }}>
                   No hay clientes con esos filtros.
                 </td>
               </tr>
             )}
             {loading && (
               <tr>
-                <td colSpan={8} style={{ color: "#64748b", padding: 24, textAlign: "center" }}>
+                <td colSpan={10} style={{ color: "#64748b", padding: 24, textAlign: "center" }}>
                   Cargando clientes...
                 </td>
               </tr>
@@ -356,9 +419,12 @@ export function ClientesPage() {
       </div>
 
       {modalCliente && (
-        <div className="modal-overlay" onClick={() => setModalCliente(false)}>
+        <div className="modal-overlay" onClick={() => {
+          setModalCliente(false);
+          resetClienteForm();
+        }}>
           <div className="modal-card customer-modal" onClick={(event) => event.stopPropagation()}>
-            <h2>Nuevo Cliente</h2>
+            <h2>{clienteEditando ? "Editar Cliente" : "Nuevo Cliente"}</h2>
             <div className="modal-grid">
               <label className="pos-field floating">
                 <span>Nombre</span>
@@ -422,11 +488,14 @@ export function ClientesPage() {
               )}
             </div>
             <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
-              <button className="ghost-button" onClick={() => setModalCliente(false)} type="button">
+              <button className="ghost-button" onClick={() => {
+                setModalCliente(false);
+                resetClienteForm();
+              }} type="button">
                 Cancelar
               </button>
               <button className="primary-button" disabled={saving} onClick={guardarCliente} type="button">
-                {saving ? "Guardando..." : "Guardar Cliente"}
+                {saving ? "Guardando..." : clienteEditando ? "Guardar Cambios" : "Guardar Cliente"}
               </button>
             </div>
           </div>

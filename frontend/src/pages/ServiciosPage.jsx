@@ -24,6 +24,7 @@ export function ServiciosPage() {
   const [buscar, setBuscar] = useState("");
 
   const [modalServicio, setModalServicio] = useState(false);
+  const [servicioEditando, setServicioEditando] = useState(null);
   const [formServicio, setFormServicio] = useState({
     nombre: "", descripcion: "", estado: "Activo", categoriaServicioId: ""
   });
@@ -113,6 +114,23 @@ export function ServiciosPage() {
     return partes.length > 1 ? `${partes[0]}.${partes.slice(1).join("")}` : limpio;
   }
 
+  function abrirNuevoServicio() {
+    setServicioEditando(null);
+    setFormServicio({ nombre: "", descripcion: "", estado: "Activo", categoriaServicioId: "" });
+    setModalServicio(true);
+  }
+
+  function abrirEditarServicio(servicio) {
+    setServicioEditando(servicio);
+    setFormServicio({
+      nombre: servicio.nombre || "",
+      descripcion: servicio.descripcion || "",
+      estado: servicio.estado || "Activo",
+      categoriaServicioId: servicio.categoriaServicioId ? String(servicio.categoriaServicioId) : ""
+    });
+    setModalServicio(true);
+  }
+
   useEffect(() => {
     let active = true;
     async function cargar() {
@@ -168,18 +186,26 @@ export function ServiciosPage() {
     }
     setSaving(true);
     try {
-      await crearServicio({
+      const esEdicion = Boolean(servicioEditando);
+      const payload = {
         nombre: formServicio.nombre.trim(),
         descripcion: formServicio.descripcion.trim(),
         estado: formServicio.estado,
         categoriaServicioId: Number(formServicio.categoriaServicioId),
-        createdBy: session.empleadoId
-      });
+        createdBy: servicioEditando?.createdBy || session.empleadoId,
+        updatedBy: esEdicion ? session.empleadoId : null
+      };
+      if (esEdicion) {
+        await actualizarServicio(servicioEditando.idServicio || servicioEditando.id, payload);
+      } else {
+        await crearServicio(payload);
+      }
       const svs = await listarServicios();
       setServicios(safe(svs));
       setModalServicio(false);
+      setServicioEditando(null);
       setFormServicio({ nombre: "", descripcion: "", estado: "Activo", categoriaServicioId: "" });
-      mostrarSuccess("Servicio creado correctamente.");
+      mostrarSuccess(esEdicion ? "Servicio actualizado correctamente." : "Servicio creado correctamente.");
     } catch (err) {
       mostrarError(err.message || String(err));
     } finally {
@@ -292,7 +318,7 @@ export function ServiciosPage() {
         <button
           className="primary-button"
           onClick={() => tab === "servicios"
-            ? setModalServicio(true)
+            ? abrirNuevoServicio()
             : setModalMaterial(true)
           }
           type="button"
@@ -327,6 +353,7 @@ export function ServiciosPage() {
               <th>Materiales</th>
               <th>Categoría</th>
               <th>Estado</th>
+              <th>Acciones</th>
               <th></th>
               <th></th> {/* acción: agregar material */}
             </tr>
@@ -371,6 +398,13 @@ export function ServiciosPage() {
                     </select>
                   </td>
                   <td>
+                    <div className="table-actions">
+                      <button className="ghost-button" onClick={() => abrirEditarServicio(s)} type="button">
+                        Editar
+                      </button>
+                    </div>
+                  </td>
+                  <td>
                     <button
                       aria-label="Ver auditoria del servicio"
                       className="audit-toggle"
@@ -399,7 +433,7 @@ export function ServiciosPage() {
             })}
             {serviciosFiltrados.length === 0 && !loading && (
               <tr>
-                <td colSpan={8} style={{
+                <td colSpan={9} style={{
                   textAlign: "center",
                   color: "#64748b",
                   padding: 24
@@ -413,9 +447,12 @@ export function ServiciosPage() {
       </div>
 
       {modalServicio && (
-        <div className="modal-overlay" onClick={() => setModalServicio(false)}>
+        <div className="modal-overlay" onClick={() => {
+          setModalServicio(false);
+          setServicioEditando(null);
+        }}>
           <div className="modal-card" onClick={e => e.stopPropagation()}>
-            <h2>Nuevo Servicio</h2>
+            <h2>{servicioEditando ? "Editar Servicio" : "Nuevo Servicio"}</h2>
             <label className="pos-field floating">
               <span>Nombre</span>
               <input
@@ -482,7 +519,10 @@ export function ServiciosPage() {
               <button
                 className="ghost-button"
                 type="button"
-                onClick={() => setModalServicio(false)}
+                onClick={() => {
+                  setModalServicio(false);
+                  setServicioEditando(null);
+                }}
               >
                 Cancelar
               </button>
@@ -492,7 +532,7 @@ export function ServiciosPage() {
                 disabled={saving}
                 onClick={guardarServicio}
               >
-                {saving ? "Guardando..." : "Guardar Servicio"}
+                {saving ? "Guardando..." : servicioEditando ? "Guardar Cambios" : "Guardar Servicio"}
               </button>
             </div>
           </div>

@@ -3,9 +3,11 @@ import {
   listarCategoriasMaterial,
   listarMateriales,
   crearMaterial,
+  actualizarMaterial,
   crearCategoriaMaterial,
   listarInventarios,
   crearInventario,
+  actualizarInventario,
   listarMovimientos,
   crearMovimiento
 } from "../api/inventarioApi.js";
@@ -149,6 +151,7 @@ export function InventarioPage() {
   const [materialExpandido, setMaterialExpandido] = useState(null);
   const [movimientoExpandido, setMovimientoExpandido] = useState(null);
   const [auditModal, setAuditModal] = useState(null);
+  const [materialEditando, setMaterialEditando] = useState(null);
 
   const [buscar, setBuscar] = useState("");
   const [categoriaFiltro, setCategoriaFiltro] = useState("");
@@ -475,11 +478,33 @@ export function InventarioPage() {
   function abrirNuevo() {
     setError("");
     setSuccess("");
+    setMaterialEditando(null);
+    setFormularioAbierto(true);
+  }
+
+  function abrirEditarMaterial(material) {
+    const inv = inventarioParaMaterial(material.idMaterial || material.id);
+    setError("");
+    setSuccess("");
+    setMaterialEditando({ material, inventario: inv || null });
+    setFormulario((f) => ({
+      ...f,
+      sucursalId: inv?.sucursalId ? String(inv.sucursalId) : "",
+      nombre: material.nombre || "",
+      unidad: material.unidad || "Metros",
+      costoUnitario: String(material.costoUnitario ?? ""),
+      categoriaMaterialId: material.categoriaMaterialId ? String(material.categoriaMaterialId) : "",
+      estado: estadoMaterialParaVista(material.estado),
+      stockActual: inv?.stockActual != null ? String(inv.stockActual) : "",
+      stockMinimo: inv?.stockMinimo != null ? String(inv.stockMinimo) : "",
+      nombreMaterial: f.nombreMaterial
+    }));
     setFormularioAbierto(true);
   }
 
   function cancelarFormulario() {
     setError("");
+    setMaterialEditando(null);
     setFormularioAbierto(false);
   }
 

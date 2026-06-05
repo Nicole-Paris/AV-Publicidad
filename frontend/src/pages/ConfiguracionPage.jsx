@@ -4,7 +4,14 @@ import {
   listarGlobalValues, crearGlobalValue,
   actualizarGlobalValue
 } from "../api/configuracionApi.js";
-import { crearEmpleado, listarEmpleados, listarRoles } from "../api/empleadoApi.js";
+import {
+  actualizarEmpleado,
+  crearEmpleado,
+  eliminarEmpleado,
+  listarEmpleados,
+  listarRoles,
+  crearRol
+} from "../api/empleadoApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
 
 export function ConfiguracionPage() {
@@ -20,6 +27,8 @@ export function ConfiguracionPage() {
   const [globalValues, setGlobalValues] = useState([]);
   const [modalSucursal, setModalSucursal] = useState(false);
   const [modalEmpleado, setModalEmpleado] = useState(false);
+  const [modalRol, setModalRol] = useState(false);
+  const [empleadoEditando, setEmpleadoEditando] = useState(null);
   const [empleadoExpandido, setEmpleadoExpandido] = useState(null);
   const [sucursalSeleccionada, setSucursalSeleccionada] = useState(null);
   const [formSucursal, setFormSucursal] = useState({
@@ -37,6 +46,10 @@ export function ConfiguracionPage() {
     horaSalida: "18:00",
     rolId: "",
     sucursalIdSucursal: ""
+  });
+  const [formRol, setFormRol] = useState({
+    nombre: "",
+    descripcion: ""
   });
   const [formEmpresa, setFormEmpresa] = useState({
     nombreEmpresa: "", razonSocial: "", rfc: "",
@@ -94,10 +107,36 @@ export function ConfiguracionPage() {
   }
 
   function abrirNuevoEmpleado(sucursal = sucursalSeleccionada) {
+    setEmpleadoEditando(null);
     setFormEmpleado(f => ({
-      ...f,
+      nombre: "",
+      apellidoPaterno: "",
+      apellidoMaterno: "",
+      telefono: "",
+      correo: "",
+      contrasena: "",
+      horaEntrada: "09:00",
+      horaSalida: "18:00",
+      rolId: "",
       sucursalIdSucursal: sucursal ? String(sucursal.idSucursal || sucursal.id) : f.sucursalIdSucursal
     }));
+    setModalEmpleado(true);
+  }
+
+  function abrirEditarEmpleado(empleado) {
+    setEmpleadoEditando(empleado);
+    setFormEmpleado({
+      nombre: empleado.nombre || "",
+      apellidoPaterno: empleado.apellidoPaterno || "",
+      apellidoMaterno: empleado.apellidoMaterno || "",
+      telefono: empleado.telefono || "",
+      correo: empleado.correo || "",
+      contrasena: empleado.contrasena || "",
+      horaEntrada: empleado.horaEntrada?.slice(0, 5) || "09:00",
+      horaSalida: empleado.horaSalida?.slice(0, 5) || "18:00",
+      rolId: empleado.rolId ? String(empleado.rolId) : "",
+      sucursalIdSucursal: empleado.sucursalIdSucursal ? String(empleado.sucursalIdSucursal) : ""
+    });
     setModalEmpleado(true);
   }
 
@@ -265,7 +304,7 @@ export function ConfiguracionPage() {
 
     setSaving(true);
     try {
-      await crearEmpleado({
+      const payload = {
         nombre: formEmpleado.nombre.trim(),
         apellidoPaterno: formEmpleado.apellidoPaterno.trim(),
         apellidoMaterno: formEmpleado.apellidoMaterno.trim(),
@@ -276,11 +315,18 @@ export function ConfiguracionPage() {
         horaSalida: `${formEmpleado.horaSalida}:00`,
         rolId: Number(formEmpleado.rolId),
         sucursalIdSucursal: Number(formEmpleado.sucursalIdSucursal)
-      });
+      };
+
+      if (empleadoEditando) {
+        await actualizarEmpleado(empleadoEditando.idEmpleado, payload);
+      } else {
+        await crearEmpleado(payload);
+      }
 
       const emps = await listarEmpleados();
       setEmpleados(safe(emps));
       setModalEmpleado(false);
+      setEmpleadoEditando(null);
       setSucursalSeleccionada(current => current ? { ...current } : current);
       setFormEmpleado({
         nombre: "",
@@ -294,7 +340,58 @@ export function ConfiguracionPage() {
         rolId: "",
         sucursalIdSucursal: ""
       });
-      mostrarSuccess("Empleado creado correctamente.");
+      mostrarSuccess(empleadoEditando ? "Empleado actualizado correctamente." : "Empleado creado correctamente.");
+    } catch (err) {
+      mostrarError(err.message || String(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function borrarEmpleado(empleado) {
+    const confirmar = window.confirm(`¿Eliminar a ${nombreEmpleado(empleado)}?`);
+    if (!confirmar) return;
+
+    setSaving(true);
+    try {
+      await eliminarEmpleado(empleado.idEmpleado);
+      const emps = await listarEmpleados();
+      setEmpleados(safe(emps));
+      setEmpleadoExpandido(null);
+      setSucursalSeleccionada(current => current ? { ...current } : current);
+      mostrarSuccess("Empleado eliminado correctamente.");
+    } catch (err) {
+      mostrarError(err.message || String(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function guardarRol() {
+    if (!formRol.nombre.trim()) {
+      mostrarError("Escribe el nombre del rol."); return;
+    }
+    if (!formRol.descripcion.trim()) {
+      mostrarError("Escribe la descripcion del rol."); return;
+    }
+
+    setSaving(true);
+    try {
+      const nuevoRol = await crearRol({
+        nombre: formRol.nombre.trim(),
+        descripcion: formRol.descripcion.trim(),
+        createdBy: session.empleadoId
+      });
+      const rolesActualizados = await listarRoles();
+      setRoles(safe(rolesActualizados));
+      const rolId = nuevoRol.idRol || nuevoRol.id || safe(rolesActualizados)
+        .find(rol => rol.nombre === formRol.nombre.trim())?.idRol;
+      if (rolId) {
+        setFormEmpleado(f => ({ ...f, rolId: String(rolId) }));
+      }
+      setFormRol({ nombre: "", descripcion: "" });
+      setModalRol(false);
+      mostrarSuccess("Rol creado correctamente.");
     } catch (err) {
       mostrarError(err.message || String(err));
     } finally {
@@ -605,12 +702,20 @@ export function ConfiguracionPage() {
                           {nombreRol(empleado.rolId)} · {empleado.horaEntrada?.slice(0, 5)} - {empleado.horaSalida?.slice(0, 5)}
                         </p>
                       </div>
-                      <button
-                        aria-label="Ver auditoria del empleado"
-                        className={`audit-toggle ${expandido ? "open" : ""}`}
-                        onClick={() => setEmpleadoExpandido(expandido ? null : id)}
-                        type="button"
-                      />
+                      <div className="employee-card-actions">
+                        <button className="ghost-button" onClick={() => abrirEditarEmpleado(empleado)} type="button">
+                          Editar
+                        </button>
+                        <button className="danger-button" disabled={saving} onClick={() => borrarEmpleado(empleado)} type="button">
+                          Eliminar
+                        </button>
+                        <button
+                          aria-label="Ver auditoria del empleado"
+                          className={`audit-toggle ${expandido ? "open" : ""}`}
+                          onClick={() => setEmpleadoExpandido(expandido ? null : id)}
+                          type="button"
+                        />
+                      </div>
                     </div>
                     {expandido && (
                       <div className="audit-grid employee-audit-grid">
@@ -718,9 +823,12 @@ export function ConfiguracionPage() {
       )}
 
       {modalEmpleado && (
-        <div className="modal-overlay" onClick={() => setModalEmpleado(false)}>
+        <div className="modal-overlay" onClick={() => {
+          setModalEmpleado(false);
+          setEmpleadoEditando(null);
+        }}>
           <div className="modal-card customer-modal" onClick={e => e.stopPropagation()}>
-            <h2>Nuevo Empleado</h2>
+            <h2>{empleadoEditando ? "Editar Empleado" : "Nuevo Empleado"}</h2>
             <div className="modal-grid">
               <label className="pos-field floating">
                 <span>Nombre</span>
@@ -743,7 +851,7 @@ export function ConfiguracionPage() {
                 <input value={formEmpleado.correo} onChange={e => setFormEmpleado(f => ({...f, correo: e.target.value}))} type="email" />
               </label>
               <label className="pos-field floating">
-                <span>Contrasena</span>
+                <span>Contraseña</span>
                 <input value={formEmpleado.contrasena} onChange={e => setFormEmpleado(f => ({...f, contrasena: e.target.value}))} type="password" />
               </label>
               <label className="pos-field floating">
@@ -756,19 +864,29 @@ export function ConfiguracionPage() {
               </label>
               <label className="pos-field floating">
                 <span>Rol</span>
-                <select value={formEmpleado.rolId} onChange={e => setFormEmpleado(f => ({...f, rolId: e.target.value}))}>
+                <select
+                  value={formEmpleado.rolId}
+                  onChange={e => {
+                    if (e.target.value === "__nuevo_rol__") {
+                      setModalRol(true);
+                      return;
+                    }
+                    setFormEmpleado(f => ({...f, rolId: e.target.value}));
+                  }}
+                >
                   <option value="">Selecciona</option>
                   {roles.map(rol => (
                     <option key={rol.idRol || rol.id} value={rol.idRol || rol.id}>
                       {rol.nombre}
                     </option>
                   ))}
+                  <option value="__nuevo_rol__">+ Nuevo rol...</option>
                 </select>
               </label>
               <label className="pos-field floating">
                 <span>Sucursal</span>
                 <select
-                  disabled={Boolean(sucursalSeleccionada)}
+                  disabled={Boolean(sucursalSeleccionada && !empleadoEditando)}
                   value={formEmpleado.sucursalIdSucursal}
                   onChange={e => setFormEmpleado(f => ({...f, sucursalIdSucursal: e.target.value}))}
                 >
@@ -782,11 +900,46 @@ export function ConfiguracionPage() {
               </label>
             </div>
             <div style={{display:"flex", justifyContent:"flex-end", gap:12, marginTop:20}}>
-              <button className="ghost-button" type="button" onClick={() => setModalEmpleado(false)}>
+              <button className="ghost-button" type="button" onClick={() => {
+                setModalEmpleado(false);
+                setEmpleadoEditando(null);
+              }}>
                 Cancelar
               </button>
               <button className="primary-button" type="button" disabled={saving} onClick={guardarEmpleado}>
-                {saving ? "Guardando..." : "Guardar Empleado"}
+                {saving ? "Guardando..." : empleadoEditando ? "Guardar Cambios" : "Guardar Empleado"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modalRol && (
+        <div className="modal-overlay nested-modal-overlay" onClick={() => setModalRol(false)}>
+          <div className="modal-card" onClick={e => e.stopPropagation()}>
+            <h2>Nuevo Rol</h2>
+            <label className="pos-field floating">
+              <span>Nombre</span>
+              <input
+                type="text"
+                value={formRol.nombre}
+                onChange={e => setFormRol(f => ({ ...f, nombre: e.target.value }))}
+              />
+            </label>
+            <label className="pos-field floating">
+              <span>Descripcion</span>
+              <input
+                type="text"
+                value={formRol.descripcion}
+                onChange={e => setFormRol(f => ({ ...f, descripcion: e.target.value }))}
+              />
+            </label>
+            <div style={{display:"flex", justifyContent:"flex-end", gap:12, marginTop:20}}>
+              <button className="ghost-button" type="button" onClick={() => setModalRol(false)}>
+                Cancelar
+              </button>
+              <button className="primary-button" type="button" disabled={saving} onClick={guardarRol}>
+                {saving ? "Guardando..." : "Guardar Rol"}
               </button>
             </div>
           </div>

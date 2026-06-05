@@ -12,11 +12,17 @@ export function listarMateriales() {
 export function crearMaterial(payload) {
   return apiRequest("/materiales", { method: "POST", body: JSON.stringify(payload) });
 }
+export function actualizarMaterial(id, payload) {
+  return apiRequest(`/materiales/${id}`, { method: "PUT", body: JSON.stringify(payload) });
+}
 export function listarInventarios() {
   return apiRequest("/inventarios");
 }
 export function crearInventario(payload) {
   return apiRequest("/inventarios", { method: "POST", body: JSON.stringify(payload) });
+}
+export function actualizarInventario(id, payload) {
+  return apiRequest(`/inventarios/${id}`, { method: "PUT", body: JSON.stringify(payload) });
 }
 export function listarMovimientos() {
   return apiRequest("/movimientos-inventario");
