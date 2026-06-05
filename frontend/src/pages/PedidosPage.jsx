@@ -447,7 +447,7 @@ export function PedidosPage() {
                       <span className={estadoPago === "Pagado" ? "inv-badge ok" : "inv-badge warn"} style={{fontSize:12}}>
                         {estadoPago}
                       </span>
-                      <strong className="pedido-total">{money(pedido.total)}</strong>
+                      <strong className="pedido-total">Resta: {money(pendiente)}</strong>
                       <select
                          value={pedido.estado}
                          disabled={cambiandoEstado === pedido.idPedido}

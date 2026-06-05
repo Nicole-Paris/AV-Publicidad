@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import {
   listarSucursales, crearSucursal,
   listarGlobalValues, crearGlobalValue,
   actualizarGlobalValue
 } from "../api/configuracionApi.js";
+import { crearEmpleado, listarEmpleados, listarRoles } from "../api/empleadoApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
 
 export function ConfiguracionPage() {
@@ -14,11 +15,28 @@ export function ConfiguracionPage() {
   const [modalError, setModalError] = useState("");
   const [success, setSuccess] = useState("");
   const [sucursales, setSucursales] = useState([]);
+  const [empleados, setEmpleados] = useState([]);
+  const [roles, setRoles] = useState([]);
   const [globalValues, setGlobalValues] = useState([]);
   const [modalSucursal, setModalSucursal] = useState(false);
+  const [modalEmpleado, setModalEmpleado] = useState(false);
+  const [empleadoExpandido, setEmpleadoExpandido] = useState(null);
+  const [sucursalSeleccionada, setSucursalSeleccionada] = useState(null);
   const [formSucursal, setFormSucursal] = useState({
     nombre: "", direccion: "", codigoPostal: "",
     telefono: "", horario: ""
+  });
+  const [formEmpleado, setFormEmpleado] = useState({
+    nombre: "",
+    apellidoPaterno: "",
+    apellidoMaterno: "",
+    telefono: "",
+    correo: "",
+    contrasena: "",
+    horaEntrada: "09:00",
+    horaSalida: "18:00",
+    rolId: "",
+    sucursalIdSucursal: ""
   });
   const [formEmpresa, setFormEmpresa] = useState({
     nombreEmpresa: "", razonSocial: "", rfc: "",
@@ -40,17 +58,64 @@ export function ConfiguracionPage() {
     return gv ? gv.valor : "";
   }
 
+  function nombreEmpleado(empleado) {
+    return [empleado?.nombre, empleado?.apellidoPaterno, empleado?.apellidoMaterno]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  function nombreRol(id) {
+    const rol = roles.find(item => Number(item.idRol || item.id) === Number(id));
+    return rol ? rol.nombre : `Rol ${id || "-"}`;
+  }
+
+  function nombreSucursal(id) {
+    const sucursal = sucursales.find(item => Number(item.idSucursal || item.id) === Number(id));
+    return sucursal ? sucursal.nombre : `Sucursal ${id || "-"}`;
+  }
+
+  function nombreEmpleadoPorId(id) {
+    const empleado = empleados.find(item => Number(item.idEmpleado) === Number(id));
+    if (!id) return "-";
+    return empleado ? nombreEmpleado(empleado) : `Empleado ${id}`;
+  }
+
+  function fechaHora(value) {
+    return value ? new Date(value).toLocaleString("es-MX") : "-";
+  }
+
+  function empleadosDeSucursal(sucursalId) {
+    return empleados.filter(empleado => Number(empleado.sucursalIdSucursal) === Number(sucursalId));
+  }
+
+  function abrirSucursal(sucursal) {
+    setSucursalSeleccionada(sucursal);
+    setEmpleadoExpandido(null);
+  }
+
+  function abrirNuevoEmpleado(sucursal = sucursalSeleccionada) {
+    setFormEmpleado(f => ({
+      ...f,
+      sucursalIdSucursal: sucursal ? String(sucursal.idSucursal || sucursal.id) : f.sucursalIdSucursal
+    }));
+    setModalEmpleado(true);
+  }
+
   useEffect(() => {
     let active = true;
     async function cargar() {
       setLoading(true);
       try {
-        const [sucs, gvs] = await Promise.all([
+        const [sucs, gvs, emps, rolesData] = await Promise.all([
           listarSucursales(),
-          listarGlobalValues()
+          listarGlobalValues(),
+          listarEmpleados(),
+          listarRoles()
         ]);
         if (!active) return;
         setSucursales(safe(sucs));
+        setEmpleados(safe(emps));
+        setRoles(safe(rolesData));
         const gvsArr = safe(gvs);
         setGlobalValues(gvsArr);
         setFormEmpresa({
@@ -175,6 +240,68 @@ export function ConfiguracionPage() {
     }
   }
 
+  async function guardarEmpleado() {
+    if (!formEmpleado.nombre.trim()) {
+      mostrarError("Escribe el nombre del empleado."); return;
+    }
+    if (!formEmpleado.apellidoPaterno.trim()) {
+      mostrarError("Escribe el apellido paterno."); return;
+    }
+    if (!formEmpleado.telefono.trim()) {
+      mostrarError("Escribe el telefono."); return;
+    }
+    if (!formEmpleado.correo.trim()) {
+      mostrarError("Escribe el correo."); return;
+    }
+    if (!formEmpleado.contrasena.trim()) {
+      mostrarError("Escribe la contrasena."); return;
+    }
+    if (!formEmpleado.rolId) {
+      mostrarError("Selecciona un rol."); return;
+    }
+    if (!formEmpleado.sucursalIdSucursal) {
+      mostrarError("Selecciona una sucursal."); return;
+    }
+
+    setSaving(true);
+    try {
+      await crearEmpleado({
+        nombre: formEmpleado.nombre.trim(),
+        apellidoPaterno: formEmpleado.apellidoPaterno.trim(),
+        apellidoMaterno: formEmpleado.apellidoMaterno.trim(),
+        telefono: formEmpleado.telefono.trim(),
+        correo: formEmpleado.correo.trim(),
+        contrasena: formEmpleado.contrasena,
+        horaEntrada: `${formEmpleado.horaEntrada}:00`,
+        horaSalida: `${formEmpleado.horaSalida}:00`,
+        rolId: Number(formEmpleado.rolId),
+        sucursalIdSucursal: Number(formEmpleado.sucursalIdSucursal)
+      });
+
+      const emps = await listarEmpleados();
+      setEmpleados(safe(emps));
+      setModalEmpleado(false);
+      setSucursalSeleccionada(current => current ? { ...current } : current);
+      setFormEmpleado({
+        nombre: "",
+        apellidoPaterno: "",
+        apellidoMaterno: "",
+        telefono: "",
+        correo: "",
+        contrasena: "",
+        horaEntrada: "09:00",
+        horaSalida: "18:00",
+        rolId: "",
+        sucursalIdSucursal: ""
+      });
+      mostrarSuccess("Empleado creado correctamente.");
+    } catch (err) {
+      mostrarError(err.message || String(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function guardarSoloLogo() {
     if (!formEmpresa.logoUrl || !formEmpresa.logoUrl.toString().trim()) {
       mostrarError("Escribe una URL de logotipo válida.");
@@ -222,7 +349,7 @@ export function ConfiguracionPage() {
         <div>
           <h1>Configuración</h1>
         </div>
-        <div>
+        <div style={{ display: "flex", gap: 12 }}>
           {tab === "sucursales" && (
             <button
               className="primary-button"
@@ -412,50 +539,104 @@ export function ConfiguracionPage() {
       )}
 
       {tab === "sucursales" && (
-        <>
-          {/* botón movido al header */}
-          <div style={{display:"flex", flexDirection:"column", gap:12}}>
-            {sucursales.map((s, i) => (
-              <div key={s.idSucursal || i} className="pos-card" style={{padding:"20px 24px"}}>
-                <div style={{
-                  display:"flex", justifyContent:"space-between",
-                  alignItems:"flex-start"
-                }}>
+        <section className="settings-column">
+          <div className="tab-section-header">
+            <h2>Sucursales</h2>
+            <span className="cash-count">{sucursales.length} sucursales</span>
+          </div>
+          <div className="branch-card-grid">
+            {sucursales.map((s, i) => {
+              const totalEmpleados = empleadosDeSucursal(s.idSucursal || s.id).length;
+              return (
+                <button
+                  key={s.idSucursal || i}
+                  className="pos-card branch-card"
+                  onClick={() => abrirSucursal(s)}
+                  type="button"
+                >
                   <div>
-                    <p style={{fontWeight:700, fontSize:16, margin:"0 0 4px"}}>
-                      {s.nombre}
-                    </p>
-                    <p style={{color:"#64748b", fontSize:14, margin:"0 0 2px"}}>
-                      {s.direccion}
-                    </p>
-                    {s.telefono && (
-                      <p style={{color:"#64748b", fontSize:14, margin:"0 0 2px"}}>
-                        Tel: {s.telefono}
-                      </p>
-                    )}
-                    {s.horario && (
-                      <p style={{color:"#64748b", fontSize:14, margin:0}}>
-                        {s.horario}
-                      </p>
-                    )}
+                    <p style={{fontWeight:700, fontSize:16, margin:"0 0 4px"}}>{s.nombre}</p>
+                    <p style={{color:"#64748b", fontSize:14, margin:"0 0 2px"}}>{s.direccion}</p>
+                    {s.telefono && <p style={{color:"#64748b", fontSize:14, margin:"0 0 2px"}}>Tel: {s.telefono}</p>}
+                    {s.horario && <p style={{color:"#64748b", fontSize:14, margin:0}}>{s.horario}</p>}
                   </div>
-                  <span style={{
-                    background:"#f0fff4", color:"#216e39",
-                    borderRadius:20, padding:"4px 12px",
-                    fontSize:13, fontWeight:700
-                  }}>
-                    Activa
-                  </span>
-                </div>
-              </div>
-            ))}
+                  <div className="branch-card-side">
+                    <span className="inv-badge ok">Activa</span>
+                    <span className="cash-count">{totalEmpleados} empleados</span>
+                  </div>
+                </button>
+              );
+            })}
             {sucursales.length === 0 && !loading && (
-              <p style={{color:"#64748b", textAlign:"center", padding:32}}>
-                Sin sucursales registradas.
-              </p>
+              <p style={{color:"#64748b", textAlign:"center", padding:32}}>Sin sucursales registradas.</p>
             )}
           </div>
-        </>
+        </section>
+      )}
+
+      {sucursalSeleccionada && (
+        <div className="modal-overlay" onClick={() => setSucursalSeleccionada(null)}>
+          <div className="modal-card customer-modal" onClick={e => e.stopPropagation()}>
+            <div className="tab-section-header">
+              <div>
+                <h2>{sucursalSeleccionada.nombre}</h2>
+                <p className="page-subtitle">{sucursalSeleccionada.direccion}</p>
+              </div>
+              <button
+                className="primary-button"
+                onClick={() => abrirNuevoEmpleado(sucursalSeleccionada)}
+                type="button"
+              >
+                + Nuevo Empleado
+              </button>
+            </div>
+
+            <div className="employee-modal-list">
+              {empleadosDeSucursal(sucursalSeleccionada.idSucursal || sucursalSeleccionada.id).map((empleado) => {
+                const id = empleado.idEmpleado;
+                const expandido = empleadoExpandido === id;
+                return (
+                  <div key={id} className="employee-card inline-employee-card">
+                    <div className="employee-card-header">
+                      <div>
+                        <p style={{fontWeight:700, fontSize:16, margin:"0 0 4px"}}>{nombreEmpleado(empleado)}</p>
+                        <p style={{color:"#64748b", fontSize:14, margin:"0 0 2px"}}>{empleado.correo}</p>
+                        <p style={{color:"#64748b", fontSize:14, margin:0}}>
+                          {nombreRol(empleado.rolId)} · {empleado.horaEntrada?.slice(0, 5)} - {empleado.horaSalida?.slice(0, 5)}
+                        </p>
+                      </div>
+                      <button
+                        aria-label="Ver auditoria del empleado"
+                        className={`audit-toggle ${expandido ? "open" : ""}`}
+                        onClick={() => setEmpleadoExpandido(expandido ? null : id)}
+                        type="button"
+                      />
+                    </div>
+                    {expandido && (
+                      <div className="audit-grid employee-audit-grid">
+                        <div><span>Registrado por</span><strong>{nombreEmpleadoPorId(empleado.createdBy)}</strong></div>
+                        <div><span>Registro</span><strong>{fechaHora(empleado.createdAt)}</strong></div>
+                        <div><span>Editado por</span><strong>{nombreEmpleadoPorId(empleado.updatedBy)}</strong></div>
+                        <div><span>Ultima edicion</span><strong>{fechaHora(empleado.updatedAt)}</strong></div>
+                        <div><span>Eliminado por</span><strong>{nombreEmpleadoPorId(empleado.deletedBy)}</strong></div>
+                        <div><span>Eliminacion</span><strong>{fechaHora(empleado.deletedAt)}</strong></div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              {empleadosDeSucursal(sucursalSeleccionada.idSucursal || sucursalSeleccionada.id).length === 0 && (
+                <p style={{color:"#64748b", textAlign:"center", padding:24}}>Esta sucursal aun no tiene empleados.</p>
+              )}
+            </div>
+
+            <div className="modal-actions" style={{marginTop:20}}>
+              <button className="ghost-button" onClick={() => setSucursalSeleccionada(null)} type="button">
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {modalSucursal && (
@@ -536,10 +717,86 @@ export function ConfiguracionPage() {
         </div>
       )}
 
+      {modalEmpleado && (
+        <div className="modal-overlay" onClick={() => setModalEmpleado(false)}>
+          <div className="modal-card customer-modal" onClick={e => e.stopPropagation()}>
+            <h2>Nuevo Empleado</h2>
+            <div className="modal-grid">
+              <label className="pos-field floating">
+                <span>Nombre</span>
+                <input value={formEmpleado.nombre} onChange={e => setFormEmpleado(f => ({...f, nombre: e.target.value}))} type="text" />
+              </label>
+              <label className="pos-field floating">
+                <span>Apellido paterno</span>
+                <input value={formEmpleado.apellidoPaterno} onChange={e => setFormEmpleado(f => ({...f, apellidoPaterno: e.target.value}))} type="text" />
+              </label>
+              <label className="pos-field floating">
+                <span>Apellido materno</span>
+                <input value={formEmpleado.apellidoMaterno} onChange={e => setFormEmpleado(f => ({...f, apellidoMaterno: e.target.value}))} type="text" />
+              </label>
+              <label className="pos-field floating">
+                <span>Telefono</span>
+                <input maxLength={10} value={formEmpleado.telefono} onChange={e => setFormEmpleado(f => ({...f, telefono: e.target.value.replace(/\D/g, "").slice(0, 10)}))} type="text" />
+              </label>
+              <label className="pos-field floating">
+                <span>Correo</span>
+                <input value={formEmpleado.correo} onChange={e => setFormEmpleado(f => ({...f, correo: e.target.value}))} type="email" />
+              </label>
+              <label className="pos-field floating">
+                <span>Contrasena</span>
+                <input value={formEmpleado.contrasena} onChange={e => setFormEmpleado(f => ({...f, contrasena: e.target.value}))} type="password" />
+              </label>
+              <label className="pos-field floating">
+                <span>Hora entrada</span>
+                <input value={formEmpleado.horaEntrada} onChange={e => setFormEmpleado(f => ({...f, horaEntrada: e.target.value}))} type="time" />
+              </label>
+              <label className="pos-field floating">
+                <span>Hora salida</span>
+                <input value={formEmpleado.horaSalida} onChange={e => setFormEmpleado(f => ({...f, horaSalida: e.target.value}))} type="time" />
+              </label>
+              <label className="pos-field floating">
+                <span>Rol</span>
+                <select value={formEmpleado.rolId} onChange={e => setFormEmpleado(f => ({...f, rolId: e.target.value}))}>
+                  <option value="">Selecciona</option>
+                  {roles.map(rol => (
+                    <option key={rol.idRol || rol.id} value={rol.idRol || rol.id}>
+                      {rol.nombre}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="pos-field floating">
+                <span>Sucursal</span>
+                <select
+                  disabled={Boolean(sucursalSeleccionada)}
+                  value={formEmpleado.sucursalIdSucursal}
+                  onChange={e => setFormEmpleado(f => ({...f, sucursalIdSucursal: e.target.value}))}
+                >
+                  <option value="">Selecciona</option>
+                  {sucursales.map(sucursal => (
+                    <option key={sucursal.idSucursal || sucursal.id} value={sucursal.idSucursal || sucursal.id}>
+                      {sucursal.nombre}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div style={{display:"flex", justifyContent:"flex-end", gap:12, marginTop:20}}>
+              <button className="ghost-button" type="button" onClick={() => setModalEmpleado(false)}>
+                Cancelar
+              </button>
+              <button className="primary-button" type="button" disabled={saving} onClick={guardarEmpleado}>
+                {saving ? "Guardando..." : "Guardar Empleado"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {modalError && (
         <div className="modal-error-overlay" onClick={() => setModalError("")}>
           <div className="modal-error-card" onClick={e => e.stopPropagation()}>
-            <p className="modal-error-icon">⚠</p>
+            <p className="modal-error-icon">âš </p>
             <p className="modal-error-msg">{modalError}</p>
             <button
               className="primary-button"
@@ -553,3 +810,5 @@ export function ConfiguracionPage() {
     </section>
   );
 }
+
+
