@@ -66,6 +66,15 @@ public class Empleado {
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 
+    @Column(name = "created_by")
+    private Integer createdBy;
+
+    @Column(name = "updated_by")
+    private Integer updatedBy;
+
+    @Column(name = "deleted_by")
+    private Integer deletedBy;
+
     @Column(name = "rol_id", nullable = false)
     private Integer rolId;
 

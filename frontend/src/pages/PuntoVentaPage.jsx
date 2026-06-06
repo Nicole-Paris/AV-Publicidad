@@ -12,6 +12,7 @@ import {
 } from "../api/catalogApi.js";
 import { actualizarPedido, crearDetallePedido, crearPedido } from "../api/pedidoApi.js";
 import { listarInventarios, listarMateriales, crearMovimiento } from "../api/inventarioApi.js";
+import { listarEmpleados } from "../api/empleadoApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { AppIcon } from "../components/AppIcon.jsx";
 
@@ -61,6 +62,7 @@ export function PuntoVentaPage() {
   const [clienteSearch, setClienteSearch] = useState("");
   const [clienteSuggestionsOpen, setClienteSuggestionsOpen] = useState(false);
   const [servicios, setServicios] = useState([]);
+  const [empleados, setEmpleados] = useState([]);
   const [categoriasServicio, setCategoriasServicio] = useState([]);
   const [sucursales, setSucursales] = useState([]);
   const [loadingCatalogos, setLoadingCatalogos] = useState(true);
@@ -129,11 +131,12 @@ export function PuntoVentaPage() {
       setError("");
 
       try {
-        const [clientesData, serviciosData, sucursalesData, categoriasServicioData] = await Promise.all([
+        const [clientesData, serviciosData, sucursalesData, categoriasServicioData, empleadosData] = await Promise.all([
           listarClientes(),
           listarServicios(),
           listarSucursales(),
-          listarCategoriaServicio()
+          listarCategoriaServicio(),
+          listarEmpleados()
         ]);
 
         if (!active) {
@@ -144,6 +147,7 @@ export function PuntoVentaPage() {
         setServicios(serviciosData);
         setSucursales(sucursalesData);
         setCategoriasServicio(categoriasServicioData);
+        setEmpleados(Array.isArray(empleadosData) ? empleadosData : []);
       } catch (err) {
         if (active) {
           mostrarError(err.message || String(err));
@@ -167,6 +171,15 @@ export function PuntoVentaPage() {
     return sucursales.find((sucursal) => sucursal.idSucursal === id) || sucursales[0];
   }, [session, sucursales]);
 
+  function registroDeSucursal(registro) {
+    const sucursalId = session?.sucursalIdSucursal || session?.sucursalId;
+    if (!sucursalId) {
+      return true;
+    }
+    const empleado = empleados.find((item) => Number(item.idEmpleado) === Number(registro.createdBy));
+    return Number(empleado?.sucursalIdSucursal) === Number(sucursalId);
+  }
+
   const clientesFiltrados = useMemo(() => {
     const query = normalizarTexto(clienteSearch.trim());
     if (!query) {
@@ -174,13 +187,14 @@ export function PuntoVentaPage() {
     }
 
     return clientes
+      .filter(registroDeSucursal)
       .filter((cliente) => normalizarTexto(nombreCliente(cliente)).includes(query))
       .slice(0, 6);
-  }, [clienteSearch, clientes]);
+  }, [clienteSearch, clientes, empleados, session]);
 
   const serviciosActivos = useMemo(
-    () => servicios.filter((servicio) => servicioActivo(servicio)),
-    [servicios]
+    () => servicios.filter((servicio) => registroDeSucursal(servicio) && servicioActivo(servicio)),
+    [servicios, empleados, session]
   );
 
   const subtotal = useMemo(

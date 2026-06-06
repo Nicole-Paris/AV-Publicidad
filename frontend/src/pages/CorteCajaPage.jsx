@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { actualizarCorteCaja, crearCorteCaja, listarCortesCaja } from "../api/corteCajaApi.js";
 import { listarEmpleados } from "../api/empleadoApi.js";
 import { listarTodosPagos } from "../api/pagoApi.js";
+import { listarPedidos } from "../api/pedidoApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
 
 function money(value) {
@@ -38,6 +39,7 @@ export function CorteCajaPage() {
   const [cortes, setCortes] = useState([]);
   const [empleados, setEmpleados] = useState([]);
   const [pagos, setPagos] = useState([]);
+  const [pedidos, setPedidos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -55,15 +57,17 @@ export function CorteCajaPage() {
       setError("");
 
       try {
-        const [cortesData, pagosData, empleadosData] = await Promise.all([
+        const [cortesData, pagosData, empleadosData, pedidosData] = await Promise.all([
           listarCortesCaja(),
           listarTodosPagos(),
-          listarEmpleados()
+          listarEmpleados(),
+          listarPedidos()
         ]);
         if (!active) return;
         setCortes((cortesData || []).slice().sort((a, b) => Number(b.idCorteCaja) - Number(a.idCorteCaja)));
         setPagos(pagosData || []);
         setEmpleados(empleadosData || []);
+        setPedidos(pedidosData || []);
       } catch (err) {
         if (active) setError(err.message);
       } finally {
@@ -78,13 +82,18 @@ export function CorteCajaPage() {
     };
   }, []);
 
+  const sucursalActivaId = session?.sucursalIdSucursal || session?.sucursalId;
+
   const pagosDelDia = useMemo(() => {
     return pagos.filter(
-      (pago) =>
-        pago.fecha === fechaFiltro &&
-        Number(pago.empleadoIdEmpleado) === Number(session?.empleadoId)
+      (pago) => {
+        const pedido = pedidos.find((item) => Number(item.idPedido) === Number(pago.pedidoId));
+        return pago.fecha === fechaFiltro &&
+          Number(pago.empleadoIdEmpleado) === Number(session?.empleadoId) &&
+          (!sucursalActivaId || Number(pedido?.sucursalId) === Number(sucursalActivaId));
+      }
     );
-  }, [fechaFiltro, pagos, session]);
+  }, [fechaFiltro, pagos, pedidos, session, sucursalActivaId]);
 
   const corteAbierto = useMemo(() => {
     return cortes.find(
@@ -96,8 +105,12 @@ export function CorteCajaPage() {
   }, [cortes, fechaFiltro, session]);
 
   const cortesDelDia = useMemo(() => {
-    return cortes.filter((corte) => corte.fecha === fechaFiltro);
-  }, [cortes, fechaFiltro]);
+    return cortes.filter((corte) => {
+      const empleado = empleados.find((item) => Number(item.idEmpleado) === Number(corte.empleadoId));
+      return corte.fecha === fechaFiltro &&
+        (!sucursalActivaId || Number(empleado?.sucursalIdSucursal) === Number(sucursalActivaId));
+    });
+  }, [cortes, empleados, fechaFiltro, sucursalActivaId]);
 
   const totalPagos = pagosDelDia.reduce((total, pago) => total + toAmount(pago.monto), 0);
   const saldoBase = corteAbierto ? toAmount(corteAbierto.saldoInicial) : toAmount(saldoInicial);
@@ -107,14 +120,16 @@ export function CorteCajaPage() {
   const canCerrar = !loading && !saving && corteAbierto && saldoReal !== "";
 
   async function recargar() {
-    const [cortesData, pagosData, empleadosData] = await Promise.all([
+    const [cortesData, pagosData, empleadosData, pedidosData] = await Promise.all([
       listarCortesCaja(),
       listarTodosPagos(),
-      listarEmpleados()
+      listarEmpleados(),
+      listarPedidos()
     ]);
     setCortes((cortesData || []).slice().sort((a, b) => Number(b.idCorteCaja) - Number(a.idCorteCaja)));
     setPagos(pagosData || []);
     setEmpleados(empleadosData || []);
+    setPedidos(pedidosData || []);
   }
 
   function nombreEmpleado(id) {

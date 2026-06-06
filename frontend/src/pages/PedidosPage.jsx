@@ -54,6 +54,7 @@ export function PedidosPage() {
   const [pedidoSugerencias, setPedidoSugerencias] = useState([]);
   const [pedidoSeleccionado, setPedidoSeleccionado] = useState(null);
   const [confirmarEntregaPendiente, setConfirmarEntregaPendiente] = useState(null);
+  const sucursalActivaId = session?.sucursalIdSucursal || session?.sucursalId;
 
   function mostrarError(msg) {
     setModalError(msg);
@@ -236,14 +237,15 @@ export function PedidosPage() {
   const pedidosFiltrados = useMemo(() => {
     const q = (buscarPedido || "").trim().toLowerCase();
     return pedidos.filter(p => {
+      const matchSucursal = !sucursalActivaId || Number(p.sucursalId) === Number(sucursalActivaId);
       const cliente = clienteDePedido(p);
       const nombre = cliente ? nombreCliente(cliente).toLowerCase() : "";
       const matchBuscar = !q || nombre.includes(q) || String(p.idPedido).includes(q);
       const matchEstado = !filtroEstado || p.estado === filtroEstado;
       const matchEstadoPago = !filtroEstadoPago || estadoPagoPedido(p) === filtroEstadoPago;
-      return matchBuscar && matchEstado && matchEstadoPago;
+      return matchSucursal && matchBuscar && matchEstado && matchEstadoPago;
     });
-  }, [pedidos, buscarPedido, filtroEstado, filtroEstadoPago, clientes, todosLosPagos]);
+  }, [pedidos, buscarPedido, filtroEstado, filtroEstadoPago, clientes, todosLosPagos, sucursalActivaId]);
 
   async function expandirPedido(idPedido) {
     if (pedidoExpandido === idPedido) {
@@ -384,9 +386,12 @@ export function PedidosPage() {
   const pagosFiltrados = useMemo(() => {
     const q = (buscarPago || "").trim().toLowerCase();
     return (todosLosPagos || []).filter(p => {
-      return !q || String(p.pedidoId).includes(q) || (p.formaPago || "").toLowerCase().includes(q) || (p.conceptoPago || "").toLowerCase().includes(q);
+      const pedidoPago = pedidos.find(pedido => Number(pedido.idPedido) === Number(p.pedidoId));
+      const matchSucursal = !sucursalActivaId || Number(pedidoPago?.sucursalId) === Number(sucursalActivaId);
+      const matchBuscar = !q || String(p.pedidoId).includes(q) || (p.formaPago || "").toLowerCase().includes(q) || (p.conceptoPago || "").toLowerCase().includes(q);
+      return matchSucursal && matchBuscar;
     });
-  }, [todosLosPagos, buscarPago]);
+  }, [todosLosPagos, buscarPago, pedidos, sucursalActivaId]);
 
   return (
     <section className="page-stack">

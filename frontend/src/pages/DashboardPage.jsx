@@ -5,6 +5,7 @@ import { listarCortesCaja } from "../api/corteCajaApi.js";
 import { listarInventarios, listarMateriales } from "../api/inventarioApi.js";
 import { listarTodosPagos } from "../api/pagoApi.js";
 import { listarDetallesPedido, listarPedidos } from "../api/pedidoApi.js";
+import { listarEmpleados } from "../api/empleadoApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
 
 const CURRENCY = new Intl.NumberFormat("es-MX", {
@@ -75,6 +76,7 @@ export function DashboardPage() {
   const [materiales, setMateriales] = useState([]);
   const [servicios, setServicios] = useState([]);
   const [cortes, setCortes] = useState([]);
+  const [empleados, setEmpleados] = useState([]);
 
   useEffect(() => {
     let active = true;
@@ -82,14 +84,15 @@ export function DashboardPage() {
     async function cargarDashboard() {
       setLoading(true);
       try {
-        const [pedidosData, pagosData, clientesData, inventariosData, materialesData, cortesData, serviciosData] = await Promise.all([
+        const [pedidosData, pagosData, clientesData, inventariosData, materialesData, cortesData, serviciosData, empleadosData] = await Promise.all([
           listarPedidos(),
           listarTodosPagos(),
           listarClientes(),
           listarInventarios(),
           listarMateriales(),
           listarCortesCaja(),
-          listarServicios()
+          listarServicios(),
+          listarEmpleados()
         ]);
 
         if (!active) return;
@@ -102,6 +105,7 @@ export function DashboardPage() {
         setMateriales(Array.isArray(materialesData) ? materialesData : []);
         setCortes(Array.isArray(cortesData) ? cortesData : []);
         setServicios(Array.isArray(serviciosData) ? serviciosData : []);
+        setEmpleados(Array.isArray(empleadosData) ? empleadosData : []);
 
         const detallesPorPedido = await Promise.all(
           pedidosArray.map(async (pedido) => {
@@ -131,28 +135,65 @@ export function DashboardPage() {
   }, []);
 
   const hoy = today();
+  const sucursalActivaId = session?.sucursalIdSucursal || session?.sucursalId;
+
+  function empleadoPerteneceSucursal(empleadoId) {
+    if (!sucursalActivaId) {
+      return true;
+    }
+    const empleado = empleados.find((item) => Number(item.idEmpleado) === Number(empleadoId));
+    return Number(empleado?.sucursalIdSucursal) === Number(sucursalActivaId);
+  }
+
+  function registroCreadoEnSucursal(registro) {
+    if (!sucursalActivaId) {
+      return true;
+    }
+    return empleadoPerteneceSucursal(registro.createdBy);
+  }
+
+  const pedidosSucursal = useMemo(() => (
+    pedidos.filter(pedido => !sucursalActivaId || Number(pedido.sucursalId) === Number(sucursalActivaId))
+  ), [pedidos, sucursalActivaId]);
+
+  const pagosSucursal = useMemo(() => {
+    const pedidosIds = new Set(pedidosSucursal.map(pedido => Number(pedido.idPedido)));
+    return pagos.filter(pago => pedidosIds.has(Number(pago.pedidoId)));
+  }, [pagos, pedidosSucursal]);
+
+  const inventariosSucursal = useMemo(() => (
+    inventarios.filter(inventario => !sucursalActivaId || Number(inventario.sucursalId) === Number(sucursalActivaId))
+  ), [inventarios, sucursalActivaId]);
+
+  const cortesSucursal = useMemo(() => (
+    cortes.filter(corte => empleadoPerteneceSucursal(corte.empleadoId))
+  ), [cortes, empleados, sucursalActivaId]);
+
+  const clientesSucursal = useMemo(() => (
+    clientes.filter(registroCreadoEnSucursal)
+  ), [clientes, empleados, sucursalActivaId]);
 
   const pagosDelDia = useMemo(() => {
-    return pagos
+    return pagosSucursal
       .filter(pago => dateOnly(pago.fecha || pago.createdAt) === hoy)
       .reduce((total, pago) => total + Number(pago.monto || 0), 0);
-  }, [pagos, hoy]);
+  }, [pagosSucursal, hoy]);
 
-  const pedidosPendientes = pedidos.filter(pedido =>
+  const pedidosPendientes = pedidosSucursal.filter(pedido =>
     ["Pendiente", "En proceso", "Terminado"].includes(pedido.estado)
   );
 
-  const stockBajo = inventarios.filter(inventario =>
+  const stockBajo = inventariosSucursal.filter(inventario =>
     Number(inventario.stockActual || 0) <= Number(inventario.stockMinimo || 0)
   );
 
-  const cortesAbiertos = cortes.filter(corte => !corte.horaFin && !corte.deletedAt);
+  const cortesAbiertos = cortesSucursal.filter(corte => !corte.horaFin && !corte.deletedAt);
 
-  const ventasHoy = pedidos
+  const ventasHoy = pedidosSucursal
     .filter(pedido => dateOnly(pedido.fechaPedido) === hoy)
     .reduce((total, pedido) => total + Number(pedido.total || 0), 0);
 
-  const pedidosRecientes = [...pedidos]
+  const pedidosRecientes = [...pedidosSucursal]
     .sort((a, b) => Number(b.idPedido) - Number(a.idPedido))
     .slice(0, 5);
 
@@ -161,7 +202,7 @@ export function DashboardPage() {
     material: materiales.find(material => Number(material.idMaterial) === Number(inventario.materialId))?.nombre || `Material ${inventario.materialId}`
   }));
 
-  const clientesFrecuentes = clientes.filter(cliente => cliente.tipo === "Frecuente").length;
+  const clientesFrecuentes = clientesSucursal.filter(cliente => cliente.tipo === "Frecuente").length;
 
   const pedidosPorEstado = [
     "Borrador",
@@ -172,7 +213,7 @@ export function DashboardPage() {
     "Cancelado"
   ].map((estado) => ({
     label: estado,
-    value: pedidos.filter(pedido => pedido.estado === estado).length
+    value: pedidosSucursal.filter(pedido => pedido.estado === estado).length
   }));
 
   const ventasMensuales = useMemo(() => {
@@ -188,7 +229,7 @@ export function DashboardPage() {
     }
 
     const map = new Map(months.map(item => [item.key, item]));
-    pedidos.forEach((pedido) => {
+    pedidosSucursal.forEach((pedido) => {
       const date = new Date(pedido.fechaPedido);
       if (Number.isNaN(date.getTime())) return;
 
@@ -197,11 +238,12 @@ export function DashboardPage() {
     });
 
     return months;
-  }, [pedidos]);
+  }, [pedidosSucursal]);
 
   const serviciosMasPedidos = useMemo(() => {
+    const pedidosIds = new Set(pedidosSucursal.map(pedido => Number(pedido.idPedido)));
     const map = new Map();
-    detalles.forEach((detalle) => {
+    detalles.filter(detalle => pedidosIds.has(Number(detalle.pedidoId))).forEach((detalle) => {
       const servicioId = Number(detalle.servicioId);
       if (!servicioId) return;
 
@@ -218,10 +260,10 @@ export function DashboardPage() {
       }))
       .sort((a, b) => b.cantidad - a.cantidad)
       .slice(0, 5);
-  }, [detalles, servicios]);
+  }, [detalles, servicios, pedidosSucursal]);
 
   const estadoInventario = [
-    { label: "Stock correcto", value: Math.max(0, inventarios.length - stockBajo.length) },
+    { label: "Stock correcto", value: Math.max(0, inventariosSucursal.length - stockBajo.length) },
     { label: "Stock bajo", value: stockBajo.length }
   ];
 
@@ -383,7 +425,7 @@ export function DashboardPage() {
           </div>
           <div className="dashboard-pie-wrap">
             <div className="dashboard-pie" style={{ background: buildPieGradient(inventarioPie) }}>
-              <span>{inventarios.length}</span>
+              <span>{inventariosSucursal.length}</span>
             </div>
             <div className="dashboard-pie-legend">
               {inventarioPie.map((item) => (

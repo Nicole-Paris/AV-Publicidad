@@ -114,6 +114,16 @@ export function ServiciosPage() {
     return partes.length > 1 ? `${partes[0]}.${partes.slice(1).join("")}` : limpio;
   }
 
+  const sucursalActivaId = session?.sucursalIdSucursal || session?.sucursalId;
+
+  function registroDeSucursal(registro) {
+    if (!sucursalActivaId) {
+      return true;
+    }
+    const empleado = empleados.find((item) => Number(item.idEmpleado) === Number(registro.createdBy));
+    return Number(empleado?.sucursalIdSucursal) === Number(sucursalActivaId);
+  }
+
   function abrirNuevoServicio() {
     setServicioEditando(null);
     setFormServicio({ nombre: "", descripcion: "", estado: "Activo", categoriaServicioId: "" });
@@ -161,17 +171,18 @@ export function ServiciosPage() {
 
   const serviciosFiltrados = useMemo(() => {
     const q = buscar.trim().toLowerCase();
-    if (!q) return servicios;
-    return servicios.filter(s =>
-      (s.nombre || "").toLowerCase().includes(q) ||
-      (s.descripcion || "").toLowerCase().includes(q) ||
-      nombreCategoria(s.categoriaServicioId).toLowerCase().includes(q)
-    );
-  }, [servicios, buscar, categorias]);
+    return servicios
+      .filter(registroDeSucursal)
+      .filter(s => !q ||
+        (s.nombre || "").toLowerCase().includes(q) ||
+        (s.descripcion || "").toLowerCase().includes(q) ||
+        nombreCategoria(s.categoriaServicioId).toLowerCase().includes(q)
+      );
+  }, [servicios, buscar, categorias, empleados, sucursalActivaId]);
 
   const serviciosDisponibles = useMemo(() => {
-    return servicios.filter((servicio) => (servicio.estado || "Activo") === "Activo");
-  }, [servicios]);
+    return servicios.filter((servicio) => registroDeSucursal(servicio) && (servicio.estado || "Activo") === "Activo");
+  }, [servicios, empleados, sucursalActivaId]);
 
   const materialesDisponibles = useMemo(() => {
     return materiales.filter((material) => materialActivo(material));

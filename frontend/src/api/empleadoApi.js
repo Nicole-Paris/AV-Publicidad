@@ -18,8 +18,9 @@ export function actualizarEmpleado(id, payload) {
   });
 }
 
-export function eliminarEmpleado(id) {
-  return apiRequest(`/empleados/${id}`, {
+export function eliminarEmpleado(id, deletedBy) {
+  const query = deletedBy ? `?deletedBy=${deletedBy}` : "";
+  return apiRequest(`/empleados/${id}${query}`, {
     method: "DELETE"
   });
 }

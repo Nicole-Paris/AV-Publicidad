@@ -155,6 +155,7 @@ export function InventarioPage() {
 
   const [buscar, setBuscar] = useState("");
   const [categoriaFiltro, setCategoriaFiltro] = useState("");
+  const sucursalActivaId = session?.sucursalIdSucursal || session?.sucursalId;
 
   const [nuevaCat, setNuevaCat] = useState({ visible: false, nombre: "", descripcion: "" });
 
@@ -234,13 +235,32 @@ export function InventarioPage() {
   const materialesFiltrados = useMemo(() => {
     const q = normalizarTexto(buscar.trim());
     return materiales
+      .filter((m) => {
+        const inv = inventarios.find((i) =>
+          Number(i.materialId) === Number(m.idMaterial || m.id) &&
+          (!sucursalActivaId || Number(i.sucursalId) === Number(sucursalActivaId))
+        );
+        return Boolean(inv);
+      })
       .filter((m) => (!categoriaFiltro || String(m.categoriaMaterialId) === String(categoriaFiltro)))
       .filter((m) => (!q || normalizarTexto(m.nombre).includes(q)));
-  }, [materiales, buscar, categoriaFiltro]);
+  }, [materiales, inventarios, buscar, categoriaFiltro, sucursalActivaId]);
+
+  const movimientosFiltrados = useMemo(() => {
+    return movimientos.filter((movimiento) => {
+      const inventario = inventarios.find((inv) =>
+        Number(inv.idInventario || inv.id) === Number(movimiento.inventarioId)
+      );
+      return !sucursalActivaId || Number(inventario?.sucursalId) === Number(sucursalActivaId);
+    });
+  }, [movimientos, inventarios, sucursalActivaId]);
 
   // helpers para buscar inventario por material (primera coincidencia)
   function inventarioParaMaterial(materialId) {
-    return inventarios.find((i) => Number(i.materialId) === Number(materialId));
+    return inventarios.find((i) =>
+      Number(i.materialId) === Number(materialId) &&
+      (!sucursalActivaId || Number(i.sucursalId) === Number(sucursalActivaId))
+    );
   }
 
   function nombreEmpleado(id) {
@@ -332,25 +352,43 @@ export function InventarioPage() {
     }
     setSaving(true);
     try {
-      const creada = await crearMaterial({
+      const esEdicion = Boolean(materialEditando);
+      const payloadMaterial = {
         nombre: formulario.nombre,
         unidad: formulario.unidad,
         costoUnitario: Number(formulario.costoUnitario),
         categoriaMaterialId: Number(formulario.categoriaMaterialId),
         estado: estadoMaterialParaBackend(formulario.estado),
-        sucursalId: Number(formulario.sucursalId),
-        createdBy: session.empleadoId
-      });
+        createdBy: materialEditando?.material?.createdBy || session.empleadoId,
+        updatedBy: esEdicion ? session.empleadoId : null
+      };
+
+      const creada = esEdicion
+        ? await actualizarMaterial(materialEditando.material.idMaterial || materialEditando.material.id, payloadMaterial)
+        : await crearMaterial({
+            ...payloadMaterial,
+            sucursalId: Number(formulario.sucursalId)
+          });
 
       // crear inventario inicial para el material recién creado
       const idMaterialNuevo = creada.idMaterial || creada.id;
-      if (idMaterialNuevo) {
+      if (!esEdicion && idMaterialNuevo) {
         await crearInventario({
           stockActual: Number(formulario.stockActual || 0),
           stockMinimo: Number(formulario.stockMinimo || 0),
           materialId: Number(idMaterialNuevo),
           sucursalId: Number(formulario.sucursalId),
           createdBy: session.empleadoId
+        });
+      }
+      if (esEdicion && materialEditando.inventario) {
+        await actualizarInventario(materialEditando.inventario.idInventario || materialEditando.inventario.id, {
+          stockActual: Number(formulario.stockActual || 0),
+          stockMinimo: Number(formulario.stockMinimo || 0),
+          materialId: Number(materialEditando.material.idMaterial || materialEditando.material.id),
+          sucursalId: Number(formulario.sucursalId || materialEditando.inventario.sucursalId),
+          createdBy: materialEditando.inventario.createdBy || session.empleadoId,
+          updatedBy: session.empleadoId
         });
       }
 
@@ -381,8 +419,9 @@ export function InventarioPage() {
         stockActual: "",
         stockMinimo: ""
       }));
+      setMaterialEditando(null);
       setFormularioAbierto(false);
-      mostrarSuccess("Material creado correctamente.");
+      mostrarSuccess(esEdicion ? "Material actualizado correctamente." : "Material creado correctamente.");
     } catch (err) {
       mostrarError(err.message || String(err));
     } finally {
@@ -565,6 +604,7 @@ export function InventarioPage() {
                   <th>Stock Actual</th>
                   <th>Stock Mínimo</th>
                   <th>Estado</th>
+                  <th>Acciones</th>
                   <th></th>
                 </tr>
               </thead>
@@ -593,6 +633,13 @@ export function InventarioPage() {
                         )}
                       </td>
                       <td>
+                        <div className="table-actions">
+                          <button className="ghost-button" onClick={() => abrirEditarMaterial(m)} type="button">
+                            Editar
+                          </button>
+                        </div>
+                      </td>
+                      <td>
                         <button
                           aria-label="Ver auditoria del material"
                           className="audit-toggle"
@@ -611,7 +658,7 @@ export function InventarioPage() {
 
           {formularioAbierto && (
             <section className="pos-card" style={{ marginTop: 18 }}>
-              <h2>Nuevo Material</h2>
+              <h2>{materialEditando ? "Editar Material" : "Nuevo Material"}</h2>
               <form onSubmit={guardarMaterial}>
                 <label className="pos-field floating">
                   <span>Sucursal</span>
@@ -697,7 +744,9 @@ export function InventarioPage() {
                 </div>
 
                 <div style={{ display: "flex", gap: 12, marginTop: 12 }}>
-                  <button className="primary-button" type="submit" disabled={saving}>{saving ? "Guardando..." : "Guardar"}</button>
+                  <button className="primary-button" type="submit" disabled={saving}>
+                    {saving ? "Guardando..." : materialEditando ? "Guardar Cambios" : "Guardar"}
+                  </button>
                   <button className="ghost-button" type="button" onClick={cancelarFormulario}>Cancelar</button>
                 </div>
               </form>
@@ -726,7 +775,7 @@ export function InventarioPage() {
                 </tr>
               </thead>
               <tbody>
-                {movimientos.map((m) => (
+                {movimientosFiltrados.map((m) => (
                   <tr key={m.idMovimiento || m.id}>
                     <td>{m.idMovimiento || m.id}</td>
                     <td>{m.fecha ? new Date(m.fecha).toLocaleString() : "—"}</td>
@@ -875,7 +924,7 @@ export function InventarioPage() {
       {modalError && (
         <div className="modal-overlay" onClick={() => setModalError("")}>
           <div className="modal-error-card" onClick={e => e.stopPropagation()}>
-            <p className="modal-error-icon">⚠</p>
+            <h2>Error</h2>
             <p className="modal-error-msg">{modalError}</p>
             <button className="primary-button" onClick={() => setModalError("")}>Entendido</button>
           </div>

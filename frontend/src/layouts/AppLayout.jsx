@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { AppIcon } from "../components/AppIcon.jsx";
+import { listarSucursales } from "../api/configuracionApi.js";
 
 const links = [
   { to: "/punto-venta", label: "Punto de Venta", icon: "cart" },
@@ -15,9 +16,11 @@ const links = [
 ];
 
 export function AppLayout() {
-  const { session, logout, cambiarSucursal } = useAuth();
+  const { session, logout, cambiarSucursal, actualizarSucursales } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [branchMenuOpen, setBranchMenuOpen] = useState(false);
   const [logoUrl, setLogoUrl] = useState(localStorage.getItem("av_logo_url") || "");
 
   useEffect(() => {
@@ -28,10 +31,52 @@ export function AppLayout() {
     return () => window.removeEventListener("av_logo_changed", onLogoChange);
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    const esAdministrador = (session?.rol || "").toLowerCase() === "administrador";
+    const tieneOpciones = (session?.sucursales || []).length > 1;
+
+    if (!session || !esAdministrador || tieneOpciones) {
+      return () => {
+        active = false;
+      };
+    }
+
+    async function cargarSucursalesAdmin() {
+      try {
+        const sucursales = await listarSucursales();
+        if (!active || !Array.isArray(sucursales) || sucursales.length === 0) {
+          return;
+        }
+
+        actualizarSucursales(
+          sucursales.map((sucursal) => ({
+            idSucursal: sucursal.idSucursal || sucursal.id,
+            nombre: sucursal.nombre
+          }))
+        );
+      } catch {
+        // Si no se pueden cargar, se mantiene la sucursal de la sesión actual.
+      }
+    }
+
+    cargarSucursalesAdmin();
+    return () => {
+      active = false;
+    };
+  }, [session, actualizarSucursales]);
+
   const sucursalesSesion = session?.sucursales || [];
+  const sucursalActivaId = session?.sucursalIdSucursal || session?.sucursalId || "";
+  const isDashboard = location.pathname === "/dashboard" || location.pathname === "/";
 
   function goBack() {
     navigate("/dashboard");
+  }
+
+  function handleBranchChange(sucursal) {
+    cambiarSucursal(Number(sucursal.idSucursal));
+    setBranchMenuOpen(false);
   }
 
   function goAccountSettings() {
@@ -79,31 +124,63 @@ export function AppLayout() {
       <div className="workspace">
         <header className="topbar">
           <div className="topbar-title">
-            <button className="back-button" type="button" onClick={goBack} aria-label="Volver">
-              <AppIcon name="arrowLeft" size={20} />
-            </button>
+            {!isDashboard && (
+              <button className="back-button" type="button" onClick={goBack} aria-label="Volver">
+                <AppIcon name="arrowLeft" size={20} />
+              </button>
+            )}
             <strong>Punto de Venta</strong>
           </div>
 
           <div className="topbar-actions">
-            <span className="branch-pill">
-              <AppIcon name="store" />
-              {sucursalesSesion.length > 1 ? (
-                <select
-                  aria-label="Sucursal activa"
-                  onChange={(event) => cambiarSucursal(Number(event.target.value))}
-                  value={session?.sucursalIdSucursal || session?.sucursalId || ""}
-                >
-                  {sucursalesSesion.map((sucursal) => (
-                    <option key={sucursal.idSucursal} value={sucursal.idSucursal}>
-                      {sucursal.nombre}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                session?.sucursal || "Sucursal Centro"
+            <div className="branch-menu-wrap">
+              <button
+                aria-expanded={branchMenuOpen}
+                aria-haspopup="menu"
+                className="branch-pill"
+                onClick={() => {
+                  setUserMenuOpen(false);
+                  setBranchMenuOpen((current) => !current);
+                }}
+                type="button"
+              >
+                <AppIcon name="store" />
+                <span>{session?.sucursal || "Sucursal Centro"}</span>
+                <span className="branch-chevron" aria-hidden="true" />
+              </button>
+
+              {branchMenuOpen && (
+                <div className="branch-menu" role="menu">
+                  <div className="branch-menu-header">
+                    <strong>Sucursal activa</strong>
+                    <span>
+                      {sucursalesSesion.length > 1
+                        ? "Puedes cambiar a otra sucursal ligada a tu usuario."
+                        : "Solo hay una sucursal disponible en esta sesión."}
+                    </span>
+                  </div>
+                  {(sucursalesSesion.length > 0
+                    ? sucursalesSesion
+                    : [{ idSucursal: sucursalActivaId, nombre: session?.sucursal || "Sucursal Centro" }]
+                  ).map((sucursal) => {
+                    const activa = Number(sucursal.idSucursal) === Number(sucursalActivaId);
+                    return (
+                      <button
+                        className={activa ? "branch-menu-option active" : "branch-menu-option"}
+                        disabled={activa}
+                        key={sucursal.idSucursal}
+                        onClick={() => handleBranchChange(sucursal)}
+                        type="button"
+                      >
+                        <AppIcon name="store" />
+                        <span>{sucursal.nombre}</span>
+                        <strong>{activa ? "Actual" : "Cambiar"}</strong>
+                      </button>
+                    );
+                  })}
+                </div>
               )}
-            </span>
+            </div>
             <div className="user-menu-wrap">
               <button
                 aria-expanded={userMenuOpen}
@@ -111,7 +188,10 @@ export function AppLayout() {
                 className="avatar-button"
                 title="Menú de usuario"
                 type="button"
-                onClick={() => setUserMenuOpen((current) => !current)}
+                onClick={() => {
+                  setBranchMenuOpen(false);
+                  setUserMenuOpen((current) => !current);
+                }}
               >
                 {(session?.nombre || "A").charAt(0)}
               </button>

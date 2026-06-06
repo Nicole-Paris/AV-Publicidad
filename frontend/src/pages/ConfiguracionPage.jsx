@@ -1,6 +1,6 @@
 ﻿import { useEffect, useState } from "react";
 import {
-  listarSucursales, crearSucursal,
+  listarSucursales, crearSucursal, actualizarSucursal,
   listarGlobalValues, crearGlobalValue,
   actualizarGlobalValue
 } from "../api/configuracionApi.js";
@@ -28,9 +28,18 @@ export function ConfiguracionPage() {
   const [modalSucursal, setModalSucursal] = useState(false);
   const [modalEmpleado, setModalEmpleado] = useState(false);
   const [modalRol, setModalRol] = useState(false);
+  const [sucursalEditando, setSucursalEditando] = useState(null);
   const [empleadoEditando, setEmpleadoEditando] = useState(null);
   const [empleadoExpandido, setEmpleadoExpandido] = useState(null);
   const [sucursalSeleccionada, setSucursalSeleccionada] = useState(null);
+  const [busquedaEmpleadoExistente, setBusquedaEmpleadoExistente] = useState("");
+  const [empleadosPorSucursalExtra, setEmpleadosPorSucursalExtra] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("av_empleados_sucursales_extra") || "{}");
+    } catch {
+      return {};
+    }
+  });
   const [formSucursal, setFormSucursal] = useState({
     nombre: "", direccion: "", codigoPostal: "",
     telefono: "", horario: ""
@@ -98,12 +107,52 @@ export function ConfiguracionPage() {
   }
 
   function empleadosDeSucursal(sucursalId) {
-    return empleados.filter(empleado => Number(empleado.sucursalIdSucursal) === Number(sucursalId));
+    const extras = empleadosPorSucursalExtra[String(sucursalId)] || [];
+    return empleados.filter(empleado =>
+      Number(empleado.sucursalIdSucursal) === Number(sucursalId) ||
+      extras.map(Number).includes(Number(empleado.idEmpleado))
+    );
+  }
+
+  function empleadosParaAgregar(sucursalId) {
+    const query = busquedaEmpleadoExistente.trim().toLowerCase();
+    if (!query) return [];
+    const idsActuales = empleadosDeSucursal(sucursalId).map(empleado => Number(empleado.idEmpleado));
+
+    return empleados
+      .filter(empleado => !idsActuales.includes(Number(empleado.idEmpleado)))
+      .filter(empleado => {
+        const texto = `${nombreEmpleado(empleado)} ${empleado.correo || ""}`.toLowerCase();
+        return texto.includes(query);
+      })
+      .slice(0, 5);
   }
 
   function abrirSucursal(sucursal) {
     setSucursalSeleccionada(sucursal);
     setEmpleadoExpandido(null);
+    setBusquedaEmpleadoExistente("");
+  }
+
+  function abrirNuevaSucursal() {
+    setSucursalEditando(null);
+    setFormSucursal({
+      nombre: "", direccion: "", codigoPostal: "",
+      telefono: "", horario: ""
+    });
+    setModalSucursal(true);
+  }
+
+  function abrirEditarSucursal(sucursal) {
+    setSucursalEditando(sucursal);
+    setFormSucursal({
+      nombre: sucursal.nombre || "",
+      direccion: sucursal.direccion || "",
+      codigoPostal: sucursal.codigoPostal || "",
+      telefono: sucursal.telefono || "",
+      horario: sucursal.horario || ""
+    });
+    setModalSucursal(true);
   }
 
   function abrirNuevoEmpleado(sucursal = sucursalSeleccionada) {
@@ -131,7 +180,7 @@ export function ConfiguracionPage() {
       apellidoMaterno: empleado.apellidoMaterno || "",
       telefono: empleado.telefono || "",
       correo: empleado.correo || "",
-      contrasena: empleado.contrasena || "",
+      contrasena: "",
       horaEntrada: empleado.horaEntrada?.slice(0, 5) || "09:00",
       horaSalida: empleado.horaSalida?.slice(0, 5) || "18:00",
       rolId: empleado.rolId ? String(empleado.rolId) : "",
@@ -256,27 +305,49 @@ export function ConfiguracionPage() {
     }
     setSaving(true);
     try {
-      await crearSucursal({
+      const payload = {
         nombre: formSucursal.nombre.trim(),
         direccion: formSucursal.direccion.trim(),
         codigoPostal: formSucursal.codigoPostal.trim(),
         telefono: formSucursal.telefono.trim(),
         horario: formSucursal.horario.trim(),
-        createdBy: session.empleadoId
-      });
+        createdBy: sucursalEditando?.createdBy || session.empleadoId,
+        updatedBy: sucursalEditando ? session.empleadoId : null
+      };
+
+      if (sucursalEditando) {
+        await actualizarSucursal(sucursalEditando.idSucursal || sucursalEditando.id, payload);
+      } else {
+        await crearSucursal(payload);
+      }
+
       const sucs = await listarSucursales();
       setSucursales(safe(sucs));
       setModalSucursal(false);
+      setSucursalEditando(null);
       setFormSucursal({
         nombre: "", direccion: "", codigoPostal: "",
         telefono: "", horario: ""
       });
-      mostrarSuccess("Sucursal creada correctamente.");
+      mostrarSuccess(sucursalEditando ? "Sucursal actualizada correctamente." : "Sucursal creada correctamente.");
     } catch (err) {
       mostrarError(err.message || String(err));
     } finally {
       setSaving(false);
     }
+  }
+
+  async function asignarEmpleadoASucursal(empleado) {
+    if (!sucursalSeleccionada) return;
+    const sucursalId = String(sucursalSeleccionada.idSucursal || sucursalSeleccionada.id);
+    const next = {
+      ...empleadosPorSucursalExtra,
+      [sucursalId]: Array.from(new Set([...(empleadosPorSucursalExtra[sucursalId] || []), empleado.idEmpleado]))
+    };
+    setEmpleadosPorSucursalExtra(next);
+    localStorage.setItem("av_empleados_sucursales_extra", JSON.stringify(next));
+    setBusquedaEmpleadoExistente("");
+    mostrarSuccess("Empleado agregado a la sucursal correctamente.");
   }
 
   async function guardarEmpleado() {
@@ -292,8 +363,8 @@ export function ConfiguracionPage() {
     if (!formEmpleado.correo.trim()) {
       mostrarError("Escribe el correo."); return;
     }
-    if (!formEmpleado.contrasena.trim()) {
-      mostrarError("Escribe la contrasena."); return;
+    if (!empleadoEditando && !formEmpleado.contrasena.trim()) {
+      mostrarError("Escribe la contraseña."); return;
     }
     if (!formEmpleado.rolId) {
       mostrarError("Selecciona un rol."); return;
@@ -310,12 +381,16 @@ export function ConfiguracionPage() {
         apellidoMaterno: formEmpleado.apellidoMaterno.trim(),
         telefono: formEmpleado.telefono.trim(),
         correo: formEmpleado.correo.trim(),
-        contrasena: formEmpleado.contrasena,
         horaEntrada: `${formEmpleado.horaEntrada}:00`,
         horaSalida: `${formEmpleado.horaSalida}:00`,
         rolId: Number(formEmpleado.rolId),
-        sucursalIdSucursal: Number(formEmpleado.sucursalIdSucursal)
+        sucursalIdSucursal: Number(formEmpleado.sucursalIdSucursal),
+        createdBy: empleadoEditando?.createdBy || session.empleadoId,
+        updatedBy: empleadoEditando ? session.empleadoId : null
       };
+      if (!empleadoEditando || formEmpleado.contrasena.trim()) {
+        payload.contrasena = formEmpleado.contrasena.trim();
+      }
 
       if (empleadoEditando) {
         await actualizarEmpleado(empleadoEditando.idEmpleado, payload);
@@ -324,7 +399,12 @@ export function ConfiguracionPage() {
       }
 
       const emps = await listarEmpleados();
-      setEmpleados(safe(emps));
+      const empsSeguros = safe(emps).map(empleado =>
+        empleadoEditando && Number(empleado.idEmpleado) === Number(empleadoEditando.idEmpleado)
+          ? { ...empleado, updatedBy: session.empleadoId, updatedAt: empleado.updatedAt || new Date().toISOString() }
+          : empleado
+      );
+      setEmpleados(empsSeguros);
       setModalEmpleado(false);
       setEmpleadoEditando(null);
       setSucursalSeleccionada(current => current ? { ...current } : current);
@@ -354,7 +434,7 @@ export function ConfiguracionPage() {
 
     setSaving(true);
     try {
-      await eliminarEmpleado(empleado.idEmpleado);
+      await eliminarEmpleado(empleado.idEmpleado, session.empleadoId);
       const emps = await listarEmpleados();
       setEmpleados(safe(emps));
       setEmpleadoExpandido(null);
@@ -451,7 +531,7 @@ export function ConfiguracionPage() {
             <button
               className="primary-button"
               type="button"
-              onClick={() => setModalSucursal(true)}
+              onClick={abrirNuevaSucursal}
             >
               + Nueva Sucursal
             </button>
@@ -660,6 +740,15 @@ export function ConfiguracionPage() {
                   <div className="branch-card-side">
                     <span className="inv-badge ok">Activa</span>
                     <span className="cash-count">{totalEmpleados} empleados</span>
+                    <span
+                      className="ghost-button branch-edit-action"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        abrirEditarSucursal(s);
+                      }}
+                    >
+                      Editar
+                    </span>
                   </div>
                 </button>
               );
@@ -679,13 +768,42 @@ export function ConfiguracionPage() {
                 <h2>{sucursalSeleccionada.nombre}</h2>
                 <p className="page-subtitle">{sucursalSeleccionada.direccion}</p>
               </div>
-              <button
-                className="primary-button"
-                onClick={() => abrirNuevoEmpleado(sucursalSeleccionada)}
-                type="button"
-              >
-                + Nuevo Empleado
-              </button>
+              <div className="branch-employee-tools">
+                <div className="existing-employee-inline">
+                  <label className="pos-field floating">
+                    <span>Agregar empleado existente</span>
+                    <input
+                      type="text"
+                      value={busquedaEmpleadoExistente}
+                      onChange={e => setBusquedaEmpleadoExistente(e.target.value)}
+                      placeholder="Buscar por nombre o correo"
+                    />
+                  </label>
+                  {empleadosParaAgregar(sucursalSeleccionada.idSucursal || sucursalSeleccionada.id).length > 0 && (
+                    <div className="employee-search-results inline-results">
+                      {empleadosParaAgregar(sucursalSeleccionada.idSucursal || sucursalSeleccionada.id).map(empleado => (
+                        <button
+                          className="employee-search-option"
+                          disabled={saving}
+                          key={empleado.idEmpleado}
+                          onClick={() => asignarEmpleadoASucursal(empleado)}
+                          type="button"
+                        >
+                          <strong>{nombreEmpleado(empleado)}</strong>
+                          <span>{empleado.correo} · {nombreSucursal(empleado.sucursalIdSucursal)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <button
+                  className="primary-button"
+                  onClick={() => abrirNuevoEmpleado(sucursalSeleccionada)}
+                  type="button"
+                >
+                  + Nuevo Empleado
+                </button>
+              </div>
             </div>
 
             <div className="employee-modal-list">
@@ -747,7 +865,7 @@ export function ConfiguracionPage() {
       {modalSucursal && (
         <div className="modal-overlay" onClick={() => setModalSucursal(false)}>
           <div className="modal-card" onClick={e => e.stopPropagation()}>
-            <h2>Nueva Sucursal</h2>
+            <h2>{sucursalEditando ? "Editar Sucursal" : "Nueva Sucursal"}</h2>
 
             <label className="pos-field floating">
               <span>Nombre</span>
@@ -805,7 +923,10 @@ export function ConfiguracionPage() {
               <button
                 className="ghost-button"
                 type="button"
-                onClick={() => setModalSucursal(false)}
+                onClick={() => {
+                  setModalSucursal(false);
+                  setSucursalEditando(null);
+                }}
               >
                 Cancelar
               </button>
@@ -815,7 +936,7 @@ export function ConfiguracionPage() {
                 disabled={saving}
                 onClick={guardarSucursal}
               >
-                {saving ? "Guardando..." : "Guardar Sucursal"}
+                {saving ? "Guardando..." : sucursalEditando ? "Guardar Cambios" : "Guardar Sucursal"}
               </button>
             </div>
           </div>
@@ -851,7 +972,7 @@ export function ConfiguracionPage() {
                 <input value={formEmpleado.correo} onChange={e => setFormEmpleado(f => ({...f, correo: e.target.value}))} type="email" />
               </label>
               <label className="pos-field floating">
-                <span>Contraseña</span>
+                <span>{empleadoEditando ? "Nueva contraseña (opcional)" : "Contraseña"}</span>
                 <input value={formEmpleado.contrasena} onChange={e => setFormEmpleado(f => ({...f, contrasena: e.target.value}))} type="password" />
               </label>
               <label className="pos-field floating">
@@ -949,7 +1070,7 @@ export function ConfiguracionPage() {
       {modalError && (
         <div className="modal-error-overlay" onClick={() => setModalError("")}>
           <div className="modal-error-card" onClick={e => e.stopPropagation()}>
-            <p className="modal-error-icon">âš </p>
+            <h2>Error</h2>
             <p className="modal-error-msg">{modalError}</p>
             <button
               className="primary-button"

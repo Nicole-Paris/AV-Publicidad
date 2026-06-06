@@ -116,6 +116,16 @@ export function ClientesPage() {
     return value ? new Date(value).toLocaleString("es-MX") : "-";
   }
 
+  const sucursalActivaId = session?.sucursalIdSucursal || session?.sucursalId;
+
+  function registroDeSucursal(registro) {
+    if (!sucursalActivaId) {
+      return true;
+    }
+    const empleado = empleados.find((item) => Number(item.idEmpleado) === Number(registro.createdBy));
+    return Number(empleado?.sucursalIdSucursal) === Number(sucursalActivaId);
+  }
+
   function updateClienteForm(event) {
     const { name, type, checked, value } = event.target;
     const nextValue = name === "limiteCredito" || name === "creditoActual"
@@ -253,6 +263,7 @@ export function ClientesPage() {
     const q = normalizarTexto(buscar.trim());
 
     return clientes
+      .filter(registroDeSucursal)
       .filter((cliente) => !filtroTipo || cliente.tipo === filtroTipo)
       .filter((cliente) => {
         if (!filtroCredito) {
@@ -277,7 +288,7 @@ export function ClientesPage() {
 
         return texto.includes(q);
       });
-  }, [clientes, buscar, filtroTipo, filtroCredito]);
+  }, [clientes, buscar, filtroTipo, filtroCredito, empleados, sucursalActivaId]);
 
   return (
     <section className="page-stack">

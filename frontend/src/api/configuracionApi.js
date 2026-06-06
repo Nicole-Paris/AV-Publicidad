@@ -9,6 +9,12 @@ export function crearSucursal(payload) {
     body: JSON.stringify(payload)
   });
 }
+export function actualizarSucursal(id, payload) {
+  return apiRequest(`/sucursales/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
 export function listarGlobalValues() {
   return apiRequest("/global-values");
 }

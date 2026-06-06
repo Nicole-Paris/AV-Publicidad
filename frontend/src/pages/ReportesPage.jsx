@@ -3,6 +3,8 @@ import { listarClientes, listarServicios } from "../api/catalogApi.js";
 import { listarInventarios, listarMateriales } from "../api/inventarioApi.js";
 import { listarPagosPorPedido, listarTodosPagos } from "../api/pagoApi.js";
 import { listarDetallesPedido, listarPedidos } from "../api/pedidoApi.js";
+import { listarEmpleados } from "../api/empleadoApi.js";
+import { useAuth } from "../auth/AuthContext.jsx";
 
 const CURRENCY = new Intl.NumberFormat("es-MX", {
   currency: "MXN",
@@ -41,6 +43,7 @@ function nombreCliente(cliente) {
 }
 
 export function ReportesPage() {
+  const { session } = useAuth();
   const [loading, setLoading] = useState(true);
   const [modalError, setModalError] = useState("");
   const [fechaInicio, setFechaInicio] = useState(localDate(-30));
@@ -52,6 +55,7 @@ export function ReportesPage() {
   const [servicios, setServicios] = useState([]);
   const [materiales, setMateriales] = useState([]);
   const [inventarios, setInventarios] = useState([]);
+  const [empleados, setEmpleados] = useState([]);
 
   useEffect(() => {
     let active = true;
@@ -59,13 +63,14 @@ export function ReportesPage() {
     async function cargarReportes() {
       setLoading(true);
       try {
-        const [pedidosData, pagosData, clientesData, serviciosData, materialesData, inventariosData] = await Promise.all([
+        const [pedidosData, pagosData, clientesData, serviciosData, materialesData, inventariosData, empleadosData] = await Promise.all([
           listarPedidos(),
           listarTodosPagos(),
           listarClientes(),
           listarServicios(),
           listarMateriales(),
-          listarInventarios()
+          listarInventarios(),
+          listarEmpleados()
         ]);
 
         if (!active) return;
@@ -77,6 +82,7 @@ export function ReportesPage() {
         setServicios(Array.isArray(serviciosData) ? serviciosData : []);
         setMateriales(Array.isArray(materialesData) ? materialesData : []);
         setInventarios(Array.isArray(inventariosData) ? inventariosData : []);
+        setEmpleados(Array.isArray(empleadosData) ? empleadosData : []);
 
         const detallesPorPedido = await Promise.all(
           pedidosArray.map(async (pedido) => {
@@ -105,14 +111,52 @@ export function ReportesPage() {
     };
   }, []);
 
+  const sucursalActivaId = session?.sucursalIdSucursal || session?.sucursalId;
+
+  function empleadoPerteneceSucursal(empleadoId) {
+    if (!sucursalActivaId) {
+      return true;
+    }
+    const empleado = empleados.find((item) => Number(item.idEmpleado) === Number(empleadoId));
+    return Number(empleado?.sucursalIdSucursal) === Number(sucursalActivaId);
+  }
+
+  function registroCreadoEnSucursal(registro) {
+    if (!sucursalActivaId) {
+      return true;
+    }
+    return empleadoPerteneceSucursal(registro.createdBy);
+  }
+
+  const pedidosSucursal = useMemo(() => (
+    pedidos.filter(pedido => !sucursalActivaId || Number(pedido.sucursalId) === Number(sucursalActivaId))
+  ), [pedidos, sucursalActivaId]);
+
+  const pagosSucursal = useMemo(() => {
+    const pedidosIds = new Set(pedidosSucursal.map(pedido => Number(pedido.idPedido)));
+    return pagos.filter(pago => pedidosIds.has(Number(pago.pedidoId)));
+  }, [pagos, pedidosSucursal]);
+
+  const inventariosSucursal = useMemo(() => (
+    inventarios.filter(inventario => !sucursalActivaId || Number(inventario.sucursalId) === Number(sucursalActivaId))
+  ), [inventarios, sucursalActivaId]);
+
+  const clientesSucursal = useMemo(() => (
+    clientes.filter(registroCreadoEnSucursal)
+  ), [clientes, empleados, sucursalActivaId]);
+
+  const serviciosSucursal = useMemo(() => (
+    servicios.filter(registroCreadoEnSucursal)
+  ), [servicios, empleados, sucursalActivaId]);
+
   const pedidosPeriodo = useMemo(
-    () => pedidos.filter(pedido => inRange(pedido.fechaPedido, fechaInicio, fechaFin)),
-    [pedidos, fechaInicio, fechaFin]
+    () => pedidosSucursal.filter(pedido => inRange(pedido.fechaPedido, fechaInicio, fechaFin)),
+    [pedidosSucursal, fechaInicio, fechaFin]
   );
 
   const pagosPeriodo = useMemo(
-    () => pagos.filter(pago => inRange(pago.fecha || pago.createdAt, fechaInicio, fechaFin)),
-    [pagos, fechaInicio, fechaFin]
+    () => pagosSucursal.filter(pago => inRange(pago.fecha || pago.createdAt, fechaInicio, fechaFin)),
+    [pagosSucursal, fechaInicio, fechaFin]
   );
 
   const pagosPorPedido = useMemo(() => {
@@ -163,11 +207,11 @@ export function ReportesPage() {
     return Array.from(map.values())
       .map(item => ({
         ...item,
-        nombre: nombreCliente(clientes.find(cliente => Number(cliente.idCliente) === Number(item.clienteId))) || `Cliente ${item.clienteId}`
+        nombre: nombreCliente(clientesSucursal.find(cliente => Number(cliente.idCliente) === Number(item.clienteId))) || `Cliente ${item.clienteId}`
       }))
       .sort((a, b) => b.total - a.total)
       .slice(0, 5);
-  }, [pedidosPeriodo, clientes]);
+  }, [pedidosPeriodo, clientesSucursal]);
 
   const topServicios = useMemo(() => {
     const pedidosIds = new Set(pedidosPeriodo.map(pedido => Number(pedido.idPedido)));
@@ -185,14 +229,14 @@ export function ReportesPage() {
     return Array.from(map.values())
       .map(item => ({
         ...item,
-        nombre: servicios.find(servicio => Number(servicio.idServicio) === Number(item.servicioId))?.nombre || `Servicio ${item.servicioId}`
+        nombre: serviciosSucursal.find(servicio => Number(servicio.idServicio) === Number(item.servicioId))?.nombre || `Servicio ${item.servicioId}`
       }))
       .sort((a, b) => b.total - a.total)
       .slice(0, 5);
-  }, [detalles, pedidosPeriodo, servicios]);
+  }, [detalles, pedidosPeriodo, serviciosSucursal]);
 
   const alertasStock = useMemo(() => {
-    return inventarios
+    return inventariosSucursal
       .filter(inventario => Number(inventario.stockActual || 0) <= Number(inventario.stockMinimo || 0))
       .map((inventario) => ({
         ...inventario,
@@ -200,7 +244,7 @@ export function ReportesPage() {
       }))
       .sort((a, b) => Number(a.stockActual || 0) - Number(b.stockActual || 0))
       .slice(0, 6);
-  }, [inventarios, materiales]);
+  }, [inventariosSucursal, materiales]);
 
   const pagosRecientes = useMemo(() => {
     return [...pagosPeriodo]

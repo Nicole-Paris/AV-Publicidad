@@ -72,6 +72,21 @@ export function AuthProvider({ children }) {
     });
   }
 
+  function actualizarSucursales(sucursales) {
+    setSession((current) => {
+      if (!current) {
+        return current;
+      }
+
+      const nextSession = {
+        ...current,
+        sucursales
+      };
+      storeSession(nextSession);
+      return nextSession;
+    });
+  }
+
   const value = useMemo(
     () => ({
       session,
@@ -79,7 +94,8 @@ export function AuthProvider({ children }) {
       isAuthenticated: Boolean(session?.token),
       login,
       logout,
-      cambiarSucursal
+      cambiarSucursal,
+      actualizarSucursales
     }),
     [session, loading]
   );

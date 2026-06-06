@@ -13,6 +13,7 @@ export function LoginPage() {
   });
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [showForgotModal, setShowForgotModal] = useState(false);
 
   function handleChange(event) {
     const { name, value } = event.target;
@@ -83,11 +84,29 @@ export function LoginPage() {
             {loading ? "Entrando..." : "Iniciar Sesion"}
           </button>
 
-          <a className="forgot-password" href="/login">
-            Olvidaste tu contrasena?
-          </a>
+          <button
+            className="forgot-password"
+            onClick={() => setShowForgotModal(true)}
+            type="button"
+          >
+            ¿Olvidaste tu contraseña?
+          </button>
         </form>
       </section>
+
+      {showForgotModal && (
+        <div className="modal-error-overlay" onClick={() => setShowForgotModal(false)}>
+          <div className="modal-error-card" onClick={event => event.stopPropagation()}>
+            <p className="modal-error-icon">!</p>
+            <p className="modal-error-msg">
+              Solicita a un administrador que restablezca tu contrasena desde Configuracion, Empleados y Editar empleado.
+            </p>
+            <button className="primary-button" onClick={() => setShowForgotModal(false)} type="button">
+              Entendido
+            </button>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
