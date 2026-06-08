@@ -1,7 +1,9 @@
 package avpublicidad.proyecto.service;
 
+import avpublicidad.proyecto.constants.MaterialConstants;
 import avpublicidad.proyecto.dto.ServicioMaterialRequest;
 import avpublicidad.proyecto.exception.ResourceNotFoundException;
+import avpublicidad.proyecto.model.Material;
 import avpublicidad.proyecto.model.ServicioMaterial;
 import avpublicidad.proyecto.repository.MaterialRepository;
 import avpublicidad.proyecto.repository.ServicioMaterialRepository;
@@ -74,8 +76,14 @@ public class ServicioMaterialService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Servicio no encontrado");
         }
 
-        if (request.getMaterialId() != null && !materialRepository.existsById(request.getMaterialId())) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Material no encontrado");
+        if (request.getMaterialId() != null) {
+            Material material = materialRepository.findById(request.getMaterialId())
+                    .filter(valor -> valor.getDeletedAt() == null)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Material no encontrado"));
+
+            if (!MaterialConstants.ESTADO_DISPONIBLE.equals(material.getEstado())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No se puede asignar un material inactivo a un servicio");
+            }
         }
     }
 

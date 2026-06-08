@@ -41,6 +41,9 @@ public class EmpleadoService {
         validarCorreoDisponible(request.getCorreo(), null);
         validarRol(request.getRolId());
         validarSucursal(request.getSucursalIdSucursal());
+        if (request.getContrasena() == null || request.getContrasena().isBlank()) {
+            throw new ValidationException("La contrasena es obligatoria");
+        }
         validarReglasNegocio(request);
 
         Empleado empleado = Empleado.builder()
@@ -54,6 +57,7 @@ public class EmpleadoService {
                 .horaSalida(request.getHoraSalida())
                 .rolId(request.getRolId())
                 .sucursalIdSucursal(request.getSucursalIdSucursal())
+                .createdBy(request.getCreatedBy())
                 .build();
 
         return empleadoRepository.save(empleado);
@@ -72,20 +76,28 @@ public class EmpleadoService {
         empleado.setApellidoMaterno(request.getApellidoMaterno());
         empleado.setTelefono(request.getTelefono());
         empleado.setCorreo(normalizarCorreo(request.getCorreo()));
-        empleado.setContrasena(encriptarContrasena(request.getContrasena()));
+        if (request.getContrasena() != null && !request.getContrasena().isBlank()) {
+            empleado.setContrasena(encriptarContrasena(request.getContrasena()));
+        }
         empleado.setHoraEntrada(request.getHoraEntrada());
         empleado.setHoraSalida(request.getHoraSalida());
         empleado.setRolId(request.getRolId());
         empleado.setSucursalIdSucursal(request.getSucursalIdSucursal());
+        empleado.setUpdatedBy(request.getUpdatedBy());
 
         return empleadoRepository.save(empleado);
     }
 
-    public void eliminar(Integer id) {
+    public void eliminar(Integer id, Integer deletedBy) {
         Empleado empleado = obtenerPorId(id);
         validarNoEliminarUltimoAdministrador(empleado);
         empleado.setDeletedAt(LocalDateTime.now());
+        empleado.setDeletedBy(deletedBy);
         empleadoRepository.save(empleado);
+    }
+
+    public void eliminar(Integer id) {
+        eliminar(id, null);
     }
 
     private void validarCorreoDisponible(String correo, Integer idEmpleadoActual) {
@@ -121,6 +133,7 @@ public class EmpleadoService {
         }
 
         if (request.getContrasena() != null
+                && !request.getContrasena().isBlank()
                 && !request.getContrasena().startsWith("$2")
                 && !esContrasenaFuerte(request.getContrasena())) {
             throw new ValidationException("La contrasena debe tener al menos 8 caracteres, una mayuscula, una minuscula y un numero");

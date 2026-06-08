@@ -274,7 +274,7 @@ class BackendIntegrationTest {
                                 "horaPago", "12:00:00",
                                 "referencia", "PAGO-001",
                                 "formaPago", PagoConstants.FORMA_PAGO_EFECTIVO,
-                                "conceptoPago", PagoConstants.CONCEPTO_PAGO_TOTAL,
+                                "conceptoPago", PagoConstants.CONCEPTO_ABONO,
                                 "pedidoId", pedidoId,
                                 "empleadoIdEmpleado", admin.getIdEmpleado(),
                                 "createdBy", admin.getIdEmpleado()
@@ -371,7 +371,8 @@ class BackendIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of(
                                 "correo", "admin@av.com",
-                                "contrasena", "Admin123"
+                                "contrasena", "Admin123",
+                                "sucursalIdSucursal", sucursal.getIdSucursal()
                         ))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.token").isString())

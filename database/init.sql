@@ -99,6 +99,9 @@ CREATE TABLE IF NOT EXISTS `AV`.`empleado` (
   `created_at` DATETIME NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` DATETIME NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `deleted_at` DATETIME NULL DEFAULT NULL,
+  `created_by` INT NULL DEFAULT NULL,
+  `updated_by` INT NULL DEFAULT NULL,
+  `deleted_by` INT NULL DEFAULT NULL,
   `rol_id` INT NOT NULL,
   `sucursal_id_sucursal` INT NOT NULL,
   PRIMARY KEY (`id_empleado`),
@@ -121,11 +124,11 @@ COLLATE = utf8mb4_0900_ai_ci;
 
 INSERT INTO `AV`.`empleado` (
   `id_empleado`, `nombre`, `apellido_paterno`, `apellido_materno`, `telefono`, `correo`, `contrasena`,
-  `hora_entrada`, `hora_salida`, `rol_id`, `sucursal_id_sucursal`
+  `hora_entrada`, `hora_salida`, `rol_id`, `sucursal_id_sucursal`, `created_by`
 )
 VALUES
-  (1, 'Admin', 'Sistema', 'AV', '5551112233', 'admin@av.com', '$2a$10$3ybwP10I3b6rHtQckqaN7.70pXPwiX.5kbbLMmhGInHA3ZJPeiCdG', '09:00:00', '18:00:00', 1, 1),
-  (2, 'Empleado', 'General', 'AV', '5551112244', 'empleado@av.com', '$2a$10$Rhos0oyEuyFqDuOg0hDOC.rJd7ivRUGyfw3FplmWxD/EVBnsJvjVq', '09:00:00', '18:00:00', 2, 1)
+  (1, 'Admin', 'Sistema', 'AV', '5551112233', 'admin@av.com', '$2a$10$3ybwP10I3b6rHtQckqaN7.70pXPwiX.5kbbLMmhGInHA3ZJPeiCdG', '09:00:00', '18:00:00', 1, 1, 1),
+  (2, 'Empleado', 'General', 'AV', '5551112244', 'empleado@av.com', '$2a$10$Rhos0oyEuyFqDuOg0hDOC.rJd7ivRUGyfw3FplmWxD/EVBnsJvjVq', '09:00:00', '18:00:00', 2, 1, 1)
 ON DUPLICATE KEY UPDATE
   `nombre` = VALUES(`nombre`),
   `apellido_paterno` = VALUES(`apellido_paterno`),
@@ -134,6 +137,7 @@ ON DUPLICATE KEY UPDATE
   `correo` = VALUES(`correo`),
   `rol_id` = VALUES(`rol_id`),
   `sucursal_id_sucursal` = VALUES(`sucursal_id_sucursal`),
+  `created_by` = COALESCE(`created_by`, VALUES(`created_by`)),
   `deleted_at` = NULL;
 
 
@@ -563,7 +567,7 @@ CREATE TABLE IF NOT EXISTS `AV`.`pago` (
   `hora_pago` TIME NOT NULL,
   `referencia` VARCHAR(50) NOT NULL,
   `forma_pago` ENUM('Efectivo', 'Transferencia', 'Intercambio') NOT NULL,
-  `concepto_pago` ENUM('Anticipo', 'Abono_credito', 'Liquidacion', 'Pago_total') NOT NULL,
+  `concepto_pago` ENUM('Anticipo', 'Abono_credito', 'Liquidacion', 'Abono') NOT NULL,
   `created_at` DATETIME NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` DATETIME NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `deleted_at` DATETIME NULL DEFAULT NULL,

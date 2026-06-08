@@ -33,7 +33,6 @@ public class EmpleadoRequest {
     @Size(max = 100, message = "El correo no debe exceder 100 caracteres")
     private String correo;
 
-    @NotBlank(message = "La contrasena es obligatoria")
     @Size(max = 255, message = "La contrasena no debe exceder 255 caracteres")
     private String contrasena;
 
@@ -48,4 +47,10 @@ public class EmpleadoRequest {
 
     @NotNull(message = "La sucursal es obligatoria")
     private Integer sucursalIdSucursal;
+
+    private Integer createdBy;
+
+    private Integer updatedBy;
+
+    private Integer deletedBy;
 }

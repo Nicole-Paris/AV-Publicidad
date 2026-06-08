@@ -6,6 +6,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -83,4 +84,13 @@ public class Pedido {
 
     @Column(name = "deleted_by")
     private Integer deletedBy;
+
+    @Transient
+    private String estadoPago;
+
+    @Transient
+    private BigDecimal totalPagado;
+
+    @Transient
+    private BigDecimal saldoPendiente;
 }

@@ -97,15 +97,6 @@ public class CorteCajaService {
         }
 
         if (request.getHoraFin() != null) {
-            boolean existeCorteCerrado = corteCajaRepository
-                    .findByEmpleadoIdAndFechaAndHoraFinIsNotNullAndDeletedAtIsNull(request.getEmpleadoId(), request.getFecha())
-                    .stream()
-                    .anyMatch(corte -> !corte.getIdCorteCaja().equals(corteActualId));
-
-            if (existeCorteCerrado) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT, "Ya existe un corte cerrado para ese empleado y fecha");
-            }
-
             BigDecimal saldoEsperado = calcularSaldoEsperado(request);
             if (request.getSaldoEsperado() != null && request.getSaldoEsperado().compareTo(saldoEsperado) != 0) {
                 throw new ValidationException("El saldo esperado debe coincidir con saldo inicial mas pagos del dia");

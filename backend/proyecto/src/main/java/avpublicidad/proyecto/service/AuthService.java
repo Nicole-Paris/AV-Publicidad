@@ -1,17 +1,23 @@
 package avpublicidad.proyecto.service;
 
 import avpublicidad.proyecto.dto.AuthResponse;
+import avpublicidad.proyecto.dto.AuthResponse.SucursalSesionResponse;
 import avpublicidad.proyecto.dto.LoginRequest;
 import avpublicidad.proyecto.dto.LogoutResponse;
+import avpublicidad.proyecto.constants.RolConstants;
 import avpublicidad.proyecto.model.Empleado;
 import avpublicidad.proyecto.model.Rol;
+import avpublicidad.proyecto.model.Sucursal;
 import avpublicidad.proyecto.repository.EmpleadoRepository;
 import avpublicidad.proyecto.repository.RolRepository;
+import avpublicidad.proyecto.repository.SucursalRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -19,6 +25,7 @@ public class AuthService {
 
     private final EmpleadoRepository empleadoRepository;
     private final RolRepository rolRepository;
+    private final SucursalRepository sucursalRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
 
@@ -32,6 +39,10 @@ public class AuthService {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Credenciales invalidas");
         }
 
+        Sucursal sucursal = sucursalRepository.findById(empleado.getSucursalIdSucursal())
+                .filter(valor -> valor.getDeletedAt() == null)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Sucursal invalida"));
+
         String rol = rolRepository.findById(empleado.getRolId())
                 .filter(valor -> valor.getDeletedAt() == null)
                 .map(Rol::getNombre)
@@ -39,6 +50,7 @@ public class AuthService {
 
         String token = jwtService.generarToken(empleado, rol);
         String nombreCompleto = construirNombreCompleto(empleado);
+        List<SucursalSesionResponse> sucursalesSesion = obtenerSucursalesSesion(rol, sucursal);
 
         return new AuthResponse(
                 token,
@@ -47,7 +59,10 @@ public class AuthService {
                 nombreCompleto,
                 empleado.getCorreo(),
                 empleado.getRolId(),
-                rol
+                rol,
+                sucursal.getIdSucursal(),
+                sucursal.getNombre(),
+                sucursalesSesion
         );
     }
 
@@ -76,5 +91,16 @@ public class AuthService {
 
     private String normalizarCorreo(String correo) {
         return correo == null ? null : correo.trim().toLowerCase();
+    }
+
+    private List<SucursalSesionResponse> obtenerSucursalesSesion(String rol, Sucursal sucursalPrincipal) {
+        if (RolConstants.ADMINISTRADOR.equalsIgnoreCase(rol)) {
+            return sucursalRepository.findByDeletedAtIsNull()
+                    .stream()
+                    .map(sucursal -> new SucursalSesionResponse(sucursal.getIdSucursal(), sucursal.getNombre()))
+                    .toList();
+        }
+
+        return List.of(new SucursalSesionResponse(sucursalPrincipal.getIdSucursal(), sucursalPrincipal.getNombre()));
     }
 }

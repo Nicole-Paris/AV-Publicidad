@@ -40,8 +40,12 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/auth/login").permitAll()
                 .requestMatchers("/auth/logout").permitAll()
+                .requestMatchers(HttpMethod.GET, "/sucursales").permitAll()
                 .requestMatchers(HttpMethod.GET, "/**").hasAnyAuthority(AUTHORITY_ADMINISTRADOR, AUTHORITY_EMPLEADO)
                 .requestMatchers(HttpMethod.POST, "/clientes").hasAnyAuthority(AUTHORITY_ADMINISTRADOR, AUTHORITY_EMPLEADO)
+                .requestMatchers(HttpMethod.POST, "/pedidos").hasAnyAuthority(AUTHORITY_ADMINISTRADOR, AUTHORITY_EMPLEADO)
+                .requestMatchers(HttpMethod.POST, "/detalles-pedido").hasAnyAuthority(AUTHORITY_ADMINISTRADOR, AUTHORITY_EMPLEADO)
+                .requestMatchers(HttpMethod.PUT, "/pedidos/**").hasAnyAuthority(AUTHORITY_ADMINISTRADOR, AUTHORITY_EMPLEADO)
                 .requestMatchers(HttpMethod.POST, "/pagos").hasAnyAuthority(AUTHORITY_ADMINISTRADOR, AUTHORITY_EMPLEADO)
                 .anyRequest().hasAuthority(AUTHORITY_ADMINISTRADOR)
         );

@@ -235,7 +235,7 @@ class PagoControllerTest {
                 .horaPago(LocalTime.of(13, 30))
                 .referencia(texto(50))
                 .formaPago(PagoConstants.FORMA_PAGO_TRANSFERENCIA)
-                .conceptoPago(PagoConstants.CONCEPTO_PAGO_TOTAL)
+                .conceptoPago(PagoConstants.CONCEPTO_ABONO)
                 .pedidoId(1)
                 .empleadoIdEmpleado(1)
                 .createdBy(1)
@@ -261,7 +261,7 @@ class PagoControllerTest {
         request.monto = new BigDecimal("99999999.99");
         request.referencia = texto(50);
         request.formaPago = PagoConstants.FORMA_PAGO_TRANSFERENCIA;
-        request.conceptoPago = PagoConstants.CONCEPTO_PAGO_TOTAL;
+        request.conceptoPago = PagoConstants.CONCEPTO_ABONO;
         return request;
     }
 

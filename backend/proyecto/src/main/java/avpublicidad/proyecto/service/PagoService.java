@@ -4,8 +4,10 @@ import avpublicidad.proyecto.constants.PagoConstants;
 import avpublicidad.proyecto.constants.PedidoConstants;
 import avpublicidad.proyecto.dto.PagoRequest;
 import avpublicidad.proyecto.exception.ResourceNotFoundException;
+import avpublicidad.proyecto.model.Cliente;
 import avpublicidad.proyecto.model.Pago;
 import avpublicidad.proyecto.model.Pedido;
+import avpublicidad.proyecto.repository.ClienteRepository;
 import avpublicidad.proyecto.repository.EmpleadoRepository;
 import avpublicidad.proyecto.repository.PagoRepository;
 import avpublicidad.proyecto.repository.PedidoRepository;
@@ -13,6 +15,7 @@ import jakarta.validation.ValidationException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
@@ -26,6 +29,7 @@ public class PagoService {
     private final PagoRepository pagoRepository;
     private final PedidoRepository pedidoRepository;
     private final EmpleadoRepository empleadoRepository;
+    private final ClienteRepository clienteRepository;
 
     public List<Pago> listar() {
         return pagoRepository.findByDeletedAtIsNull();
@@ -37,6 +41,7 @@ public class PagoService {
                 .orElseThrow(() -> new ResourceNotFoundException("Pago no encontrado"));
     }
 
+    @Transactional
     public Pago crear(PagoRequest request) {
         validarRelaciones(request);
         validarReglasNegocio(request, null);
@@ -55,11 +60,16 @@ public class PagoService {
                 .deletedBy(request.getDeletedBy())
                 .build();
 
-        return pagoRepository.save(pago);
+        Pago pagoGuardado = pagoRepository.save(pago);
+        aplicarPagoACreditoCliente(pagoGuardado);
+
+        return pagoGuardado;
     }
 
+    @Transactional
     public Pago actualizar(Integer id, PagoRequest request) {
         Pago pago = obtenerPorId(id);
+        Pago pagoAnterior = copiarPago(pago);
         validarRelaciones(request);
         validarReglasNegocio(request, id);
 
@@ -75,13 +85,19 @@ public class PagoService {
         pago.setUpdatedBy(request.getUpdatedBy());
         pago.setDeletedBy(request.getDeletedBy());
 
-        return pagoRepository.save(pago);
+        Pago pagoGuardado = pagoRepository.save(pago);
+        revertirPagoACreditoCliente(pagoAnterior);
+        aplicarPagoACreditoCliente(pagoGuardado);
+
+        return pagoGuardado;
     }
 
+    @Transactional
     public void eliminar(Integer id) {
         Pago pago = obtenerPorId(id);
         pago.setDeletedAt(LocalDateTime.now());
         pagoRepository.save(pago);
+        revertirPagoACreditoCliente(pago);
     }
 
     private void validarRelaciones(PagoRequest request) {
@@ -137,16 +153,74 @@ public class PagoService {
             throw new ValidationException("El anticipo solo puede registrarse como primer pago");
         }
 
-        if ((PagoConstants.CONCEPTO_LIQUIDACION.equals(concepto)
-                || PagoConstants.CONCEPTO_PAGO_TOTAL.equals(concepto))
+        if (PagoConstants.CONCEPTO_LIQUIDACION.equals(concepto)
                 && request.getMonto().compareTo(saldoPendiente) != 0) {
-            throw new ValidationException("La liquidacion o pago total debe cubrir exactamente el saldo pendiente");
+            throw new ValidationException("La liquidacion debe cubrir exactamente el saldo pendiente");
+        }
+
+        if (PagoConstants.CONCEPTO_ABONO.equals(concepto)
+                && request.getMonto().compareTo(saldoPendiente) >= 0) {
+            throw new ValidationException("El abono debe ser menor al saldo pendiente; usa liquidacion para cubrir el total");
         }
 
         if (PagoConstants.CONCEPTO_ABONO_CREDITO.equals(concepto)
                 && request.getMonto().compareTo(saldoPendiente) >= 0) {
             throw new ValidationException("El abono a credito debe ser menor al saldo pendiente");
         }
+    }
+
+    private void aplicarPagoACreditoCliente(Pago pago) {
+        ajustarCreditoClientePorPago(pago, true);
+    }
+
+    private void revertirPagoACreditoCliente(Pago pago) {
+        ajustarCreditoClientePorPago(pago, false);
+    }
+
+    private void ajustarCreditoClientePorPago(Pago pago, boolean descontar) {
+        Pedido pedido = pedidoRepository.findById(pago.getPedidoId())
+                .filter(pedidoEncontrado -> pedidoEncontrado.getDeletedAt() == null)
+                .orElse(null);
+
+        if (pedido == null || !PedidoConstants.FORMA_PAGO_CREDITO.equals(pedido.getFormaPago())) {
+            return;
+        }
+
+        Cliente cliente = clienteRepository.findById(pedido.getClienteId())
+                .filter(clienteEncontrado -> clienteEncontrado.getDeletedAt() == null)
+                .orElse(null);
+
+        if (cliente == null) {
+            return;
+        }
+
+        BigDecimal creditoActual = cliente.getCreditoActual() == null ? BigDecimal.ZERO : cliente.getCreditoActual();
+        BigDecimal monto = pago.getMonto() == null ? BigDecimal.ZERO : pago.getMonto();
+        BigDecimal nuevoCredito = descontar ? creditoActual.subtract(monto) : creditoActual.add(monto);
+
+        if (nuevoCredito.compareTo(BigDecimal.ZERO) < 0) {
+            nuevoCredito = BigDecimal.ZERO;
+        }
+
+        cliente.setCreditoActual(nuevoCredito);
+        clienteRepository.save(cliente);
+    }
+
+    private Pago copiarPago(Pago pago) {
+        return Pago.builder()
+                .idPago(pago.getIdPago())
+                .monto(pago.getMonto())
+                .fecha(pago.getFecha())
+                .horaPago(pago.getHoraPago())
+                .referencia(pago.getReferencia())
+                .formaPago(pago.getFormaPago())
+                .conceptoPago(pago.getConceptoPago())
+                .pedidoId(pago.getPedidoId())
+                .empleadoIdEmpleado(pago.getEmpleadoIdEmpleado())
+                .createdBy(pago.getCreatedBy())
+                .updatedBy(pago.getUpdatedBy())
+                .deletedBy(pago.getDeletedBy())
+                .build();
     }
 
     private String normalizarFormaPago(String formaPago) {
@@ -183,8 +257,8 @@ public class PagoService {
         if (PagoConstants.CONCEPTO_LIQUIDACION.equalsIgnoreCase(valor)) {
             return PagoConstants.CONCEPTO_LIQUIDACION;
         }
-        if (PagoConstants.CONCEPTO_PAGO_TOTAL.equalsIgnoreCase(valor)) {
-            return PagoConstants.CONCEPTO_PAGO_TOTAL;
+        if (PagoConstants.CONCEPTO_ABONO.equalsIgnoreCase(valor)) {
+            return PagoConstants.CONCEPTO_ABONO;
         }
 
         throw new ValidationException("El concepto de pago no es valido");
