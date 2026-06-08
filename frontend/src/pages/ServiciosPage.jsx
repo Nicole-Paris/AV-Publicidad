@@ -3,7 +3,7 @@ import {
   listarServicios, crearServicio,
   listarCategoriaServicio, crearCategoriaServicio,
   listarServiciosMateriales, crearServicioMaterial,
-  actualizarServicio
+  actualizarServicio, actualizarServicioMaterial, eliminarServicioMaterial
 } from "../api/catalogApi.js";
 import { listarMateriales } from "../api/inventarioApi.js";
 import { listarEmpleados } from "../api/empleadoApi.js";
@@ -25,6 +25,7 @@ export function ServiciosPage() {
 
   const [modalServicio, setModalServicio] = useState(false);
   const [servicioEditando, setServicioEditando] = useState(null);
+  const [materialesEditandoServicio, setMaterialesEditandoServicio] = useState([]);
   const [formServicio, setFormServicio] = useState({
     nombre: "", descripcion: "", estado: "Activo", categoriaServicioId: ""
   });
@@ -126,12 +127,27 @@ export function ServiciosPage() {
 
   function abrirNuevoServicio() {
     setServicioEditando(null);
+    setMaterialesEditandoServicio([]);
     setFormServicio({ nombre: "", descripcion: "", estado: "Activo", categoriaServicioId: "" });
     setModalServicio(true);
   }
 
   function abrirEditarServicio(servicio) {
+    const servicioId = Number(servicio.idServicio || servicio.id);
     setServicioEditando(servicio);
+    setMaterialesEditandoServicio(
+      serviciosMateriales
+        .filter(item => Number(item.servicioId) === servicioId)
+        .map(item => ({
+          idServicioMaterial: item.idServicioMaterial || item.id,
+          servicioId,
+          materialId: item.materialId ? String(item.materialId) : "",
+          cantidadUsada: String(item.cantidadUsada ?? ""),
+          createdBy: item.createdBy,
+          deleted: false,
+          isNew: false
+        }))
+    );
     setFormServicio({
       nombre: servicio.nombre || "",
       descripcion: servicio.descripcion || "",
@@ -139,6 +155,40 @@ export function ServiciosPage() {
       categoriaServicioId: servicio.categoriaServicioId ? String(servicio.categoriaServicioId) : ""
     });
     setModalServicio(true);
+  }
+
+  function agregarMaterialEditandoServicio() {
+    setMaterialesEditandoServicio((current) => [
+      ...current,
+      {
+        idServicioMaterial: `nuevo-${crypto.randomUUID()}`,
+        servicioId: Number(servicioEditando?.idServicio || servicioEditando?.id),
+        materialId: "",
+        cantidadUsada: "",
+        createdBy: session.empleadoId,
+        deleted: false,
+        isNew: true
+      }
+    ]);
+  }
+
+  function actualizarMaterialEditandoServicio(id, field, value) {
+    setMaterialesEditandoServicio((current) => current.map((item) => {
+      if (item.idServicioMaterial !== id) {
+        return item;
+      }
+
+      return {
+        ...item,
+        [field]: field === "cantidadUsada" ? limpiarCantidadPositiva(value) : value
+      };
+    }));
+  }
+
+  function quitarMaterialEditandoServicio(id) {
+    setMaterialesEditandoServicio((current) => current.map((item) => (
+      item.idServicioMaterial === id ? { ...item, deleted: true } : item
+    )));
   }
 
   useEffect(() => {
@@ -208,19 +258,68 @@ export function ServiciosPage() {
       };
       if (esEdicion) {
         await actualizarServicio(servicioEditando.idServicio || servicioEditando.id, payload);
+        await guardarMaterialesEditandoServicio(servicioEditando.idServicio || servicioEditando.id);
       } else {
         await crearServicio(payload);
       }
       const svs = await listarServicios();
+      const svMats = await listarServiciosMateriales();
       setServicios(safe(svs));
+      setServiciosMateriales(safe(svMats));
       setModalServicio(false);
       setServicioEditando(null);
+      setMaterialesEditandoServicio([]);
       setFormServicio({ nombre: "", descripcion: "", estado: "Activo", categoriaServicioId: "" });
       mostrarSuccess(esEdicion ? "Servicio actualizado correctamente." : "Servicio creado correctamente.");
     } catch (err) {
       mostrarError(err.message || String(err));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function guardarMaterialesEditandoServicio(servicioId) {
+    const activos = materialesEditandoServicio.filter(item => !item.deleted);
+    const ids = activos.map(item => item.materialId).filter(Boolean);
+    if (new Set(ids).size !== ids.length) {
+      throw new Error("No puedes repetir el mismo material en un servicio.");
+    }
+
+    for (const item of activos) {
+      if (!item.materialId) {
+        throw new Error("Selecciona el material ligado al servicio.");
+      }
+      if (!item.cantidadUsada || Number(item.cantidadUsada) <= 0) {
+        throw new Error("La cantidad usada del material debe ser mayor a cero.");
+      }
+
+      const material = materiales.find((mat) => Number(mat.idMaterial || mat.id) === Number(item.materialId));
+      if (!materialActivo(material)) {
+        throw new Error("No se puede asignar un material inactivo a un servicio.");
+      }
+    }
+
+    for (const item of materialesEditandoServicio) {
+      if (item.deleted) {
+        if (!item.isNew) {
+          await eliminarServicioMaterial(item.idServicioMaterial);
+        }
+        continue;
+      }
+
+      const payload = {
+        cantidadUsada: Number(item.cantidadUsada),
+        servicioId: Number(servicioId),
+        materialId: Number(item.materialId),
+        createdBy: item.createdBy || session.empleadoId,
+        updatedBy: item.isNew ? null : session.empleadoId
+      };
+
+      if (item.isNew) {
+        await crearServicioMaterial(payload);
+      } else {
+        await actualizarServicioMaterial(item.idServicioMaterial, payload);
+      }
     }
   }
 
@@ -322,23 +421,6 @@ export function ServiciosPage() {
 
   return (
     <section className="page-stack">
-      <div className="page-header">
-        <div>
-          <h1>Servicios</h1>
-        </div>
-        <button
-          className="primary-button"
-          onClick={() => tab === "servicios"
-            ? abrirNuevoServicio()
-            : setModalMaterial(true)
-          }
-          type="button"
-          disabled={loading}
-        >
-          {tab === "servicios" ? "+ Nuevo Servicio" : "+ Asignar Material"}
-        </button>
-      </div>
-
       {success && (
         <div className="pos-alert success">{success}</div>
       )}
@@ -352,6 +434,20 @@ export function ServiciosPage() {
           style={{ flex: 1 }}
           disabled={loading}
         />
+        <div />
+        <div className="toolbar-actions">
+          <button
+            className="primary-button"
+            onClick={() => tab === "servicios"
+              ? abrirNuevoServicio()
+              : setModalMaterial(true)
+            }
+            type="button"
+            disabled={loading}
+          >
+            {tab === "servicios" ? "+ Nuevo Servicio" : "+ Asignar Material"}
+          </button>
+        </div>
       </div>
 
       <div className="inv-table-wrap">
@@ -510,6 +606,68 @@ export function ServiciosPage() {
                 <option value="__nueva__">+ Nueva categoría...</option>
               </select>
             </label>
+            {servicioEditando && (
+              <div className="service-material-editor">
+                <div className="tab-section-header">
+                  <h3>Materiales usados</h3>
+                  <button
+                    className="ghost-button"
+                    onClick={agregarMaterialEditandoServicio}
+                    type="button"
+                  >
+                    + Agregar material
+                  </button>
+                </div>
+                {materialesEditandoServicio.filter(item => !item.deleted).length === 0 && (
+                  <p className="report-empty">Este servicio no tiene materiales ligados.</p>
+                )}
+                {materialesEditandoServicio.filter(item => !item.deleted).map(item => (
+                  <div className="service-material-row" key={item.idServicioMaterial}>
+                    <label className="pos-field floating">
+                      <span>Material</span>
+                      <select
+                        value={item.materialId}
+                        onChange={e => actualizarMaterialEditandoServicio(
+                          item.idServicioMaterial,
+                          "materialId",
+                          e.target.value
+                        )}
+                      >
+                        <option value="">Selecciona un material</option>
+                        {materialesDisponibles.map(material => (
+                          <option
+                            key={material.idMaterial || material.id}
+                            value={material.idMaterial || material.id}
+                          >
+                            {material.nombre} ({material.unidad})
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="pos-field floating">
+                      <span>Cantidad usada</span>
+                      <input
+                        inputMode="decimal"
+                        type="text"
+                        value={item.cantidadUsada}
+                        onChange={e => actualizarMaterialEditandoServicio(
+                          item.idServicioMaterial,
+                          "cantidadUsada",
+                          e.target.value
+                        )}
+                      />
+                    </label>
+                    <button
+                      className="danger-button"
+                      onClick={() => quitarMaterialEditandoServicio(item.idServicioMaterial)}
+                      type="button"
+                    >
+                      Quitar
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
             {/* El estado ya no se selecciona al crear: por defecto será "Activo" */}
             {/* <label className="pos-field floating">
               <span>Estado</span>

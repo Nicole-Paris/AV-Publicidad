@@ -3,6 +3,7 @@ package avpublicidad.proyecto.service;
 import avpublicidad.proyecto.constants.PedidoConstants;
 import avpublicidad.proyecto.dto.PedidoRequest;
 import avpublicidad.proyecto.exception.ResourceNotFoundException;
+import avpublicidad.proyecto.model.Cliente;
 import avpublicidad.proyecto.model.Pedido;
 import avpublicidad.proyecto.repository.ClienteRepository;
 import avpublicidad.proyecto.repository.DetallePedidoRepository;
@@ -14,6 +15,7 @@ import jakarta.validation.ValidationException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
@@ -44,14 +46,19 @@ public class PedidoService {
         return agregarEstadoPago(pedido);
     }
 
+    @Transactional
     public Pedido crear(PedidoRequest request) {
         validarRelaciones(request);
         validarReglasNegocio(request);
+        if (PedidoConstants.FORMA_PAGO_CREDITO.equals(normalizarFormaPago(request.getFormaPago()))
+                && PedidoConstants.TIPO_PEDIDO.equals(normalizarTipoPedido(request.getTipoPedido()))) {
+            validarCreditoDisponible(request.getClienteId(), request.getTotal(), null);
+        }
 
         Pedido pedido = Pedido.builder()
                 .fechaPedido(request.getFechaPedido())
                 .fechaEntrega(request.getFechaEntrega())
-                .estado(normalizarEstado(request.getEstado()))
+                .estado(estadoInicialAlCrear(request))
                 .total(request.getTotal())
                 .descripcion(request.getDescripcion())
                 .tipoPedido(normalizarTipoPedido(request.getTipoPedido()))
@@ -65,7 +72,10 @@ public class PedidoService {
                 .deletedBy(request.getDeletedBy())
                 .build();
 
-        return agregarEstadoPago(pedidoRepository.save(pedido));
+        Pedido pedidoGuardado = pedidoRepository.save(pedido);
+        aplicarCreditoClienteAlCrearPedido(pedidoGuardado);
+
+        return agregarEstadoPago(pedidoGuardado);
     }
 
     public Pedido actualizar(Integer id, PedidoRequest request) {
@@ -73,6 +83,10 @@ public class PedidoService {
         validarRelaciones(request);
         validarReglasNegocio(request);
         String estadoNuevo = normalizarEstado(request.getEstado());
+        if (PedidoConstants.FORMA_PAGO_CREDITO.equals(normalizarFormaPago(request.getFormaPago()))
+                && PedidoConstants.TIPO_PEDIDO.equals(normalizarTipoPedido(request.getTipoPedido()))) {
+            validarCreditoDisponible(request.getClienteId(), request.getTotal(), id);
+        }
         validarFlujoEstado(pedido.getEstado(), estadoNuevo);
         validarPedidoEditable(pedido, request);
         validarRequisitosEstado(pedido, request, estadoNuevo);
@@ -134,6 +148,57 @@ public class PedidoService {
                 && (request.getMotivoCancelacion() == null || request.getMotivoCancelacion().isBlank())) {
             throw new ValidationException("El motivo de cancelacion es obligatorio cuando el pedido esta cancelado");
         }
+
+    }
+
+    private void validarCreditoDisponible(Integer clienteId, BigDecimal totalPedido, Integer pedidoActualId) {
+        Cliente cliente = clienteRepository.findById(clienteId)
+                .filter(clienteEncontrado -> clienteEncontrado.getDeletedAt() == null)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Cliente no encontrado"));
+
+        if (!Boolean.TRUE.equals(cliente.getTieneCredito())) {
+            throw new ValidationException("El cliente no tiene credito habilitado");
+        }
+
+        BigDecimal limiteCredito = cliente.getLimiteCredito() == null ? BigDecimal.ZERO : cliente.getLimiteCredito();
+        BigDecimal creditoUsado = calcularCreditoUsadoCliente(clienteId, pedidoActualId);
+        BigDecimal nuevoCredito = creditoUsado.add(totalPedido == null ? BigDecimal.ZERO : totalPedido);
+
+        if (nuevoCredito.compareTo(limiteCredito) > 0) {
+            BigDecimal disponible = limiteCredito.subtract(creditoUsado);
+            if (disponible.compareTo(BigDecimal.ZERO) < 0) {
+                disponible = BigDecimal.ZERO;
+            }
+            throw new ValidationException("El pedido excede el limite de credito del cliente. Credito disponible: " + disponible);
+        }
+    }
+
+    private BigDecimal calcularCreditoUsadoCliente(Integer clienteId, Integer pedidoActualId) {
+        return pedidoRepository.findByClienteIdAndFormaPagoAndDeletedAtIsNull(clienteId, PedidoConstants.FORMA_PAGO_CREDITO)
+                .stream()
+                .filter(pedido -> pedidoActualId == null || !pedidoActualId.equals(pedido.getIdPedido()))
+                .filter(pedido -> PedidoConstants.TIPO_PEDIDO.equals(pedido.getTipoPedido()))
+                .filter(pedido -> !PedidoConstants.ESTADO_CANCELADO.equals(pedido.getEstado()))
+                .map((pedido) -> {
+                    BigDecimal totalPedido = pedido.getTotal() == null ? BigDecimal.ZERO : pedido.getTotal();
+                    BigDecimal totalPagado = calcularTotalPagado(pedido.getIdPedido());
+                    BigDecimal saldoPendiente = totalPedido.subtract(totalPagado);
+                    return saldoPendiente.compareTo(BigDecimal.ZERO) < 0 ? BigDecimal.ZERO : saldoPendiente;
+                })
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private void aplicarCreditoClienteAlCrearPedido(Pedido pedido) {
+        if (!PedidoConstants.FORMA_PAGO_CREDITO.equals(pedido.getFormaPago())
+                || !PedidoConstants.TIPO_PEDIDO.equals(pedido.getTipoPedido())) {
+            return;
+        }
+
+        Cliente cliente = clienteRepository.findById(pedido.getClienteId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Cliente no encontrado"));
+        BigDecimal creditoActual = cliente.getCreditoActual() == null ? BigDecimal.ZERO : cliente.getCreditoActual();
+        cliente.setCreditoActual(creditoActual.add(pedido.getTotal() == null ? BigDecimal.ZERO : pedido.getTotal()));
+        clienteRepository.save(cliente);
     }
 
     private void validarFlujoEstado(String estadoActual, String estadoNuevo) {
@@ -146,7 +211,8 @@ public class PedidoService {
                         && (PedidoConstants.ESTADO_PENDIENTE.equals(estadoNuevo)
                         || PedidoConstants.ESTADO_CANCELADO.equals(estadoNuevo)))
                         || (PedidoConstants.ESTADO_PENDIENTE.equals(estadoActual)
-                        && PedidoConstants.ESTADO_EN_PROCESO.equals(estadoNuevo))
+                        && (PedidoConstants.ESTADO_EN_PROCESO.equals(estadoNuevo)
+                        || PedidoConstants.ESTADO_CANCELADO.equals(estadoNuevo)))
                         || (PedidoConstants.ESTADO_EN_PROCESO.equals(estadoActual)
                         && PedidoConstants.ESTADO_TERMINADO.equals(estadoNuevo))
                         || (PedidoConstants.ESTADO_TERMINADO.equals(estadoActual)
@@ -173,15 +239,27 @@ public class PedidoService {
     }
 
     private void validarRequisitosEstado(Pedido pedido, PedidoRequest request, String estadoNuevo) {
+        if (PedidoConstants.ESTADO_CANCELADO.equals(estadoNuevo)) {
+            return;
+        }
+
         if (!PedidoConstants.ESTADO_BORRADOR.equals(estadoNuevo)
                 && detallePedidoRepository.findByPedidoIdAndDeletedAtIsNull(pedido.getIdPedido()).isEmpty()) {
             throw new ValidationException("El pedido debe tener al menos un detalle para avanzar de estado");
         }
 
         if (PedidoConstants.ESTADO_ENTREGADO.equals(estadoNuevo)
-                && calcularTotalPagado(pedido.getIdPedido()).compareTo(pedido.getTotal()) < 0
-                && !Boolean.TRUE.equals(request.getConfirmarEntregaConSaldoPendiente())) {
-            throw new ValidationException("No se puede entregar un pedido con saldo pendiente");
+                && calcularTotalPagado(pedido.getIdPedido()).compareTo(pedido.getTotal()) < 0) {
+            String formaPago = pedido.getFormaPago();
+            if (PedidoConstants.FORMA_PAGO_CONTADO.equals(formaPago)) {
+                throw new ValidationException("No se puede entregar un pedido de contado con saldo pendiente");
+            }
+
+            boolean puedeEntregarConSaldo = PedidoConstants.FORMA_PAGO_CREDITO.equals(formaPago)
+                    || PedidoConstants.FORMA_PAGO_INTERCAMBIO.equals(formaPago);
+            if (!puedeEntregarConSaldo || !Boolean.TRUE.equals(request.getConfirmarEntregaConSaldoPendiente())) {
+                throw new ValidationException("Confirma la entrega con saldo pendiente para pedidos a credito o intercambio");
+            }
         }
     }
 
@@ -233,6 +311,15 @@ public class PedidoService {
         }
 
         throw new ValidationException("El estado del pedido no es valido");
+    }
+
+    private String estadoInicialAlCrear(PedidoRequest request) {
+        String tipoPedido = normalizarTipoPedido(request.getTipoPedido());
+        if (PedidoConstants.TIPO_COTIZACION.equals(tipoPedido)) {
+            return PedidoConstants.ESTADO_BORRADOR;
+        }
+
+        return PedidoConstants.ESTADO_PENDIENTE;
     }
 
     private String normalizarTipoPedido(String tipoPedido) {

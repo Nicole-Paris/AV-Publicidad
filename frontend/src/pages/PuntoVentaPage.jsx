@@ -10,7 +10,7 @@ import {
   listarServiciosMateriales,
   obtenerCliente
 } from "../api/catalogApi.js";
-import { actualizarPedido, crearDetallePedido, crearPedido } from "../api/pedidoApi.js";
+import { crearDetallePedido, crearPedido } from "../api/pedidoApi.js";
 import { listarInventarios, listarMateriales, crearMovimiento } from "../api/inventarioApi.js";
 import { listarEmpleados } from "../api/empleadoApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
@@ -62,6 +62,8 @@ export function PuntoVentaPage() {
   const [clienteSearch, setClienteSearch] = useState("");
   const [clienteSuggestionsOpen, setClienteSuggestionsOpen] = useState(false);
   const [servicios, setServicios] = useState([]);
+  const [serviciosMateriales, setServiciosMateriales] = useState([]);
+  const [materiales, setMateriales] = useState([]);
   const [empleados, setEmpleados] = useState([]);
   const [categoriasServicio, setCategoriasServicio] = useState([]);
   const [sucursales, setSucursales] = useState([]);
@@ -131,12 +133,22 @@ export function PuntoVentaPage() {
       setError("");
 
       try {
-        const [clientesData, serviciosData, sucursalesData, categoriasServicioData, empleadosData] = await Promise.all([
+        const [
+          clientesData,
+          serviciosData,
+          sucursalesData,
+          categoriasServicioData,
+          empleadosData,
+          serviciosMaterialesData,
+          materialesData
+        ] = await Promise.all([
           listarClientes(),
           listarServicios(),
           listarSucursales(),
           listarCategoriaServicio(),
-          listarEmpleados()
+          listarEmpleados(),
+          listarServiciosMateriales(),
+          listarMateriales()
         ]);
 
         if (!active) {
@@ -148,6 +160,8 @@ export function PuntoVentaPage() {
         setSucursales(sucursalesData);
         setCategoriasServicio(categoriasServicioData);
         setEmpleados(Array.isArray(empleadosData) ? empleadosData : []);
+        setServiciosMateriales(Array.isArray(serviciosMaterialesData) ? serviciosMaterialesData : []);
+        setMateriales(Array.isArray(materialesData) ? materialesData : []);
       } catch (err) {
         if (active) {
           mostrarError(err.message || String(err));
@@ -196,6 +210,12 @@ export function PuntoVentaPage() {
     () => servicios.filter((servicio) => registroDeSucursal(servicio) && servicioActivo(servicio)),
     [servicios, empleados, session]
   );
+
+  function unidadDeServicio(servicioId) {
+    const relacion = serviciosMateriales.find((item) => Number(item.servicioId) === Number(servicioId));
+    const material = materiales.find((item) => Number(item.idMaterial || item.id) === Number(relacion?.materialId));
+    return material?.unidad || "Piezas";
+  }
 
   const subtotal = useMemo(
     () => items.reduce((total, item) => total + item.subtotal, 0),
@@ -335,6 +355,18 @@ export function PuntoVentaPage() {
     }
 
     setDetalle((current) => {
+      if (name === "servicioId") {
+        const unidadDetalle = value ? unidadDeServicio(value) : "Piezas";
+        return {
+          ...current,
+          servicioId: value,
+          unidadDetalle,
+          cantidad: unidadDetalle === "Piezas" && current.cantidad
+            ? String(Math.max(1, Math.trunc(Number(current.cantidad))))
+            : current.cantidad
+        };
+      }
+
       if (name === "cantidad" && current.unidadDetalle === "Piezas") {
         return { ...current, cantidad: value.replace(/\D/g, "") };
       }
@@ -572,15 +604,6 @@ export function PuntoVentaPage() {
         )
       );
 
-      // Solo si es Pedido (no Cotizacion), avanzar a "En proceso" DESPUÉS de los detalles
-      if (pedido.tipoPedido !== "Cotizacion") {
-        await actualizarPedido(pedidoId, {
-          ...payloadBase,
-          estado: "En proceso",
-          updatedBy: session.empleadoId
-        });
-      }
-
       // Reducir stock en inventario según materiales asociados a los servicios
       try {
         const svMats = inventarioValidado.serviciosMateriales;
@@ -814,7 +837,7 @@ export function PuntoVentaPage() {
               onChange={updateDetalle}
               value={detalle.servicioId}
             >
-              <option value="">Servicio o Trabajo</option>
+              <option value="" disabled>Servicio o Trabajo</option>
               {serviciosActivos.map((servicio) => (
                 <option key={servicio.idServicio} value={servicio.idServicio}>
                   {servicio.nombre}
@@ -853,7 +876,12 @@ export function PuntoVentaPage() {
 
           <label className="pos-field floating compact-field">
             <span>Unidad</span>
-            <select name="unidadDetalle" onChange={updateDetalle} value={detalle.unidadDetalle}>
+            <select
+              disabled
+              name="unidadDetalle"
+              onChange={updateDetalle}
+              value={detalle.unidadDetalle}
+            >
               <option>Piezas</option>
               <option>Metros</option>
               <option>Litros</option>

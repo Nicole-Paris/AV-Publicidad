@@ -204,7 +204,6 @@ export function CorteCajaPage() {
     <section className="page-stack cash-page">
       <div className="page-header">
         <div>
-          <h1>Corte de caja</h1>
           <p className="page-subtitle">Control de apertura, pagos del dia y cierre de caja.</p>
         </div>
       </div>

@@ -522,10 +522,7 @@ export function ConfiguracionPage() {
 
   return (
     <section className="page-stack">
-      <div className="page-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div>
-          <h1>Configuración</h1>
-        </div>
+      <div className="page-header" style={{ display: "flex", justifyContent: "flex-end", alignItems: "center" }}>
         <div style={{ display: "flex", gap: 12 }}>
           {tab === "sucursales" && (
             <button

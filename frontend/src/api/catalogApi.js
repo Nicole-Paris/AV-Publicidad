@@ -66,6 +66,19 @@ export function crearServicioMaterial(payload) {
   });
 }
 
+export function actualizarServicioMaterial(id, payload) {
+  return apiRequest(`/servicios-materiales/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function eliminarServicioMaterial(id) {
+  return apiRequest(`/servicios-materiales/${id}`, {
+    method: "DELETE"
+  });
+}
+
 export function listarSucursales() {
   return apiRequest("/sucursales");
 }

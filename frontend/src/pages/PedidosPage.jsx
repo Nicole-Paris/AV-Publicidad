@@ -11,7 +11,7 @@ const ESTADOS_PAGO = ["Pendiente pago", "Pagado"];
 
 const SIGUIENTES_ESTADOS = {
   Borrador: ["Pendiente", "Cancelado"],
-  Pendiente: ["En proceso"],
+  Pendiente: ["En proceso", "Cancelado"],
   "En proceso": ["Terminado"],
   Terminado: ["Entregado"],
   Entregado: [],
@@ -54,6 +54,8 @@ export function PedidosPage() {
   const [pedidoSugerencias, setPedidoSugerencias] = useState([]);
   const [pedidoSeleccionado, setPedidoSeleccionado] = useState(null);
   const [confirmarEntregaPendiente, setConfirmarEntregaPendiente] = useState(null);
+  const [pedidoCancelar, setPedidoCancelar] = useState(null);
+  const [motivoCancelacion, setMotivoCancelacion] = useState("");
   const sucursalActivaId = session?.sucursalIdSucursal || session?.sucursalId;
 
   function mostrarError(msg) {
@@ -346,12 +348,39 @@ export function PedidosPage() {
       return;
     }
 
+    if (nuevoEstado === "Cancelado") {
+      setPedidoCancelar(pedidoObj);
+      setMotivoCancelacion(pedidoObj.motivoCancelacion || "");
+      return;
+    }
+
     if (nuevoEstado === "Entregado" && saldoPendientePedido(pedidoObj) > 0) {
+      if (pedidoObj.formaPago === "Contado") {
+        mostrarError("No se puede entregar un pedido de contado con saldo pendiente.");
+        return;
+      }
       setConfirmarEntregaPendiente(pedidoObj);
       return;
     }
 
     await guardarEstadoPedido(pedidoObj, nuevoEstado);
+  }
+
+  async function confirmarCancelacion() {
+    if (!pedidoCancelar) {
+      return;
+    }
+
+    if (!motivoCancelacion.trim()) {
+      mostrarError("El motivo de cancelacion es obligatorio.");
+      return;
+    }
+
+    const pedidoObj = pedidoCancelar;
+    const motivo = motivoCancelacion.trim();
+    setPedidoCancelar(null);
+    setMotivoCancelacion("");
+    await guardarEstadoPedido({ ...pedidoObj, motivoCancelacion: motivo }, "Cancelado");
   }
 
   async function guardarEstadoPedido(pedidoObj, nuevoEstado, confirmarEntregaConSaldoPendiente = false) {
@@ -360,6 +389,7 @@ export function PedidosPage() {
       await actualizarPedido(pedidoObj.idPedido, {
         ...pedidoObj,
         estado: nuevoEstado,
+        motivoCancelacion: pedidoObj.motivoCancelacion,
         updatedBy: session.empleadoId,
         confirmarEntregaConSaldoPendiente
       });
@@ -395,12 +425,6 @@ export function PedidosPage() {
 
   return (
     <section className="page-stack">
-      <div className="page-header">
-        <div>
-          <h1>Pedidos</h1>
-        </div>
-      </div>
-
       {success && <div className="pos-alert success">{success}</div>}
 
       <div className="inv-tabs">
@@ -674,6 +698,45 @@ export function PedidosPage() {
         </div>
       )}
 
+      {pedidoCancelar && (
+        <div className="modal-overlay" onClick={() => {
+          setPedidoCancelar(null);
+          setMotivoCancelacion("");
+        }}>
+          <div className="modal-card confirm-delivery-modal" onClick={e => e.stopPropagation()}>
+            <h2>Cancelar pedido</h2>
+            <p>
+              Escribe el motivo por el que se cancelara el pedido{" "}
+              <strong>#{pedidoCancelar.idPedido}</strong>.
+            </p>
+            <label className="pos-field cancel-reason-field">
+              <span>Motivo de cancelacion</span>
+              <textarea
+                autoFocus
+                rows={4}
+                value={motivoCancelacion}
+                onChange={e => setMotivoCancelacion(e.target.value)}
+              />
+            </label>
+            <div className="modal-actions">
+              <button
+                className="ghost-button"
+                type="button"
+                onClick={() => {
+                  setPedidoCancelar(null);
+                  setMotivoCancelacion("");
+                }}
+              >
+                Cancelar
+              </button>
+              <button className="primary-button" type="button" onClick={confirmarCancelacion}>
+                Confirmar cancelacion
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {confirmarEntregaPendiente && (
         <div className="modal-overlay" onClick={() => setConfirmarEntregaPendiente(null)}>
           <div className="modal-card confirm-delivery-modal" onClick={e => e.stopPropagation()}>
@@ -681,6 +744,7 @@ export function PedidosPage() {
             <p>
               Este pedido tiene un saldo pendiente de{" "}
               <strong>{money(saldoPendientePedido(confirmarEntregaPendiente))}</strong>.
+              Solo los pedidos a credito o intercambio pueden entregarse con saldo pendiente.
               Confirma si deseas marcarlo como entregado de todos modos.
             </p>
             <div className="modal-actions">

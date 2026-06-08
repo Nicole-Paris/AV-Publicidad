@@ -1,6 +1,8 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { actualizarCliente, crearCliente, eliminarCliente, listarClientes } from "../api/catalogApi.js";
 import { listarEmpleados } from "../api/empleadoApi.js";
+import { listarTodosPagos } from "../api/pagoApi.js";
+import { listarPedidos } from "../api/pedidoApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
 
 function normalizarTexto(value) {
@@ -28,6 +30,8 @@ export function ClientesPage() {
   const { session } = useAuth();
   const [clientes, setClientes] = useState([]);
   const [empleados, setEmpleados] = useState([]);
+  const [pedidos, setPedidos] = useState([]);
+  const [pagos, setPagos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [modalError, setModalError] = useState("");
@@ -56,9 +60,16 @@ export function ClientesPage() {
   async function cargarClientes() {
     setLoading(true);
     try {
-      const [data, empleadosData] = await Promise.all([listarClientes(), listarEmpleados()]);
+      const [data, empleadosData, pedidosData, pagosData] = await Promise.all([
+        listarClientes(),
+        listarEmpleados(),
+        listarPedidos(),
+        listarTodosPagos()
+      ]);
       setClientes(Array.isArray(data) ? data : []);
       setEmpleados(Array.isArray(empleadosData) ? empleadosData : []);
+      setPedidos(Array.isArray(pedidosData) ? pedidosData : []);
+      setPagos(Array.isArray(pagosData) ? pagosData : []);
     } catch (err) {
       setModalError(err.message || String(err));
     } finally {
@@ -72,12 +83,19 @@ export function ClientesPage() {
     async function cargar() {
       setLoading(true);
       try {
-        const [data, empleadosData] = await Promise.all([listarClientes(), listarEmpleados()]);
+        const [data, empleadosData, pedidosData, pagosData] = await Promise.all([
+          listarClientes(),
+          listarEmpleados(),
+          listarPedidos(),
+          listarTodosPagos()
+        ]);
         if (!active) {
           return;
         }
         setClientes(Array.isArray(data) ? data : []);
         setEmpleados(Array.isArray(empleadosData) ? empleadosData : []);
+        setPedidos(Array.isArray(pedidosData) ? pedidosData : []);
+        setPagos(Array.isArray(pagosData) ? pagosData : []);
       } catch (err) {
         if (active) {
           setModalError(err.message || String(err));
@@ -117,6 +135,28 @@ export function ClientesPage() {
   }
 
   const sucursalActivaId = session?.sucursalIdSucursal || session?.sucursalId;
+
+  const pagosPorPedido = useMemo(() => {
+    const map = new Map();
+    pagos.forEach((pago) => {
+      const pedidoId = Number(pago.pedidoId);
+      map.set(pedidoId, (map.get(pedidoId) || 0) + Number(pago.monto || 0));
+    });
+    return map;
+  }, [pagos]);
+
+  function creditoUsadoCliente(cliente) {
+    return pedidos
+      .filter((pedido) => Number(pedido.clienteId) === Number(cliente.idCliente))
+      .filter((pedido) => !sucursalActivaId || Number(pedido.sucursalId) === Number(sucursalActivaId))
+      .filter((pedido) => pedido.formaPago === "Credito")
+      .filter((pedido) => pedido.estado !== "Cancelado")
+      .reduce((total, pedido) => {
+        const pagado = Number(pagosPorPedido.get(Number(pedido.idPedido)) || 0);
+        const pendiente = Math.max(0, Number(pedido.total || 0) - pagado);
+        return total + pendiente;
+      }, 0);
+  }
 
   function registroDeSucursal(registro) {
     if (!sucursalActivaId) {
@@ -292,18 +332,6 @@ export function ClientesPage() {
 
   return (
     <section className="page-stack">
-      <div className="page-header">
-        <div>
-          <h1>Clientes</h1>
-        </div>
-        <div style={{ alignItems: "center", display: "flex", gap: 12 }}>
-          <span className="cash-count">{clientesFiltrados.length} clientes</span>
-          <button className="primary-button" disabled={loading} onClick={abrirNuevoCliente} type="button">
-            + Nuevo Cliente
-          </button>
-        </div>
-      </div>
-
       {success && <div className="pos-alert success">{success}</div>}
 
       <div className="inv-toolbar clients-toolbar">
@@ -323,6 +351,12 @@ export function ClientesPage() {
           <option value="conCredito">Con credito</option>
           <option value="sinCredito">Sin credito</option>
         </select>
+        <div className="toolbar-actions">
+          <span className="cash-count">{clientesFiltrados.length} clientes</span>
+          <button className="primary-button" disabled={loading} onClick={abrirNuevoCliente} type="button">
+            + Nuevo Cliente
+          </button>
+        </div>
       </div>
 
       <div className="inv-table-wrap">
@@ -364,7 +398,7 @@ export function ClientesPage() {
                       <div className="client-credit-cell">
                         <span className="inv-badge warn">Con credito</span>
                         <small>
-                          {money(cliente.creditoActual)} / {money(cliente.limiteCredito)}
+                          {money(creditoUsadoCliente(cliente))} / {money(cliente.limiteCredito)}
                         </small>
                       </div>
                     ) : (

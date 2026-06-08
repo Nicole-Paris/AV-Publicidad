@@ -42,7 +42,6 @@ export function LoginPage() {
         <div className="login-copy">
           <span className="login-logo">av</span>
           <h1>AV Publicidad</h1>
-          <p>Sistema de Gestion POS/ERP</p>
         </div>
 
         <form className="login-form" onSubmit={handleSubmit}>

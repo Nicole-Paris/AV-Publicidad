@@ -299,7 +299,6 @@ export function DashboardPage() {
     <section className="page-stack dashboard-page">
       <div className="page-header">
         <div>
-          <span className="eyebrow">Panel principal</span>
           <h1>Hola, {session?.nombre}</h1>
           <p className="page-subtitle">
             Resumen de {session?.sucursal || "Sucursal Centro"} para operar el dia.

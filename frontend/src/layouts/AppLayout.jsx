@@ -69,6 +69,9 @@ export function AppLayout() {
   const sucursalesSesion = session?.sucursales || [];
   const sucursalActivaId = session?.sucursalIdSucursal || session?.sucursalId || "";
   const isDashboard = location.pathname === "/dashboard" || location.pathname === "/";
+  const pageTitle = isDashboard
+    ? "Panel Principal"
+    : links.find((link) => location.pathname.startsWith(link.to))?.label || "AV Publicidad";
 
   function goBack() {
     navigate("/dashboard");
@@ -129,7 +132,7 @@ export function AppLayout() {
                 <AppIcon name="arrowLeft" size={20} />
               </button>
             )}
-            <strong>Punto de Venta</strong>
+            <strong>{pageTitle}</strong>
           </div>
 
           <div className="topbar-actions">

@@ -549,20 +549,6 @@ export function InventarioPage() {
 
   return (
     <section className="page-stack">
-      <div className="page-header">
-        <div>
-          <h1>Inventario</h1>
-        </div>
-        <button
-          className="primary-button"
-          onClick={abrirNuevo}
-          type="button"
-          disabled={loading}
-        >
-          {tabActivo === "materiales" ? "+ Nuevo Material" : "Registrar Movimiento"}
-        </button>
-      </div>
-
       {success && (
         <div className="pos-alert success">{success}</div>
       )}
@@ -590,7 +576,16 @@ export function InventarioPage() {
                 </option>
               ))}
             </select>
-            <div style={{ flex: 1 }} />
+            <div className="toolbar-actions">
+              <button
+                className="primary-button"
+                onClick={abrirNuevo}
+                type="button"
+                disabled={loading}
+              >
+                {tabActivo === "materiales" ? "+ Nuevo Material" : "Registrar Movimiento"}
+              </button>
+            </div>
           </div>
 
           <div className="inv-table-wrap">
@@ -759,7 +754,18 @@ export function InventarioPage() {
       {tabActivo === "movimientos" && (
         <>
           <div className="inv-toolbar">
-            <div style={{ flex: 1 }} />
+            <div />
+            <div />
+            <div className="toolbar-actions">
+              <button
+                className="primary-button"
+                onClick={abrirNuevo}
+                type="button"
+                disabled={loading}
+              >
+                Registrar Movimiento
+              </button>
+            </div>
           </div>
 
           <div className="inv-table-wrap">

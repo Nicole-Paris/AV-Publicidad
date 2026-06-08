@@ -259,7 +259,6 @@ export function ReportesPage() {
     <section className="page-stack reports-page">
       <div className="page-header">
         <div>
-          <h1>Reportes</h1>
           <p className="page-subtitle">Resumen operativo de ventas, pagos, pedidos e inventario.</p>
         </div>
       </div>
