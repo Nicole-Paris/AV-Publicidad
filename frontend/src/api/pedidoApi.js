@@ -1,4 +1,4 @@
-import { apiRequest } from "./apiClient.js";
+import { apiBlobRequest, apiRequest } from "./apiClient.js";
 
 export function crearPedido(payload) {
   return apiRequest("/pedidos", {
@@ -31,4 +31,8 @@ export function obtenerPedido(id) {
 
 export function listarDetallesPedido(pedidoId) {
   return apiRequest(`/detalles-pedido?pedidoId=${pedidoId}`);
+}
+
+export function descargarNotaPedidoPdf(pedidoId) {
+  return apiBlobRequest(`/pedidos/${pedidoId}/nota-pdf`);
 }

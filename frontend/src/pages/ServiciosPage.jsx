@@ -610,16 +610,18 @@ export function ServiciosPage() {
               <div className="service-material-editor">
                 <div className="tab-section-header">
                   <h3>Materiales usados</h3>
-                  <button
-                    className="ghost-button"
-                    onClick={agregarMaterialEditandoServicio}
-                    type="button"
-                  >
-                    + Agregar material
-                  </button>
                 </div>
                 {materialesEditandoServicio.filter(item => !item.deleted).length === 0 && (
-                  <p className="report-empty">Este servicio no tiene materiales ligados.</p>
+                  <>
+                    <p className="report-empty">Este servicio no tiene materiales ligados.</p>
+                    <button
+                      className="ghost-button service-material-add-empty"
+                      onClick={agregarMaterialEditandoServicio}
+                      type="button"
+                    >
+                      + Agregar material
+                    </button>
+                  </>
                 )}
                 {materialesEditandoServicio.filter(item => !item.deleted).map(item => (
                   <div className="service-material-row" key={item.idServicioMaterial}>
@@ -657,13 +659,22 @@ export function ServiciosPage() {
                         )}
                       />
                     </label>
-                    <button
-                      className="danger-button"
-                      onClick={() => quitarMaterialEditandoServicio(item.idServicioMaterial)}
-                      type="button"
-                    >
-                      Quitar
-                    </button>
+                    <div className="service-material-actions">
+                      <button
+                        className="ghost-button"
+                        onClick={agregarMaterialEditandoServicio}
+                        type="button"
+                      >
+                        + Agregar material
+                      </button>
+                      <button
+                        className="danger-button service-material-remove"
+                        onClick={() => quitarMaterialEditandoServicio(item.idServicioMaterial)}
+                        type="button"
+                      >
+                        Quitar
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

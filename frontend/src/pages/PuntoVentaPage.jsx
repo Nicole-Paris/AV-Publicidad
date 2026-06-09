@@ -837,7 +837,7 @@ export function PuntoVentaPage() {
               onChange={updateDetalle}
               value={detalle.servicioId}
             >
-              <option value="" disabled>Servicio o Trabajo</option>
+              <option value="" disabled hidden>Servicio</option>
               {serviciosActivos.map((servicio) => (
                 <option key={servicio.idServicio} value={servicio.idServicio}>
                   {servicio.nombre}

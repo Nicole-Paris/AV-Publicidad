@@ -41,6 +41,7 @@ export function ClientesPage() {
   const [filtroCredito, setFiltroCredito] = useState("");
   const [modalCliente, setModalCliente] = useState(false);
   const [clienteEditando, setClienteEditando] = useState(null);
+  const [clienteAEliminar, setClienteAEliminar] = useState(null);
   const [clienteExpandido, setClienteExpandido] = useState(null);
   const [formCliente, setFormCliente] = useState({
     nombre: "",
@@ -281,15 +282,14 @@ export function ClientesPage() {
     }
   }
 
-  async function borrarCliente(cliente) {
-    const confirmar = window.confirm(`¿Eliminar a ${nombreCliente(cliente)}?`);
-    if (!confirmar) return;
-
+  async function confirmarEliminarCliente() {
+    if (!clienteAEliminar) return;
     setSaving(true);
     try {
-      await eliminarCliente(cliente.idCliente);
+      await eliminarCliente(clienteAEliminar.idCliente);
       await cargarClientes();
       setClienteExpandido(null);
+      setClienteAEliminar(null);
       setSuccess("Cliente eliminado correctamente.");
       setTimeout(() => setSuccess(""), 2500);
     } catch (err) {
@@ -413,7 +413,7 @@ export function ClientesPage() {
                       <button className="ghost-button" onClick={() => abrirEditarCliente(cliente)} type="button">
                         Editar
                       </button>
-                      <button className="danger-button" disabled={saving} onClick={() => borrarCliente(cliente)} type="button">
+                      <button className="danger-button" disabled={saving} onClick={() => setClienteAEliminar(cliente)} type="button">
                         Eliminar
                       </button>
                     </div>
@@ -547,6 +547,26 @@ export function ClientesPage() {
         </div>
       )}
 
+      {clienteAEliminar && (
+        <div className="modal-overlay" onClick={() => setClienteAEliminar(null)}>
+          <div className="modal-card delete-confirm-modal" onClick={(event) => event.stopPropagation()}>
+            <h2>Eliminar cliente</h2>
+            <p>
+              Esta accion eliminara a <strong>{nombreCliente(clienteAEliminar)}</strong> del listado de clientes.
+            </p>
+            <p className="delete-confirm-warning">Esta accion no se puede deshacer desde esta pantalla.</p>
+            <div className="modal-actions">
+              <button className="ghost-button" disabled={saving} onClick={() => setClienteAEliminar(null)} type="button">
+                Cancelar
+              </button>
+              <button className="danger-button" disabled={saving} onClick={confirmarEliminarCliente} type="button">
+                {saving ? "Eliminando..." : "Eliminar cliente"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {modalError && (
         <div className="modal-error-overlay" onClick={() => setModalError("")}>
           <div className="modal-error-card" onClick={(event) => event.stopPropagation()}>
@@ -561,3 +581,4 @@ export function ClientesPage() {
     </section>
   );
 }
+

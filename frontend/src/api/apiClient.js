@@ -29,6 +29,31 @@ export async function apiRequest(path, options = {}) {
   return data;
 }
 
+export async function apiBlobRequest(path, options = {}) {
+  const session = getStoredSession();
+  const headers = new Headers(options.headers || {});
+
+  if (session?.token) {
+    headers.set("Authorization", `Bearer ${session.token}`);
+  }
+
+  const response = await fetch(`${API_URL}${path}`, {
+    ...options,
+    headers
+  });
+
+  if (!response.ok) {
+    const contentType = response.headers.get("content-type") || "";
+    const data = contentType.includes("application/json")
+      ? await response.json()
+      : await response.text();
+    const message = data?.message || data?.error || "No se pudo completar la solicitud";
+    throw new Error(message);
+  }
+
+  return response.blob();
+}
+
 export function getStoredSession() {
   const value = localStorage.getItem("av_session");
   if (!value) {

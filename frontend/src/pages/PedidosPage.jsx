@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { listarPedidos, actualizarPedido, listarDetallesPedido } from "../api/pedidoApi.js";
+import { listarPedidos, actualizarPedido, listarDetallesPedido, descargarNotaPedidoPdf } from "../api/pedidoApi.js";
 import { listarPagosPorPedido, listarTodosPagos, crearPago } from "../api/pagoApi.js";
 // import listarServicios además de listarClientes
 import { listarClientes, listarServicios } from "../api/catalogApi.js";
@@ -56,6 +56,7 @@ export function PedidosPage() {
   const [confirmarEntregaPendiente, setConfirmarEntregaPendiente] = useState(null);
   const [pedidoCancelar, setPedidoCancelar] = useState(null);
   const [motivoCancelacion, setMotivoCancelacion] = useState("");
+  const [descargandoPdf, setDescargandoPdf] = useState(null);
   const sucursalActivaId = session?.sucursalIdSucursal || session?.sucursalId;
 
   function mostrarError(msg) {
@@ -67,6 +68,24 @@ export function PedidosPage() {
   }
   function money(v) {
     return new Intl.NumberFormat("es-MX", { currency: "MXN", style: "currency" }).format(v || 0);
+  }
+  async function exportarPedidoPdf(pedidoObj) {
+    setDescargandoPdf(pedidoObj.idPedido);
+    try {
+      const blob = await descargarNotaPedidoPdf(pedidoObj.idPedido);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `pedido-${pedidoObj.idPedido}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      mostrarError(err.message || String(err));
+    } finally {
+      setDescargandoPdf(null);
+    }
   }
   function nombreCliente(c) {
     return [c?.nombre, c?.apellidoPaterno, c?.apellidoMaterno].filter(Boolean).join(" ");
@@ -500,6 +519,17 @@ export function PedidosPage() {
                        >
                          Pago
                        </button>
+                       <button
+                         className="pedido-pdf-button"
+                         disabled={descargandoPdf === pedido.idPedido}
+                         type="button"
+                         onClick={e => {
+                           e.stopPropagation();
+                           exportarPedidoPdf(pedido);
+                         }}
+                       >
+                         {descargandoPdf === pedido.idPedido ? "..." : "PDF"}
+                       </button>
                        <span className="pedido-chevron">{expandido ? "▲" : "▼"}</span>
                      </div>
                   </div>
@@ -899,6 +929,8 @@ export function PedidosPage() {
     </section>
   );
 }
+
+
 
 
 

@@ -53,7 +53,7 @@ export function LoginPage() {
               aria-label="Correo Electronico"
               name="correo"
               onChange={handleChange}
-              placeholder="Correo Electronico *"
+              placeholder="Correo Electronico "
               type="email"
               value={form.correo}
             />
@@ -65,7 +65,7 @@ export function LoginPage() {
               aria-label="Contrasena"
               name="contrasena"
               onChange={handleChange}
-              placeholder="Contrasena *"
+              placeholder="Contraseña"
               type={showPassword ? "text" : "password"}
               value={form.contrasena}
             />
