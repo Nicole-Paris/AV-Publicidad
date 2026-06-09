@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useMemo, useState } from "react";
 import { clearSession, getStoredSession, storeSession } from "../api/apiClient.js";
 import { loginRequest, logoutRequest } from "../api/authApi.js";
 
@@ -8,7 +8,7 @@ export function AuthProvider({ children }) {
   const [session, setSession] = useState(() => getStoredSession());
   const [loading, setLoading] = useState(false);
 
-  async function login(credentials) {
+  const login = useCallback(async function login(credentials) {
     setLoading(true);
     try {
       const auth = await loginRequest(credentials);
@@ -36,18 +36,18 @@ export function AuthProvider({ children }) {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
-  async function logout() {
+  const logout = useCallback(async function logout() {
     try {
       await logoutRequest();
     } finally {
       clearSession();
       setSession(null);
     }
-  }
+  }, []);
 
-  function cambiarSucursal(sucursalId) {
+  const cambiarSucursal = useCallback(function cambiarSucursal(sucursalId) {
     setSession((current) => {
       if (!current) {
         return current;
@@ -70,11 +70,23 @@ export function AuthProvider({ children }) {
       storeSession(nextSession);
       return nextSession;
     });
-  }
+  }, []);
 
-  function actualizarSucursales(sucursales) {
+  const actualizarSucursales = useCallback(function actualizarSucursales(sucursales) {
     setSession((current) => {
       if (!current) {
+        return current;
+      }
+
+      const actuales = current.sucursales || [];
+      const mismas =
+        actuales.length === sucursales.length &&
+        actuales.every((item, index) =>
+          Number(item.idSucursal) === Number(sucursales[index]?.idSucursal) &&
+          item.nombre === sucursales[index]?.nombre
+        );
+
+      if (mismas) {
         return current;
       }
 
@@ -85,7 +97,7 @@ export function AuthProvider({ children }) {
       storeSession(nextSession);
       return nextSession;
     });
-  }
+  }, []);
 
   const value = useMemo(
     () => ({
