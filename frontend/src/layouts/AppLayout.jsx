@@ -22,6 +22,14 @@ export function AppLayout() {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [branchMenuOpen, setBranchMenuOpen] = useState(false);
   const [logoUrl, setLogoUrl] = useState(localStorage.getItem("av_logo_url") || "");
+  const sucursalesSesion = session?.sucursales || [];
+  const sucursalActivaId = session?.sucursalIdSucursal || session?.sucursalId || "";
+  const rolSesion = (session?.rol || "").toLowerCase();
+  const esEmpleado = rolSesion === "empleado";
+  const sucursalesSesionCount = sucursalesSesion.length;
+  const linksVisibles = esEmpleado
+    ? links.filter((link) => ["/pedidos", "/inventario"].includes(link.to))
+    : links;
 
   useEffect(() => {
     function onLogoChange() {
@@ -33,8 +41,8 @@ export function AppLayout() {
 
   useEffect(() => {
     let active = true;
-    const esAdministrador = (session?.rol || "").toLowerCase() === "administrador";
-    const tieneOpciones = (session?.sucursales || []).length > 1;
+    const esAdministrador = rolSesion === "administrador";
+    const tieneOpciones = sucursalesSesionCount > 1;
 
     if (!session || !esAdministrador || tieneOpciones) {
       return () => {
@@ -64,17 +72,15 @@ export function AppLayout() {
     return () => {
       active = false;
     };
-  }, [session, actualizarSucursales]);
+  }, [Boolean(session), rolSesion, sucursalesSesionCount, actualizarSucursales]);
 
-  const sucursalesSesion = session?.sucursales || [];
-  const sucursalActivaId = session?.sucursalIdSucursal || session?.sucursalId || "";
   const isDashboard = location.pathname === "/dashboard" || location.pathname === "/";
   const pageTitle = isDashboard
     ? "Panel Principal"
-    : links.find((link) => location.pathname.startsWith(link.to))?.label || "AV Publicidad";
+    : linksVisibles.find((link) => location.pathname.startsWith(link.to))?.label || "AV Publicidad";
 
   function goBack() {
-    navigate("/dashboard");
+    navigate(esEmpleado ? "/pedidos" : "/dashboard");
   }
 
   function handleBranchChange(sucursal) {
@@ -113,7 +119,7 @@ export function AppLayout() {
         </div>
 
         <nav className="nav-list">
-          {links.map((link) => (
+          {linksVisibles.map((link) => (
             <NavLink key={link.to} to={link.to}>
               <span className="nav-icon">
                 <AppIcon name={link.icon} />
@@ -127,7 +133,7 @@ export function AppLayout() {
       <div className="workspace">
         <header className="topbar">
           <div className="topbar-title">
-            {!isDashboard && (
+            {!isDashboard && !(esEmpleado && location.pathname.startsWith("/pedidos")) && (
               <button className="back-button" type="button" onClick={goBack} aria-label="Volver">
                 <AppIcon name="arrowLeft" size={20} />
               </button>

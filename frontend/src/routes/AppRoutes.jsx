@@ -15,10 +15,16 @@ import { ReportesPage } from "../pages/ReportesPage.jsx";
 
 function ProtectedRoute({ children }) {
   const location = useLocation();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, session } = useAuth();
+  const esEmpleado = (session?.rol || "").toLowerCase() === "empleado";
+  const rutasEmpleadoPermitidas = ["/pedidos", "/inventario", "/configuracion"];
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace state={{ from: location }} />;
+  }
+
+  if (esEmpleado && !rutasEmpleadoPermitidas.includes(location.pathname) && location.pathname !== "/") {
+    return <Navigate to="/pedidos" replace />;
   }
 
   return children;

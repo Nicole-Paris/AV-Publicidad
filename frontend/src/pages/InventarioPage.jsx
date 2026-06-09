@@ -135,6 +135,7 @@ function BuscadorMaterial({ materiales, value, onChange, placeholder = "Escribe 
 
 export function InventarioPage() {
   const { session } = useAuth();
+  const esEmpleado = (session?.rol || "").toLowerCase() === "empleado";
   const [tabActivo, setTabActivo] = useState("materiales");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -555,7 +556,9 @@ export function InventarioPage() {
 
       <div className="inv-tabs">
         <button className={tabActivo === "materiales" ? "inv-tab active" : "inv-tab"} onClick={() => setTabActivo("materiales")} type="button">Materiales</button>
-        <button className={tabActivo === "movimientos" ? "inv-tab active" : "inv-tab"} onClick={() => setTabActivo("movimientos")} type="button">Movimientos</button>
+        {!esEmpleado && (
+          <button className={tabActivo === "movimientos" ? "inv-tab active" : "inv-tab"} onClick={() => setTabActivo("movimientos")} type="button">Movimientos</button>
+        )}
       </div>
 
       {/* Materiales */}
@@ -576,16 +579,18 @@ export function InventarioPage() {
                 </option>
               ))}
             </select>
-            <div className="toolbar-actions">
-              <button
-                className="primary-button"
-                onClick={abrirNuevo}
-                type="button"
-                disabled={loading}
-              >
-                {tabActivo === "materiales" ? "+ Nuevo Material" : "Registrar Movimiento"}
-              </button>
-            </div>
+            {!esEmpleado && (
+              <div className="toolbar-actions">
+                <button
+                  className="primary-button"
+                  onClick={abrirNuevo}
+                  type="button"
+                  disabled={loading}
+                >
+                  {tabActivo === "materiales" ? "+ Nuevo Material" : "Registrar Movimiento"}
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="inv-table-wrap">
@@ -628,11 +633,15 @@ export function InventarioPage() {
                         )}
                       </td>
                       <td>
-                        <div className="table-actions">
-                          <button className="ghost-button" onClick={() => abrirEditarMaterial(m)} type="button">
-                            Editar
-                          </button>
-                        </div>
+                        {!esEmpleado ? (
+                          <div className="table-actions">
+                            <button className="ghost-button" onClick={() => abrirEditarMaterial(m)} type="button">
+                              Editar
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="inv-badge neutral">Solo consulta</span>
+                        )}
                       </td>
                       <td>
                         <button
@@ -753,20 +762,22 @@ export function InventarioPage() {
       {/* Movimientos */}
       {tabActivo === "movimientos" && (
         <>
-          <div className="inv-toolbar">
-            <div />
-            <div />
-            <div className="toolbar-actions">
-              <button
-                className="primary-button"
-                onClick={abrirNuevo}
-                type="button"
-                disabled={loading}
-              >
-                Registrar Movimiento
-              </button>
+          {!esEmpleado && (
+            <div className="inv-toolbar">
+              <div />
+              <div />
+              <div className="toolbar-actions">
+                <button
+                  className="primary-button"
+                  onClick={abrirNuevo}
+                  type="button"
+                  disabled={loading}
+                >
+                  Registrar Movimiento
+                </button>
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="inv-table-wrap">
             <table className="inv-table">
