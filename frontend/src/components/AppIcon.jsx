@@ -6,6 +6,7 @@ import corteIcon from "../assets/icons/corte.webp";
 import eyeIcon from "../assets/icons/eye.svg";
 import eyeOffIcon from "../assets/icons/eye-off.svg";
 import inventarioIcon from "../assets/icons/inventario.webp";
+import imprimirIcon from "../assets/icons/imprimir.webp";
 import logoutIcon from "../assets/icons/logout.svg";
 import pedidosIcon from "../assets/icons/pedidos.webp";
 import reporteIcon from "../assets/icons/reporte.webp";
@@ -24,6 +25,7 @@ const iconFiles = {
   gear: ajustesIcon,
   logout: logoutIcon,
   money: corteIcon,
+  print: imprimirIcon,
   search: searchIcon,
   store: storeIcon,
   user: userIcon,

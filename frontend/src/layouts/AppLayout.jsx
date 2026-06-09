@@ -9,7 +9,7 @@ const links = [
   { to: "/pedidos", label: "Pedidos", icon: "doc" },
   { to: "/clientes", label: "Clientes", icon: "users" },
   { to: "/inventario", label: "Inventario", icon: "box" },
-  { to: "/servicios", label: "Servicios", icon: "chart" },
+  { to: "/servicios", label: "Servicios", icon: "print" },
   { to: "/cortes-caja", label: "Caja y Reportes", icon: "money" },
   { to: "/reportes", label: "Reportes", icon: "chart" },
   { to: "/configuracion", label: "Configuración", icon: "gear" }

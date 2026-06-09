@@ -466,7 +466,7 @@ a {
   align-items: center;
   display: grid;
   gap: 10px;
-  grid-template-columns: 132px 118px 136px 74px 18px;
+  grid-template-columns: 132px 118px 136px 74px 62px 18px;
   justify-content: end;
   margin-right: 0;
 }
@@ -550,6 +550,28 @@ a {
 .pedido-payment-button:focus {
   background: #fb5a35;
   outline: none;
+}
+.pedido-pdf-button {
+  background: #eef2f7;
+  border: 0;
+  border-radius: 20px;
+  color: #1f2937;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 800;
+  min-height: 38px;
+  padding: 0 12px;
+  width: 100%;
+}
+.pedido-pdf-button:hover,
+.pedido-pdf-button:focus {
+  background: #fb5a35;
+  color: #ffffff;
+  outline: none;
+}
+.pedido-pdf-button:disabled {
+  cursor: wait;
+  opacity: 0.7;
 }
 .pedido-num { font-size:18px; font-weight:700; color:#fb5a35; min-width:48px; }
 .pedido-cliente { color:#050816; font-size:15px; font-weight:600; margin:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -1178,13 +1200,18 @@ a {
 .pedido-info-grid strong { font-size:14px; color:#050816; }
 .tab-section-header { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:16px; }
 .service-material-editor {
-  border-top: 1px solid #e5e7eb;
-  margin-top: 18px;
-  padding-top: 18px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  margin-top: 22px;
+  padding: 18px;
+  background: #fbfcfe;
 }
 .service-material-editor .tab-section-header {
   align-items: center;
-  margin-bottom: 12px;
+  border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  margin-bottom: 18px;
+  padding-bottom: 14px;
 }
 .service-material-editor h3 {
   font-size: 20px;
@@ -1192,14 +1219,49 @@ a {
 }
 .service-material-row {
   align-items: end;
+  background: #fff;
+  border: 1px solid #edf1f5;
+  border-radius: 8px;
   display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.8fr);
+  margin-bottom: 14px;
+  padding: 16px;
+}
+.service-material-row .pos-field {
+  margin: 0;
+}
+.service-material-actions {
+  display: flex;
   gap: 12px;
-  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto;
-  margin-bottom: 12px;
+  grid-column: 1 / -1;
+  justify-self: end;
+}
+.service-material-actions .ghost-button,
+.service-material-remove {
+  min-width: 104px;
+  padding: 12px 18px;
+}
+.service-material-add-empty {
+  margin-top: 12px;
+  width: 100%;
 }
 @media (max-width: 900px) {
   .service-material-row {
     grid-template-columns: 1fr;
+  }
+  .service-material-editor .tab-section-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .service-material-actions {
+    flex-direction: column;
+    justify-self: stretch;
+    width: 100%;
+  }
+  .service-material-actions .ghost-button,
+  .service-material-remove {
+    width: 100%;
   }
 }
 .confirm-delivery-modal p {
@@ -1212,6 +1274,19 @@ a {
   display: flex;
   gap: 12px;
   justify-content: flex-end;
+}
+.delete-confirm-modal {
+  max-width: 460px;
+}
+.delete-confirm-modal p {
+  color: #344252;
+  font-size: 16px;
+  line-height: 1.5;
+  margin: 0 0 12px;
+}
+.delete-confirm-warning {
+  color: #b91c1c !important;
+  font-weight: 700;
 }
 
 .pedido-payments-header {
@@ -2383,7 +2458,7 @@ a {
   }
 
   .pedido-header-right {
-    grid-template-columns: 132px minmax(100px, 1fr) 136px 74px 18px;
+    grid-template-columns: 132px minmax(100px, 1fr) 136px 74px 62px 18px;
     justify-content: stretch;
   }
 }
