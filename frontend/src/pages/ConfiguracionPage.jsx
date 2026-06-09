@@ -16,7 +16,8 @@ import { useAuth } from "../auth/AuthContext.jsx";
 
 export function ConfiguracionPage() {
   const { session } = useAuth();
-  const [tab, setTab] = useState("empresa");
+  const esEmpleado = (session?.rol || "").toLowerCase() === "empleado";
+  const [tab, setTab] = useState(esEmpleado ? "mi-cuenta" : "empresa");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [modalError, setModalError] = useState("");
@@ -65,6 +66,14 @@ export function ConfiguracionPage() {
     regimenFiscal: "", direccionFiscal: "",
     telefono: "", correo: "",
     logoUrl: ""
+  });
+  const [formCuenta, setFormCuenta] = useState({
+    nombre: session?.nombre || "",
+    apellidoPaterno: "",
+    apellidoMaterno: "",
+    telefono: "",
+    correo: session?.correo || "",
+    contrasena: ""
   });
 
   function mostrarError(msg) { setModalError(msg); }
@@ -190,6 +199,26 @@ export function ConfiguracionPage() {
   }
 
   useEffect(() => {
+    setTab(esEmpleado ? "mi-cuenta" : "empresa");
+  }, [esEmpleado]);
+
+  useEffect(() => {
+    if (empleados.length > 0 && session?.empleadoId) {
+      const empleadoActual = empleados.find(item => Number(item.idEmpleado) === Number(session.empleadoId));
+      if (empleadoActual) {
+        setFormCuenta({
+          nombre: empleadoActual.nombre || "",
+          apellidoPaterno: empleadoActual.apellidoPaterno || "",
+          apellidoMaterno: empleadoActual.apellidoMaterno || "",
+          telefono: empleadoActual.telefono || "",
+          correo: empleadoActual.correo || "",
+          contrasena: ""
+        });
+      }
+    }
+  }, [empleados, session?.empleadoId]);
+
+  useEffect(() => {
     let active = true;
     async function cargar() {
       setLoading(true);
@@ -230,7 +259,6 @@ export function ConfiguracionPage() {
   async function guardarEmpresa() {
     setSaving(true);
     try {
-      // Guardar solo campos (no logoUrl) que tengan valor no vacío
       const camposConValor = Object.entries(formEmpresa).filter(
         ([nombre, valor]) =>
           nombre !== "logoUrl" &&
@@ -264,7 +292,6 @@ export function ConfiguracionPage() {
         }
       }
 
-      // Refrescar valores desde backend
       const gvsRefreshed = await listarGlobalValues();
       const gvsArr = safe(gvsRefreshed);
       setGlobalValues(gvsArr);
@@ -281,6 +308,51 @@ export function ConfiguracionPage() {
       }));
 
       mostrarSuccess("Datos guardados correctamente.");
+    } catch (err) {
+      mostrarError(err.message || String(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function guardarMiCuenta() {
+    if (!formCuenta.nombre.trim()) {
+      mostrarError("Escribe tu nombre."); return;
+    }
+    if (!formCuenta.apellidoPaterno.trim()) {
+      mostrarError("Escribe tu apellido paterno."); return;
+    }
+    if (!formCuenta.telefono.trim()) {
+      mostrarError("Escribe tu teléfono."); return;
+    }
+    if (!formCuenta.correo.trim()) {
+      mostrarError("Escribe tu correo."); return;
+    }
+
+    setSaving(true);
+    try {
+      const empleadoActual = empleados.find(item => Number(item.idEmpleado) === Number(session?.empleadoId));
+      const payload = {
+        nombre: formCuenta.nombre.trim(),
+        apellidoPaterno: formCuenta.apellidoPaterno.trim(),
+        apellidoMaterno: formCuenta.apellidoMaterno.trim(),
+        telefono: formCuenta.telefono.trim(),
+        correo: formCuenta.correo.trim(),
+        horaEntrada: empleadoActual?.horaEntrada || "09:00:00",
+        horaSalida: empleadoActual?.horaSalida || "18:00:00",
+        rolId: Number(empleadoActual?.rolId || session?.rolId || 0),
+        sucursalIdSucursal: Number(empleadoActual?.sucursalIdSucursal || session?.sucursalIdSucursal || 0),
+        createdBy: empleadoActual?.createdBy || session?.empleadoId,
+        updatedBy: session?.empleadoId
+      };
+
+      if (formCuenta.contrasena.trim()) {
+        payload.contrasena = formCuenta.contrasena.trim();
+      }
+
+      await actualizarEmpleado(session?.empleadoId, payload);
+      setFormCuenta(f => ({ ...f, contrasena: "" }));
+      mostrarSuccess("Tus datos personales se actualizaron correctamente.");
     } catch (err) {
       mostrarError(err.message || String(err));
     } finally {
@@ -539,23 +611,109 @@ export function ConfiguracionPage() {
       {success && <div className="pos-alert success">{success}</div>}
 
       <div className="inv-tabs">
-        <button
-          className={tab === "empresa" ? "inv-tab active" : "inv-tab"}
-          onClick={() => setTab("empresa")}
-          type="button"
-        >
-          Datos de Empresa
-        </button>
-        <button
-          className={tab === "sucursales" ? "inv-tab active" : "inv-tab"}
-          onClick={() => setTab("sucursales")}
-          type="button"
-        >
-          Sucursales
-        </button>
+        {esEmpleado ? (
+          <button
+            className={tab === "mi-cuenta" ? "inv-tab active" : "inv-tab"}
+            onClick={() => setTab("mi-cuenta")}
+            type="button"
+          >
+            Mi cuenta
+          </button>
+        ) : (
+          <>
+            <button
+              className={tab === "empresa" ? "inv-tab active" : "inv-tab"}
+              onClick={() => setTab("empresa")}
+              type="button"
+            >
+              Datos de Empresa
+            </button>
+            <button
+              className={tab === "sucursales" ? "inv-tab active" : "inv-tab"}
+              onClick={() => setTab("sucursales")}
+              type="button"
+            >
+              Sucursales
+            </button>
+          </>
+        )}
       </div>
 
-      {tab === "empresa" && (
+      {esEmpleado && tab === "mi-cuenta" && (
+        <section className="pos-card" style={{ maxWidth: 900, margin: "0 auto" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <div>
+              <h2 style={{ margin: 0 }}>Datos personales</h2>
+              <p style={{ margin: "6px 0 0", color: "#64748b" }}>Actualiza tu información de cuenta sin acceder a la administración.</p>
+            </div>
+          </div>
+
+          <div className="pos-field-row">
+            <label className="pos-field floating">
+              <span>Nombre</span>
+              <input
+                type="text"
+                value={formCuenta.nombre}
+                onChange={(e) => setFormCuenta(f => ({ ...f, nombre: e.target.value }))}
+              />
+            </label>
+            <label className="pos-field floating">
+              <span>Apellido paterno</span>
+              <input
+                type="text"
+                value={formCuenta.apellidoPaterno}
+                onChange={(e) => setFormCuenta(f => ({ ...f, apellidoPaterno: e.target.value }))}
+              />
+            </label>
+          </div>
+
+          <div className="pos-field-row">
+            <label className="pos-field floating">
+              <span>Apellido materno</span>
+              <input
+                type="text"
+                value={formCuenta.apellidoMaterno}
+                onChange={(e) => setFormCuenta(f => ({ ...f, apellidoMaterno: e.target.value }))}
+              />
+            </label>
+            <label className="pos-field floating">
+              <span>Teléfono</span>
+              <input
+                type="text"
+                value={formCuenta.telefono}
+                onChange={(e) => setFormCuenta(f => ({ ...f, telefono: e.target.value }))}
+              />
+            </label>
+          </div>
+
+          <label className="pos-field floating">
+            <span>Correo electrónico</span>
+            <input
+              type="email"
+              value={formCuenta.correo}
+              onChange={(e) => setFormCuenta(f => ({ ...f, correo: e.target.value }))}
+            />
+          </label>
+
+          <label className="pos-field floating">
+            <span>Nueva contraseña (opcional)</span>
+            <input
+              type="password"
+              value={formCuenta.contrasena}
+              onChange={(e) => setFormCuenta(f => ({ ...f, contrasena: e.target.value }))}
+              placeholder="Dejar vacío para no cambiarla"
+            />
+          </label>
+
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 18 }}>
+            <button className="primary-button" type="button" disabled={saving} onClick={guardarMiCuenta}>
+              {saving ? "Guardando..." : "Guardar cambios"}
+            </button>
+          </div>
+        </section>
+      )}
+
+      {!esEmpleado && tab === "empresa" && (
         <div style={{display:"grid", gridTemplateColumns:"1fr 320px", gap:24, alignItems:"start"}}>
           <section className="pos-card">
             <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:24}}>
