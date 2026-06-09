@@ -18,6 +18,13 @@ export function actualizarEmpleado(id, payload) {
   });
 }
 
+export function actualizarCuentaEmpleado(id, payload) {
+  return apiRequest(`/empleados/${id}/cuenta`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
 export function eliminarEmpleado(id, deletedBy) {
   const query = deletedBy ? `?deletedBy=${deletedBy}` : "";
   return apiRequest(`/empleados/${id}${query}`, {

@@ -14,6 +14,7 @@ import {
 import { listarSucursales } from "../api/catalogApi.js";
 import { listarEmpleados } from "../api/empleadoApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
+import { esEmpleado } from "../auth/permissions.js";
 
 const CURRENCY = new Intl.NumberFormat("es-MX", { currency: "MXN", style: "currency" });
 
@@ -135,7 +136,7 @@ function BuscadorMaterial({ materiales, value, onChange, placeholder = "Escribe 
 
 export function InventarioPage() {
   const { session } = useAuth();
-  const esEmpleado = (session?.rol || "").toLowerCase() === "empleado";
+  const soloEmpleado = esEmpleado(session);
   const [tabActivo, setTabActivo] = useState("materiales");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -579,7 +580,7 @@ export function InventarioPage() {
                 </option>
               ))}
             </select>
-            {!esEmpleado && (
+            {!soloEmpleado && (
               <div className="toolbar-actions">
                 <button
                   className="primary-button"
@@ -633,14 +634,14 @@ export function InventarioPage() {
                         )}
                       </td>
                       <td>
-                        {!esEmpleado ? (
+                        {soloEmpleado ? (
+                          <span className="muted-action">Solo consulta</span>
+                        ) : (
                           <div className="table-actions">
                             <button className="ghost-button" onClick={() => abrirEditarMaterial(m)} type="button">
                               Editar
                             </button>
                           </div>
-                        ) : (
-                          <span className="inv-badge neutral">Solo consulta</span>
                         )}
                       </td>
                       <td>
@@ -660,7 +661,7 @@ export function InventarioPage() {
             </table>
           </div>
 
-          {formularioAbierto && (
+          {!soloEmpleado && formularioAbierto && (
             <section className="pos-card" style={{ marginTop: 18 }}>
               <h2>{materialEditando ? "Editar Material" : "Nuevo Material"}</h2>
               <form onSubmit={guardarMaterial}>
@@ -762,10 +763,10 @@ export function InventarioPage() {
       {/* Movimientos */}
       {tabActivo === "movimientos" && (
         <>
-          {!esEmpleado && (
-            <div className="inv-toolbar">
-              <div />
-              <div />
+          <div className="inv-toolbar">
+            <div />
+            <div />
+            {!soloEmpleado && (
               <div className="toolbar-actions">
                 <button
                   className="primary-button"
@@ -776,8 +777,8 @@ export function InventarioPage() {
                   Registrar Movimiento
                 </button>
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           <div className="inv-table-wrap">
             <table className="inv-table">
@@ -815,7 +816,7 @@ export function InventarioPage() {
             </table>
           </div>
 
-          {formularioAbierto && (
+          {!soloEmpleado && formularioAbierto && (
             <section className="pos-card" style={{ marginTop: 18 }}>
               <h2>Registrar Movimiento</h2>
               <form onSubmit={guardarMovimiento}>

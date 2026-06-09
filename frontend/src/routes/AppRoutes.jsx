@@ -12,19 +12,18 @@ import { ServiciosPage } from "../pages/ServiciosPage.jsx";
 import { ClientesPage } from "../pages/ClientesPage.jsx";
 import { ConfiguracionPage } from "../pages/ConfiguracionPage.jsx";
 import { ReportesPage } from "../pages/ReportesPage.jsx";
+import { puedeAccederRuta } from "../auth/permissions.js";
 
 function ProtectedRoute({ children }) {
   const location = useLocation();
   const { isAuthenticated, session } = useAuth();
-  const esEmpleado = (session?.rol || "").toLowerCase() === "empleado";
-  const rutasEmpleadoPermitidas = ["/pedidos", "/inventario", "/configuracion"];
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
-  if (esEmpleado && !rutasEmpleadoPermitidas.includes(location.pathname) && location.pathname !== "/") {
-    return <Navigate to="/pedidos" replace />;
+  if (!puedeAccederRuta(session, location.pathname)) {
+    return <Navigate to="/dashboard" replace />;
   }
 
   return children;

@@ -1,6 +1,7 @@
 package avpublicidad.proyecto.service;
 
 import avpublicidad.proyecto.constants.RolConstants;
+import avpublicidad.proyecto.dto.EmpleadoCuentaRequest;
 import avpublicidad.proyecto.dto.EmpleadoRequest;
 import avpublicidad.proyecto.exception.ResourceNotFoundException;
 import avpublicidad.proyecto.model.Empleado;
@@ -85,6 +86,24 @@ public class EmpleadoService {
         empleado.setSucursalIdSucursal(request.getSucursalIdSucursal());
         empleado.setUpdatedBy(request.getUpdatedBy());
 
+        return empleadoRepository.save(empleado);
+    }
+
+    public Empleado actualizarCuenta(Integer id, EmpleadoCuentaRequest request) {
+        Empleado empleado = obtenerPorId(id);
+
+        if (request.getTelefono() != null && !request.getTelefono().isBlank()) {
+            empleado.setTelefono(request.getTelefono().trim());
+        }
+
+        if (request.getContrasena() != null && !request.getContrasena().isBlank()) {
+            if (!esContrasenaFuerte(request.getContrasena())) {
+                throw new ValidationException("La contrasena debe tener al menos 8 caracteres, una mayuscula, una minuscula y un numero");
+            }
+            empleado.setContrasena(encriptarContrasena(request.getContrasena()));
+        }
+
+        empleado.setUpdatedBy(request.getUpdatedBy());
         return empleadoRepository.save(empleado);
     }
 

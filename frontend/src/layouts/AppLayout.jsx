@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { AppIcon } from "../components/AppIcon.jsx";
 import { listarSucursales } from "../api/configuracionApi.js";
+import { esEmpleado } from "../auth/permissions.js";
 
 const links = [
   { to: "/punto-venta", label: "Punto de Venta", icon: "cart" },
@@ -25,11 +26,10 @@ export function AppLayout() {
   const sucursalesSesion = session?.sucursales || [];
   const sucursalActivaId = session?.sucursalIdSucursal || session?.sucursalId || "";
   const rolSesion = (session?.rol || "").toLowerCase();
-  const esEmpleado = rolSesion === "empleado";
-  const sucursalesSesionCount = sucursalesSesion.length;
-  const linksVisibles = esEmpleado
-    ? links.filter((link) => ["/pedidos", "/inventario"].includes(link.to))
+  const linksVisibles = esEmpleado(session)
+    ? links.filter((link) => ["/pedidos", "/clientes", "/inventario", "/configuracion"].includes(link.to))
     : links;
+  const sucursalesSesionCount = sucursalesSesion.length;
 
   useEffect(() => {
     function onLogoChange() {

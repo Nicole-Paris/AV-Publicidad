@@ -5,6 +5,7 @@ import { listarPagosPorPedido, listarTodosPagos, crearPago } from "../api/pagoAp
 import { listarClientes, listarServicios } from "../api/catalogApi.js";
 import { listarEmpleados } from "../api/empleadoApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
+import { esEmpleado } from "../auth/permissions.js";
 
 const ESTADOS_PEDIDO = ["Borrador", "Pendiente", "En proceso", "Terminado", "Entregado", "Cancelado"];
 const ESTADOS_PAGO = ["Pendiente pago", "Pagado"];
@@ -20,6 +21,7 @@ const SIGUIENTES_ESTADOS = {
 
 export function PedidosPage() {
   const { session } = useAuth();
+  const soloEmpleado = esEmpleado(session);
 
   const [tab, setTab] = useState("pedidos");
   const [pedidos, setPedidos] = useState([]);
@@ -496,19 +498,25 @@ export function PedidosPage() {
                         {estadoPago}
                       </span>
                       <strong className="pedido-total">Resta: {money(pendiente)}</strong>
-                      <select
-                         value={pedido.estado}
-                         disabled={cambiandoEstado === pedido.idPedido}
-                         onClick={e => e.stopPropagation()}
-                         onChange={e => cambiarEstado(pedido, e.target.value)}
-                         className={`pedido-status-select ${claseEstado(pedido.estado)}`}
-                       >
-                         {opcionesEstado(pedido.estado).map(({ estado, disabled }) => (
-                           <option key={estado} disabled={disabled}>
-                             {estado}
-                           </option>
-                         ))}
-                       </select>
+                      {soloEmpleado ? (
+                        <span className={`pedido-status-readonly ${claseEstado(pedido.estado)}`}>
+                          {pedido.estado}
+                        </span>
+                      ) : (
+                        <select
+                           value={pedido.estado}
+                           disabled={cambiandoEstado === pedido.idPedido}
+                           onClick={e => e.stopPropagation()}
+                           onChange={e => cambiarEstado(pedido, e.target.value)}
+                           className={`pedido-status-select ${claseEstado(pedido.estado)}`}
+                         >
+                           {opcionesEstado(pedido.estado).map(({ estado, disabled }) => (
+                             <option key={estado} disabled={disabled}>
+                               {estado}
+                             </option>
+                           ))}
+                         </select>
+                      )}
                        <button
                          className="pedido-payment-button"
                          type="button"
@@ -519,17 +527,19 @@ export function PedidosPage() {
                        >
                          Pago
                        </button>
-                       <button
-                         className="pedido-pdf-button"
-                         disabled={descargandoPdf === pedido.idPedido}
-                         type="button"
-                         onClick={e => {
-                           e.stopPropagation();
-                           exportarPedidoPdf(pedido);
-                         }}
-                       >
-                         {descargandoPdf === pedido.idPedido ? "..." : "PDF"}
-                       </button>
+                       {!soloEmpleado && (
+                         <button
+                           className="pedido-pdf-button"
+                           disabled={descargandoPdf === pedido.idPedido}
+                           type="button"
+                           onClick={e => {
+                             e.stopPropagation();
+                             exportarPedidoPdf(pedido);
+                           }}
+                         >
+                           {descargandoPdf === pedido.idPedido ? "..." : "PDF"}
+                         </button>
+                       )}
                        <span className="pedido-chevron">{expandido ? "▲" : "▼"}</span>
                      </div>
                   </div>

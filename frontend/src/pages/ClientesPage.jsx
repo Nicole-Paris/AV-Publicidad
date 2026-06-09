@@ -4,6 +4,7 @@ import { listarEmpleados } from "../api/empleadoApi.js";
 import { listarTodosPagos } from "../api/pagoApi.js";
 import { listarPedidos } from "../api/pedidoApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
+import { esEmpleado } from "../auth/permissions.js";
 
 function normalizarTexto(value) {
   return (value || "")
@@ -28,6 +29,7 @@ function money(value) {
 
 export function ClientesPage() {
   const { session } = useAuth();
+  const soloEmpleado = esEmpleado(session);
   const [clientes, setClientes] = useState([]);
   const [empleados, setEmpleados] = useState([]);
   const [pedidos, setPedidos] = useState([]);
@@ -353,9 +355,11 @@ export function ClientesPage() {
         </select>
         <div className="toolbar-actions">
           <span className="cash-count">{clientesFiltrados.length} clientes</span>
-          <button className="primary-button" disabled={loading} onClick={abrirNuevoCliente} type="button">
-            + Nuevo Cliente
-          </button>
+          {!soloEmpleado && (
+            <button className="primary-button" disabled={loading} onClick={abrirNuevoCliente} type="button">
+              + Nuevo Cliente
+            </button>
+          )}
         </div>
       </div>
 
@@ -409,14 +413,18 @@ export function ClientesPage() {
                   <td>{cliente.razonSocial || "-"}</td>
                   <td>{cliente.direccion || "-"}</td>
                   <td>
-                    <div className="table-actions">
-                      <button className="ghost-button" onClick={() => abrirEditarCliente(cliente)} type="button">
-                        Editar
-                      </button>
-                      <button className="danger-button" disabled={saving} onClick={() => setClienteAEliminar(cliente)} type="button">
-                        Eliminar
-                      </button>
-                    </div>
+                    {soloEmpleado ? (
+                      <span className="muted-action">Solo consulta</span>
+                    ) : (
+                      <div className="table-actions">
+                        <button className="ghost-button" onClick={() => abrirEditarCliente(cliente)} type="button">
+                          Editar
+                        </button>
+                        <button className="danger-button" disabled={saving} onClick={() => setClienteAEliminar(cliente)} type="button">
+                          Eliminar
+                        </button>
+                      </div>
+                    )}
                   </td>
                   <td>
                     <button

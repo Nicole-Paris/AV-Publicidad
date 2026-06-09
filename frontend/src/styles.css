@@ -485,6 +485,17 @@ a {
   padding: 6px 12px;
   width: 100%;
 }
+.pedido-status-readonly {
+  align-items: center;
+  border-radius: 20px;
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 700;
+  justify-content: center;
+  min-height: 38px;
+  padding: 6px 12px;
+  width: 100%;
+}
 
 .login-field.password-field input {
   padding-right: 58px;
@@ -531,6 +542,27 @@ a {
   color: #216e39;
 }
 .pedido-status-select.cancelled {
+  background: #fff1f0;
+  color: #a8071a;
+}
+.pedido-status-readonly.draft {
+  background: #f4f4f4;
+  color: #64748b;
+}
+.pedido-status-readonly.pending,
+.pedido-status-readonly.finished {
+  background: #fff7ed;
+  color: #c2410c;
+}
+.pedido-status-readonly.process {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+.pedido-status-readonly.delivered {
+  background: #f0fff4;
+  color: #216e39;
+}
+.pedido-status-readonly.cancelled {
   background: #fff1f0;
   color: #a8071a;
 }
@@ -1274,6 +1306,20 @@ a {
   display: flex;
   gap: 12px;
   justify-content: flex-end;
+}
+.muted-action {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
+}
+.account-card {
+  max-width: 980px;
+}
+.account-info-grid {
+  margin: 16px 0 22px;
+}
+.account-edit-grid {
+  margin-top: 10px;
 }
 .delete-confirm-modal {
   max-width: 460px;

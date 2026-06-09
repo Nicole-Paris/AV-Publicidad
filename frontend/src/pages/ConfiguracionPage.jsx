@@ -5,6 +5,7 @@ import {
   actualizarGlobalValue
 } from "../api/configuracionApi.js";
 import {
+  actualizarCuentaEmpleado,
   actualizarEmpleado,
   crearEmpleado,
   eliminarEmpleado,
@@ -13,11 +14,12 @@ import {
   crearRol
 } from "../api/empleadoApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
+import { esEmpleado } from "../auth/permissions.js";
 
 export function ConfiguracionPage() {
   const { session } = useAuth();
-  const esEmpleado = (session?.rol || "").toLowerCase() === "empleado";
-  const [tab, setTab] = useState(esEmpleado ? "mi-cuenta" : "empresa");
+  const soloEmpleado = esEmpleado(session);
+  const [tab, setTab] = useState("empresa");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [modalError, setModalError] = useState("");
@@ -255,6 +257,34 @@ export function ConfiguracionPage() {
     cargar();
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    if (!soloEmpleado || empleados.length === 0) {
+      return;
+    }
+
+    const empleadoActual = empleados.find(
+      (empleado) => Number(empleado.idEmpleado) === Number(session?.empleadoId)
+    );
+
+    if (!empleadoActual) {
+      return;
+    }
+
+    setEmpleadoEditando(empleadoActual);
+    setFormEmpleado({
+      nombre: empleadoActual.nombre || "",
+      apellidoPaterno: empleadoActual.apellidoPaterno || "",
+      apellidoMaterno: empleadoActual.apellidoMaterno || "",
+      telefono: empleadoActual.telefono || "",
+      correo: empleadoActual.correo || "",
+      contrasena: "",
+      horaEntrada: empleadoActual.horaEntrada?.slice(0, 5) || "09:00",
+      horaSalida: empleadoActual.horaSalida?.slice(0, 5) || "18:00",
+      rolId: empleadoActual.rolId ? String(empleadoActual.rolId) : "",
+      sucursalIdSucursal: empleadoActual.sucursalIdSucursal ? String(empleadoActual.sucursalIdSucursal) : ""
+    });
+  }, [soloEmpleado, empleados, session?.empleadoId]);
 
   async function guardarEmpresa() {
     setSaving(true);
@@ -500,6 +530,42 @@ export function ConfiguracionPage() {
     }
   }
 
+  async function guardarMiCuenta() {
+    if (!empleadoEditando) {
+      mostrarError("No se pudo encontrar la informacion del empleado.");
+      return;
+    }
+    if (!formEmpleado.telefono.trim()) {
+      mostrarError("Escribe tu telefono.");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const payload = {
+        telefono: formEmpleado.telefono.trim()
+      };
+
+      if (formEmpleado.contrasena.trim()) {
+        payload.contrasena = formEmpleado.contrasena.trim();
+      }
+
+      const actualizado = await actualizarCuentaEmpleado(empleadoEditando.idEmpleado, payload);
+      setEmpleados(prev => prev.map(empleado =>
+        Number(empleado.idEmpleado) === Number(empleadoEditando.idEmpleado)
+          ? { ...empleado, ...actualizado }
+          : empleado
+      ));
+      setEmpleadoEditando(actualizado);
+      setFormEmpleado(f => ({ ...f, contrasena: "" }));
+      mostrarSuccess("Informacion actualizada correctamente.");
+    } catch (err) {
+      mostrarError(err.message || String(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function borrarEmpleado(empleado) {
     const confirmar = window.confirm(`¿Eliminar a ${nombreEmpleado(empleado)}?`);
     if (!confirmar) return;
@@ -590,6 +656,71 @@ export function ConfiguracionPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  if (soloEmpleado) {
+    return (
+      <section className="page-stack">
+        {success && <div className="pos-alert success">{success}</div>}
+
+        <section className="pos-card account-card">
+          <h2>Mi informacion</h2>
+          {loading ? (
+            <p className="report-empty">Cargando informacion...</p>
+          ) : (
+            <>
+              <div className="audit-grid account-info-grid">
+                <div><span>Nombre</span><strong>{nombreEmpleado(empleadoEditando)}</strong></div>
+                <div><span>Correo</span><strong>{empleadoEditando?.correo || "-"}</strong></div>
+                <div><span>Rol</span><strong>{nombreRol(empleadoEditando?.rolId)}</strong></div>
+                <div><span>Sucursal</span><strong>{nombreSucursal(empleadoEditando?.sucursalIdSucursal)}</strong></div>
+                <div><span>Hora entrada</span><strong>{empleadoEditando?.horaEntrada?.slice(0, 5) || "-"}</strong></div>
+                <div><span>Hora salida</span><strong>{empleadoEditando?.horaSalida?.slice(0, 5) || "-"}</strong></div>
+              </div>
+
+              <div className="modal-grid account-edit-grid">
+                <label className="pos-field floating">
+                  <span>Telefono</span>
+                  <input
+                    maxLength={10}
+                    value={formEmpleado.telefono}
+                    onChange={e => setFormEmpleado(f => ({...f, telefono: e.target.value.replace(/\D/g, "").slice(0, 10)}))}
+                    type="text"
+                  />
+                </label>
+                <label className="pos-field floating">
+                  <span>Nueva contraseña</span>
+                  <input
+                    value={formEmpleado.contrasena}
+                    onChange={e => setFormEmpleado(f => ({...f, contrasena: e.target.value}))}
+                    type="password"
+                    placeholder="Dejar vacio para no cambiar"
+                  />
+                </label>
+              </div>
+
+              <div className="modal-actions">
+                <button className="primary-button" disabled={saving || loading} onClick={guardarMiCuenta} type="button">
+                  {saving ? "Guardando..." : "Guardar cambios"}
+                </button>
+              </div>
+            </>
+          )}
+        </section>
+
+        {modalError && (
+          <div className="modal-error-overlay" onClick={() => setModalError("")}>
+            <div className="modal-error-card" onClick={(event) => event.stopPropagation()}>
+              <p className="modal-error-icon">!</p>
+              <p className="modal-error-msg">{modalError}</p>
+              <button className="primary-button" onClick={() => setModalError("")} type="button">
+                Entendido
+              </button>
+            </div>
+          </div>
+        )}
+      </section>
+    );
   }
 
   return (
