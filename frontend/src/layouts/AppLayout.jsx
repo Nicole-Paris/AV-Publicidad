@@ -22,6 +22,10 @@ export function AppLayout() {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [branchMenuOpen, setBranchMenuOpen] = useState(false);
   const [logoUrl, setLogoUrl] = useState(localStorage.getItem("av_logo_url") || "");
+  const sucursalesSesion = session?.sucursales || [];
+  const sucursalActivaId = session?.sucursalIdSucursal || session?.sucursalId || "";
+  const rolSesion = (session?.rol || "").toLowerCase();
+  const sucursalesSesionCount = sucursalesSesion.length;
 
   useEffect(() => {
     function onLogoChange() {
@@ -33,8 +37,8 @@ export function AppLayout() {
 
   useEffect(() => {
     let active = true;
-    const esAdministrador = (session?.rol || "").toLowerCase() === "administrador";
-    const tieneOpciones = (session?.sucursales || []).length > 1;
+    const esAdministrador = rolSesion === "administrador";
+    const tieneOpciones = sucursalesSesionCount > 1;
 
     if (!session || !esAdministrador || tieneOpciones) {
       return () => {
@@ -64,10 +68,8 @@ export function AppLayout() {
     return () => {
       active = false;
     };
-  }, [session, actualizarSucursales]);
+  }, [Boolean(session), rolSesion, sucursalesSesionCount, actualizarSucursales]);
 
-  const sucursalesSesion = session?.sucursales || [];
-  const sucursalActivaId = session?.sucursalIdSucursal || session?.sucursalId || "";
   const isDashboard = location.pathname === "/dashboard" || location.pathname === "/";
   const pageTitle = isDashboard
     ? "Panel Principal"
