@@ -244,6 +244,32 @@ export function ClientesPage() {
       return;
     }
 
+    // Validar formato de teléfono: exactamente 10 dígitos numéricos
+    if (!/^\d{10}$/.test(formCliente.telefono.trim())) {
+      setModalError("El teléfono debe tener exactamente 10 dígitos numéricos.");
+      return;
+    }
+
+    // Validar RFC (12 para empresas o 13 para persona física), solo letras y números
+    const rfc = formCliente.rfc.trim();
+    if (rfc && !/^[A-Z0-9]{12,13}$/.test(rfc.toUpperCase())) {
+      setModalError("El RFC debe tener 12 caracteres (empresa) o 13 (persona física), solo letras y números.");
+      return;
+    }
+
+    // Validar código postal: exactamente 5 dígitos
+    const cp = formCliente.codigoPostal.trim();
+    if (cp && !/^\d{5}$/.test(cp)) {
+      setModalError("El código postal debe tener exactamente 5 dígitos numéricos.");
+      return;
+    }
+
+    // Validación: si tiene crédito, el límite debe ser mayor a 0
+    if (formCliente.tieneCredito && (!formCliente.limiteCredito || Number(formCliente.limiteCredito) <= 0)) {
+      setModalError("El límite de crédito debe ser mayor a $0.00.");
+      return;
+    }
+
     setSaving(true);
     try {
       const esEdicion = Boolean(clienteEditando);
@@ -497,7 +523,11 @@ export function ClientesPage() {
           setModalCliente(false);
           resetClienteForm();
         }}>
-          <div className="modal-card customer-modal" onClick={(event) => event.stopPropagation()}>
+          <div
+            className="modal-card customer-modal"
+            onClick={(event) => event.stopPropagation()}
+            style={{ maxHeight: "90vh", overflowY: "auto" }}
+          >
             <h2>{clienteEditando ? "Editar Cliente" : "Nuevo Cliente"}</h2>
             <div className="modal-grid">
               <label className="pos-field floating">
@@ -514,7 +544,16 @@ export function ClientesPage() {
               </label>
               <label className="pos-field floating">
                 <span>Telefono</span>
-                <input name="telefono" onChange={updateClienteForm} type="text" value={formCliente.telefono} />
+                <input
+                  name="telefono"
+                  onChange={e => setFormCliente(f => ({
+                    ...f,
+                    telefono: e.target.value.replace(/\D/g, "").slice(0, 10)
+                  }))}
+                  type="text"
+                  value={formCliente.telefono}
+                  maxLength={10}
+                />
               </label>
               <label className="pos-field floating">
                 <span>Tipo</span>
@@ -525,7 +564,16 @@ export function ClientesPage() {
               </label>
               <label className="pos-field floating">
                 <span>RFC</span>
-                <input name="rfc" onChange={updateClienteForm} type="text" value={formCliente.rfc} />
+                <input
+                  name="rfc"
+                  onChange={e => setFormCliente(f => ({
+                    ...f,
+                    rfc: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 13)
+                  }))}
+                  type="text"
+                  value={formCliente.rfc}
+                  maxLength={13}
+                />
               </label>
               <label className="pos-field floating">
                 <span>Codigo postal</span>

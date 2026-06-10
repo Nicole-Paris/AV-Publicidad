@@ -14,6 +14,8 @@ import {
   listarRoles,
   crearRol
 } from "../api/empleadoApi.js";
+import { listarCortesPorEmpleado } from "../api/corteCajaApi.js";
+import { listarPedidos } from "../api/pedidoApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { esAdministrador, esEmpleado } from "../auth/permissions.js";
 
@@ -291,6 +293,24 @@ export function ConfiguracionPage() {
   }, [soloEmpleado, empleados, session?.empleadoId]);
 
   async function guardarEmpresa() {
+    const telefono = (formEmpresa.telefono || "").trim();
+    if (telefono && !/^\d{10}$/.test(telefono)) {
+      mostrarError("El teléfono de la empresa debe tener exactamente 10 dígitos numéricos.");
+      return;
+    }
+
+    const rfc = (formEmpresa.rfc || "").trim();
+    if (rfc && !/^[A-Z0-9]{12}$/.test(rfc)) {
+      mostrarError("El RFC debe tener exactamente 12 caracteres alfanuméricos.");
+      return;
+    }
+
+    const correo = (formEmpresa.correo || "").trim();
+    if (correo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) {
+      mostrarError("El correo electrónico no tiene un formato válido.");
+      return;
+    }
+
     setSaving(true);
     try {
       const camposConValor = Object.entries(formEmpresa).filter(
@@ -488,6 +508,9 @@ export function ConfiguracionPage() {
     if (!formEmpleado.telefono.trim()) {
       mostrarError("Escribe el telefono."); return;
     }
+    if (!/^\d{10}$/.test(formEmpleado.telefono.trim())) {
+      mostrarError("El teléfono del empleado debe tener exactamente 10 dígitos numéricos."); return;
+    }
     if (!formEmpleado.correo.trim()) {
       mostrarError("Escribe el correo."); return;
     }
@@ -598,6 +621,25 @@ export function ConfiguracionPage() {
 
     setSaving(true);
     try {
+      // Verificar caja abierta
+      const cortes = await listarCortesPorEmpleado(empleado.idEmpleado);
+      if ((cortes || []).some(c => !c.horaFin)) {
+        mostrarError("No se puede eliminar el empleado: tiene un corte de caja abierto.");
+        return;
+      }
+
+      // Verificar pedidos pendientes
+      const pedidos = await listarPedidos();
+      const pendientes = (pedidos || []).filter(p =>
+        Number(p.createdBy) === Number(empleado.idEmpleado) &&
+        p.estado !== "Pagado" &&
+        p.estado !== "Cancelado"
+      );
+      if (pendientes.length > 0) {
+        mostrarError("No se puede eliminar el empleado: tiene pedidos activos sin finalizar.");
+        return;
+      }
+
       await eliminarEmpleado(empleado.idEmpleado, session.empleadoId);
       const emps = await listarEmpleados();
       setEmpleados(safe(emps));

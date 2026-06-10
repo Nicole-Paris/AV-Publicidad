@@ -8,12 +8,14 @@ import {
 import { listarMateriales } from "../api/inventarioApi.js";
 import { listarEmpleados } from "../api/empleadoApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
+import { esEmpleado } from "../auth/permissions.js";
 import { Pagination } from "../components/Pagination.jsx";
 
 const PAGE_SIZE = 30;
 
 export function ServiciosPage() {
   const { session } = useAuth();
+  const soloEmpleado = esEmpleado(session);
   const [tab, setTab] = useState("servicios");
   const [servicios, setServicios] = useState([]);
   const [categorias, setCategorias] = useState([]);
@@ -258,6 +260,24 @@ export function ServiciosPage() {
     if (!formServicio.categoriaServicioId) {
       mostrarError("Selecciona una categoría."); return;
     }
+
+    // Validación: bloquear nombres duplicados en la misma sucursal
+    const nombreNuevo = formServicio.nombre.trim().toLowerCase();
+    const duplicado = servicios
+      .filter(s => {
+        if (servicioEditando) {
+          return Number(s.idServicio || s.id) !== Number(servicioEditando.idServicio || servicioEditando.id);
+        }
+        return true;
+      })
+      .filter(registroDeSucursal)
+      .find(s => (s.nombre || "").trim().toLowerCase() === nombreNuevo);
+
+    if (duplicado) {
+      mostrarError(`Ya existe un servicio con el nombre "${formServicio.nombre.trim()}" en esta sucursal.`);
+      return;
+    }
+
     setSaving(true);
     try {
       const esEdicion = Boolean(servicioEditando);
@@ -449,17 +469,19 @@ export function ServiciosPage() {
         />
         <div />
         <div className="toolbar-actions">
-          <button
-            className="primary-button"
-            onClick={() => tab === "servicios"
-              ? abrirNuevoServicio()
-              : setModalMaterial(true)
-            }
-            type="button"
-            disabled={loading}
-          >
-            {tab === "servicios" ? "+ Nuevo Servicio" : "+ Asignar Material"}
-          </button>
+          {!soloEmpleado && (
+            <button
+              className="primary-button"
+              onClick={() => tab === "servicios"
+                ? abrirNuevoServicio()
+                : setModalMaterial(true)
+              }
+              type="button"
+              disabled={loading}
+            >
+              {tab === "servicios" ? "+ Nuevo Servicio" : "+ Asignar Material"}
+            </button>
+          )}
         </div>
       </div>
 
@@ -473,9 +495,9 @@ export function ServiciosPage() {
               <th>Materiales</th>
               <th>Categoría</th>
               <th>Estado</th>
-              <th>Acciones</th>
-              <th></th>
-              <th></th> {/* acción: agregar material */}
+              {!soloEmpleado && <th>Acciones</th>}
+              {!soloEmpleado && <th></th>}
+              {!soloEmpleado && <th></th>} {/* acción: agregar material */}
             </tr>
           </thead>
           <tbody>
@@ -500,55 +522,71 @@ export function ServiciosPage() {
                   </td>
                   <td>{nombreCategoria(s.categoriaServicioId)}</td>
                   <td>
-                    <select
-                      value={s.estado || "Activo"}
-                      onChange={e => cambiarEstadoServicio(s, e.target.value)}
-                      disabled={loading || updatingEstadoId === Number(s.idServicio || s.id)}
-                      style={{
-                        padding: "6px 10px",
-                        borderRadius: 8,
-                        border: "1px solid #e6e6e6",
+                    {soloEmpleado ? (
+                      <span style={{
+                        padding: "6px 10px", borderRadius: 8, fontWeight: 700,
                         background: s.estado === "Activo" ? "#f1fdf6" : "#fff6f5",
-                        color: s.estado === "Activo" ? "#059669" : "#be123c",
-                        fontWeight: 700
-                      }}
-                    >
-                      <option value="Activo">Activo</option>
-                      <option value="Inactivo">Inactivo</option>
-                    </select>
+                        color: s.estado === "Activo" ? "#059669" : "#be123c"
+                      }}>
+                        {s.estado || "Activo"}
+                      </span>
+                    ) : (
+                      <select
+                        value={s.estado || "Activo"}
+                        onChange={e => cambiarEstadoServicio(s, e.target.value)}
+                        disabled={loading || updatingEstadoId === Number(s.idServicio || s.id)}
+                        style={{
+                          padding: "6px 10px",
+                          borderRadius: 8,
+                          border: "1px solid #e6e6e6",
+                          background: s.estado === "Activo" ? "#f1fdf6" : "#fff6f5",
+                          color: s.estado === "Activo" ? "#059669" : "#be123c",
+                          fontWeight: 700
+                        }}
+                      >
+                        <option value="Activo">Activo</option>
+                        <option value="Inactivo">Inactivo</option>
+                      </select>
+                    )}
                   </td>
-                  <td>
-                    <div className="table-actions">
-                      <button className="ghost-button" onClick={() => abrirEditarServicio(s)} type="button">
-                        Editar
+                  { !soloEmpleado && (
+                    <td>
+                      <div className="table-actions">
+                        <button className="ghost-button" onClick={() => abrirEditarServicio(s)} type="button">
+                          Editar
+                        </button>
+                      </div>
+                    </td>
+                  )}
+                  { !soloEmpleado && (
+                    <td>
+                      <button
+                        aria-label="Ver auditoria del servicio"
+                        className="audit-toggle"
+                        onClick={() => abrirAuditoria(`Servicio ${s.idServicio || s.id}`, s, [["Cambio de estado", s.estado || "-"]])}
+                        type="button"
+                      >
+                        ▼
                       </button>
-                    </div>
-                  </td>
-                  <td>
-                    <button
-                      aria-label="Ver auditoria del servicio"
-                      className="audit-toggle"
-                      onClick={() => abrirAuditoria(`Servicio ${s.idServicio || s.id}`, s, [["Cambio de estado", s.estado || "-"]])}
-                      type="button"
-                    >
-                      ▼
-                    </button>
-                  </td>
-                  <td>
-                    <button
-                      className="primary-button"
-                      type="button"
-                      onClick={() => {
-                        setFormMaterial({ servicioId: String(s.idServicio || s.id), materialId: "", cantidadUsada: "" });
-                        setModalMaterial(true);
-                      }}
-                      disabled={loading}
-                      style={{ padding: "8px 12px", fontSize: 14 }}
-                    >
-                      + Agregar material
-                    </button>
-                  </td>
-                </tr>
+                    </td>
+                  )}
+                  { !soloEmpleado && (
+                    <td>
+                      <button
+                        className="primary-button"
+                        type="button"
+                        onClick={() => {
+                          setFormMaterial({ servicioId: String(s.idServicio || s.id), materialId: "", cantidadUsada: "" });
+                          setModalMaterial(true);
+                        }}
+                        disabled={loading}
+                        style={{ padding: "8px 12px", fontSize: 14 }}
+                      >
+                        + Agregar material
+                      </button>
+                    </td>
+                  )}
+                 </tr>
               );
             })}
             {serviciosFiltrados.length === 0 && !loading && (
@@ -891,7 +929,7 @@ export function ServiciosPage() {
         <div className="modal-error-overlay" onClick={() => setModalError("")}>
           <div className="modal-error-card" onClick={e => e.stopPropagation()}>
             <h2>Error</h2>
-            <p style={{ color: "#dc2626" }}>{modalError}</p>
+            <p className="modal-error-msg">{modalError}</p>
             <button
               className="primary-button"
               type="button"

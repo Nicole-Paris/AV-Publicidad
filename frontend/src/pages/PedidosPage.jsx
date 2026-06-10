@@ -265,14 +265,15 @@ export function PedidosPage() {
     const q = (buscarPedido || "").trim().toLowerCase();
     return pedidos.filter(p => {
       const matchSucursal = !sucursalActivaId || Number(p.sucursalId) === Number(sucursalActivaId);
+      const matchEmpleado = !soloEmpleado || Number(p.createdBy) === Number(session?.empleadoId);
       const cliente = clienteDePedido(p);
       const nombre = cliente ? nombreCliente(cliente).toLowerCase() : "";
       const matchBuscar = !q || nombre.includes(q) || String(p.idPedido).includes(q);
       const matchEstado = !filtroEstado || p.estado === filtroEstado;
       const matchEstadoPago = !filtroEstadoPago || estadoPagoPedido(p) === filtroEstadoPago;
-      return matchSucursal && matchBuscar && matchEstado && matchEstadoPago;
+      return matchSucursal && matchEmpleado && matchBuscar && matchEstado && matchEstadoPago;
     });
-  }, [pedidos, buscarPedido, filtroEstado, filtroEstadoPago, clientes, todosLosPagos, sucursalActivaId]);
+  }, [pedidos, buscarPedido, filtroEstado, filtroEstadoPago, clientes, todosLosPagos, sucursalActivaId, soloEmpleado, session?.empleadoId]);
 
   const pedidosPaginados = useMemo(() => {
     const inicio = (paginaPedidos - 1) * PAGE_SIZE;
@@ -413,7 +414,7 @@ export function PedidosPage() {
     const pedidoObj = pedidoCancelar;
     const motivo = motivoCancelacion.trim();
     setPedidoCancelar(null);
-    setMotivoCancelacion("");
+    setMotivoCancentelacion("");
     await guardarEstadoPedido({ ...pedidoObj, motivoCancelacion: motivo }, "Cancelado");
   }
 
@@ -452,10 +453,11 @@ export function PedidosPage() {
     return (todosLosPagos || []).filter(p => {
       const pedidoPago = pedidos.find(pedido => Number(pedido.idPedido) === Number(p.pedidoId));
       const matchSucursal = !sucursalActivaId || Number(pedidoPago?.sucursalId) === Number(sucursalActivaId);
+      const matchEmpleado = !soloEmpleado || Number(pedidoPago?.createdBy) === Number(session?.empleadoId);
       const matchBuscar = !q || String(p.pedidoId).includes(q) || (p.formaPago || "").toLowerCase().includes(q) || (p.conceptoPago || "").toLowerCase().includes(q);
-      return matchSucursal && matchBuscar;
+      return matchSucursal && matchEmpleado && matchBuscar;
     });
-  }, [todosLosPagos, buscarPago, pedidos, sucursalActivaId]);
+  }, [todosLosPagos, buscarPago, pedidos, sucursalActivaId, soloEmpleado, session?.empleadoId]);
 
   const gruposPagos = useMemo(() => {
     const grupos = {};
@@ -531,25 +533,19 @@ export function PedidosPage() {
                         {estadoPago}
                       </span>
                       <strong className="pedido-total">Resta: {money(pendiente)}</strong>
-                      {soloEmpleado ? (
-                        <span className={`pedido-status-readonly ${claseEstado(pedido.estado)}`}>
-                          {pedido.estado}
-                        </span>
-                      ) : (
-                        <select
-                           value={pedido.estado}
-                           disabled={cambiandoEstado === pedido.idPedido}
-                           onClick={e => e.stopPropagation()}
-                           onChange={e => cambiarEstado(pedido, e.target.value)}
-                           className={`pedido-status-select ${claseEstado(pedido.estado)}`}
-                         >
-                           {opcionesEstado(pedido.estado).map(({ estado, disabled }) => (
-                             <option key={estado} disabled={disabled}>
-                               {estado}
-                             </option>
-                           ))}
-                         </select>
-                      )}
+                      <select
+                        value={pedido.estado}
+                        disabled={cambiandoEstado === pedido.idPedido}
+                        onClick={e => e.stopPropagation()}
+                        onChange={e => cambiarEstado(pedido, e.target.value)}
+                        className={`pedido-status-select ${claseEstado(pedido.estado)}`}
+                      >
+                        {opcionesEstado(pedido.estado).map(({ estado, disabled }) => (
+                          <option key={estado} disabled={disabled}>
+                            {estado}
+                          </option>
+                        ))}
+                      </select>
                        <button
                          className="pedido-payment-button"
                          type="button"

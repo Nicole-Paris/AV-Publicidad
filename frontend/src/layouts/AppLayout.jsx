@@ -22,12 +22,24 @@ export function AppLayout() {
   const location = useLocation();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [branchMenuOpen, setBranchMenuOpen] = useState(false);
+  const [logoutError, setLogoutError] = useState("");
   const [logoUrl, setLogoUrl] = useState(localStorage.getItem("av_logo_url") || "");
   const sucursalesSesion = session?.sucursales || [];
   const sucursalActivaId = session?.sucursalIdSucursal || session?.sucursalId || "";
   const rolSesion = (session?.rol || "").toLowerCase();
   const linksVisibles = esEmpleado(session)
-    ? links.filter((link) => ["/pedidos", "/clientes", "/inventario", "/configuracion"].includes(link.to))
+    ? links.filter((link) =>
+        [
+          "/punto-venta",
+          "/pedidos",
+          "/clientes",
+          "/inventario",
+          "/servicios",
+          "/cortes-caja",
+          "/reportes",
+          "/configuracion"
+        ].includes(link.to)
+      )
     : links;
   const sucursalesSesionCount = sucursalesSesion.length;
 
@@ -89,9 +101,13 @@ export function AppLayout() {
     navigate("/configuracion");
   }
 
-  function handleLogout() {
+  async function handleLogout() {
     setUserMenuOpen(false);
-    logout();
+    try {
+      await logout();
+    } catch (err) {
+      setLogoutError(err.message || "No puedes cerrar sesión en este momento.");
+    }
   }
 
   return (
@@ -229,6 +245,18 @@ export function AppLayout() {
           <Outlet />
         </main>
       </div>
+      {/* Modal de error de logout */}
+      {logoutError && (
+        <div className="modal-error-overlay" onClick={() => setLogoutError("")}>
+          <div className="modal-error-card" onClick={e => e.stopPropagation()}>
+            <p className="modal-error-icon">⚠</p>
+            <p className="modal-error-msg">{logoutError}</p>
+            <button className="primary-button" onClick={() => setLogoutError("")}>
+              Entendido
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

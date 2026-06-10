@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useMemo, useState } from "react";
 import { clearSession, getStoredSession, storeSession } from "../api/apiClient.js";
 import { loginRequest, logoutRequest } from "../api/authApi.js";
+import { listarCortesPorEmpleado } from "../api/corteCajaApi.js";
 
 const AuthContext = createContext(null);
 
@@ -39,13 +40,31 @@ export function AuthProvider({ children }) {
   }, []);
 
   const logout = useCallback(async function logout() {
+    // comprobar cortes abiertos solo para usuarios NO administradores
+    try {
+      const rol = ((session?.rol || "") + "").toLowerCase();
+      if (session?.empleadoId && rol !== "administrador") {
+        const cortes = await listarCortesPorEmpleado(session.empleadoId);
+        console.log("Cortes encontrados:", cortes);
+        console.log("Rol actual:", rol);
+        const abierta = (cortes || []).find(c => !c.horaFin);
+        if (abierta) {
+          // evita cerrar sesión para empleados con corte abierto
+          throw new Error("No puedes cerrar sesión: tienes una caja asignada sin cerrar.");
+        }
+      }
+    } catch (err) {
+      // propaga el error para que la UI lo muestre
+      throw err;
+    }
+
     try {
       await logoutRequest();
     } finally {
       clearSession();
       setSession(null);
     }
-  }, []);
+  }, [session]);
 
   const cambiarSucursal = useCallback(function cambiarSucursal(sucursalId) {
     setSession((current) => {
@@ -109,7 +128,7 @@ export function AuthProvider({ children }) {
       cambiarSucursal,
       actualizarSucursales
     }),
-    [session, loading]
+    [session, loading, login, logout, cambiarSucursal, actualizarSucursales]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

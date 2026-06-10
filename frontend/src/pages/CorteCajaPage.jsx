@@ -4,6 +4,7 @@ import { listarEmpleados } from "../api/empleadoApi.js";
 import { listarTodosPagos } from "../api/pagoApi.js";
 import { listarPedidos } from "../api/pedidoApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
+import { esAdministrador, esEmpleado } from "../auth/permissions.js";
 
 function money(value) {
   return new Intl.NumberFormat("es-MX", {
@@ -36,6 +37,10 @@ function toAmount(value) {
 
 export function CorteCajaPage() {
   const { session } = useAuth();
+  const [assignedEmpleadoId, setAssignedEmpleadoId] = useState("");
+  const isAdmin = esAdministrador(session);
+  const isEmpleado = esEmpleado(session);
+
   const [cortes, setCortes] = useState([]);
   const [empleados, setEmpleados] = useState([]);
   const [pagos, setPagos] = useState([]);
@@ -67,6 +72,8 @@ export function CorteCajaPage() {
         setCortes((cortesData || []).slice().sort((a, b) => Number(b.idCorteCaja) - Number(a.idCorteCaja)));
         setPagos(pagosData || []);
         setEmpleados(empleadosData || []);
+        // no asignar por defecto al admin; dejar vacío para que el admin elija
+        setAssignedEmpleadoId("");
         setPedidos(pedidosData || []);
       } catch (err) {
         if (active) setError(err.message);
@@ -95,28 +102,39 @@ export function CorteCajaPage() {
     );
   }, [fechaFiltro, pagos, pedidos, session, sucursalActivaId]);
 
+  // para empleados buscar su corte abierto (sin filtrar por fecha)
   const corteAbierto = useMemo(() => {
+    if (isEmpleado) {
+      return cortes.find(c => Number(c.empleadoId) === Number(session?.empleadoId) && !c.horaFin);
+    }
     return cortes.find(
       (corte) =>
         corte.fecha === fechaFiltro &&
         Number(corte.empleadoId) === Number(session?.empleadoId) &&
         !corte.horaFin
     );
-  }, [cortes, fechaFiltro, session]);
+  }, [cortes, fechaFiltro, session, isEmpleado]);
 
   const cortesDelDia = useMemo(() => {
+    if (isEmpleado) {
+      return cortes.filter(c =>
+        Number(c.empleadoId) === Number(session?.empleadoId) &&
+        c.fecha === fechaFiltro
+      );
+    }
     return cortes.filter((corte) => {
       const empleado = empleados.find((item) => Number(item.idEmpleado) === Number(corte.empleadoId));
       return corte.fecha === fechaFiltro &&
         (!sucursalActivaId || Number(empleado?.sucursalIdSucursal) === Number(sucursalActivaId));
     });
-  }, [cortes, empleados, fechaFiltro, sucursalActivaId]);
+  }, [cortes, empleados, fechaFiltro, sucursalActivaId, isEmpleado, session]);
 
   const totalPagos = pagosDelDia.reduce((total, pago) => total + toAmount(pago.monto), 0);
   const saldoBase = corteAbierto ? toAmount(corteAbierto.saldoInicial) : toAmount(saldoInicial);
   const saldoEsperado = saldoBase + totalPagos;
   const diferencia = saldoReal === "" ? 0 : toAmount(saldoReal) - saldoEsperado;
-  const canAbrir = !loading && !saving && !corteAbierto && toAmount(saldoInicial) >= 0 && saldoInicial !== "";
+  // Solo el admin puede abrir cajas. Si es admin requiere asignar empleado destino.
+  const canAbrir = isAdmin && !loading && !saving && !corteAbierto && toAmount(saldoInicial) >= 0 && saldoInicial !== "" && Boolean(assignedEmpleadoId);
   const canCerrar = !loading && !saving && corteAbierto && saldoReal !== "";
 
   async function recargar() {
@@ -150,12 +168,13 @@ export function CorteCajaPage() {
     setSuccess("");
 
     try {
+      // crear el corte; el admin debe elegir a qué empleado se le asigna
       await crearCorteCaja({
         fecha: fechaFiltro,
         horaInicio: nowTime(),
         saldoInicial: toAmount(saldoInicial).toFixed(2),
         descripcion,
-        empleadoId: session.empleadoId,
+        empleadoId: assignedEmpleadoId || session.empleadoId,
         createdBy: session.empleadoId
       });
       setSaldoInicial("");
@@ -175,11 +194,22 @@ export function CorteCajaPage() {
     setError("");
     setSuccess("");
 
+    // Solo el empleado asignado puede cerrar su corte
+    if (String(corteAbierto.empleadoId) !== String(session?.empleadoId)) {
+      setError("Solo el empleado asignado puede cerrar este corte de caja.");
+      setSaving(false);
+      return;
+    }
+
     try {
+      const horaFinActual = nowTime();
+      const horaInicio = corteAbierto.horaInicio || "00:00:00";
+      const horaFin = horaFinActual < horaInicio ? "23:59:59" : horaFinActual;
+
       await actualizarCorteCaja(corteAbierto.idCorteCaja, {
         fecha: corteAbierto.fecha,
-        horaInicio: corteAbierto.horaInicio,
-        horaFin: nowTime(),
+        horaInicio,
+        horaFin,
         saldoInicial: Number(corteAbierto.saldoInicial).toFixed(2),
         saldoEsperado: saldoEsperado.toFixed(2),
         saldoReal: toAmount(saldoReal).toFixed(2),
@@ -204,105 +234,210 @@ export function CorteCajaPage() {
     <section className="page-stack cash-page">
       <div className="page-header">
         <div>
-          <p className="page-subtitle">Control de apertura, pagos del dia y cierre de caja.</p>
         </div>
       </div>
+
+      {/* selector de empleado ahora dentro del formulario de Abrir caja (ver más abajo) */}
 
       {(error || success) && (
         <div className={error ? "pos-alert error" : "pos-alert success"}>{error || success}</div>
       )}
 
-      <div className="cash-toolbar">
-        <label>
-          <span>Fecha de corte</span>
-          <input type="date" value={fechaFiltro} onChange={(event) => setFechaFiltro(event.target.value)} />
-        </label>
-        <div className={corteAbierto ? "cash-status open" : "cash-status closed"}>
-          {corteAbierto ? "Caja abierta" : "Sin caja abierta"}
-        </div>
-      </div>
-
-      <div className="cash-grid">
-        <section className="cash-panel">
-          <h2>{corteAbierto ? "Cerrar caja" : "Abrir caja"}</h2>
-
-          {corteAbierto ? (
-            <div className="cash-current">
-              <div>
-                <span>Inicio</span>
-                <strong>{formatTime(corteAbierto.horaInicio)}</strong>
-              </div>
-              <div>
-                <span>Saldo inicial</span>
-                <strong>{money(corteAbierto.saldoInicial)}</strong>
-              </div>
-            </div>
-          ) : (
-            <label className="pos-field floating money-field">
-              <span>Saldo inicial</span>
-              <input
-                inputMode="decimal"
-                type="text"
-                value={saldoInicial}
-                onChange={(event) => setSaldoInicial(normalizeMoney(event.target.value))}
-              />
-            </label>
-          )}
-
-          {corteAbierto && (
-            <label className="pos-field floating money-field">
-              <span>Saldo real</span>
-              <input
-                inputMode="decimal"
-                type="text"
-                value={saldoReal}
-                onChange={(event) => setSaldoReal(normalizeMoney(event.target.value))}
-              />
-            </label>
-          )}
-
-          <label className="pos-field floating">
-            <span>Descripcion</span>
+      {isAdmin && (
+        <div className="cash-toolbar">
+          <label>
+            <span>Fecha de corte</span>
             <input
-              maxLength={100}
-              type="text"
-              value={descripcion}
-              onChange={(event) => setDescripcion(event.target.value)}
+              type="date"
+              value={fechaFiltro}
+              onChange={(event) => setFechaFiltro(event.target.value)}
             />
           </label>
-
-          <button
-            className="primary-button cash-action"
-            disabled={corteAbierto ? !canCerrar : !canAbrir}
-            onClick={corteAbierto ? cerrarCorte : abrirCorte}
-            type="button"
-          >
-            {saving ? "Guardando..." : corteAbierto ? "Cerrar caja" : "Abrir caja"}
-          </button>
-        </section>
-
-        <section className="cash-panel">
-          <h2>Resumen del dia</h2>
-          <div className="cash-summary">
-            <div>
-              <span>Saldo inicial</span>
-              <strong>{money(saldoBase)}</strong>
-            </div>
-            <div>
-              <span>Pagos recibidos</span>
-              <strong>{money(totalPagos)}</strong>
-            </div>
-            <div>
-              <span>Saldo esperado</span>
-              <strong>{money(saldoEsperado)}</strong>
-            </div>
-            <div className={diferencia < 0 ? "negative" : "positive"}>
-              <span>Diferencia</span>
-              <strong>{money(diferencia)}</strong>
-            </div>
+          <div className={corteAbierto ? "cash-status open" : "cash-status closed"}>
+            {corteAbierto ? "Caja abierta" : "Sin caja abierta"}
           </div>
-        </section>
-      </div>
+        </div>
+      )}
+
+      {isAdmin ? (
+        <div className="cash-grid">
+          {/* Panel Abrir/Cerrar caja (admin) */}
+          <section className="cash-panel">
+            <h2>{corteAbierto ? "Cerrar caja" : "Abrir caja"}</h2>
+
+            {corteAbierto ? (
+              <div className="cash-current">
+                <div>
+                  <span>Inicio</span>
+                  <strong>{formatTime(corteAbierto.horaInicio)}</strong>
+                </div>
+                <div>
+                  <span>Saldo inicial</span>
+                  <strong>{money(corteAbierto.saldoInicial)}</strong>
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* Select de empleado dentro del formulario de Abrir caja */}
+                <label className="pos-field floating">
+                  <span>Asignar a empleado</span>
+                  <select
+                    value={assignedEmpleadoId}
+                    onChange={e => setAssignedEmpleadoId(e.target.value)}
+                  >
+                    <option value="">Selecciona un empleado</option>
+                    {empleados.map(emp => (
+                      <option key={emp.idEmpleado} value={emp.idEmpleado}>
+                        {[emp.nombre, emp.apellidoPaterno, emp.apellidoMaterno].filter(Boolean).join(" ")}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="pos-field floating money-field">
+                  <span>Saldo inicial</span>
+                  <input
+                    inputMode="decimal"
+                    type="text"
+                    value={saldoInicial}
+                    onChange={(event) => setSaldoInicial(normalizeMoney(event.target.value))}
+                  />
+                </label>
+              </>
+            )}
+
+            {corteAbierto && (
+              <label className="pos-field floating money-field">
+                <span>Saldo real</span>
+                <input
+                  inputMode="decimal"
+                  type="text"
+                  value={saldoReal}
+                  onChange={(event) => setSaldoReal(normalizeMoney(event.target.value))}
+                />
+              </label>
+            )}
+
+            <label className="pos-field floating">
+              <span>Descripcion</span>
+              <input
+                maxLength={100}
+                type="text"
+                value={descripcion}
+                onChange={(event) => setDescripcion(event.target.value)}
+              />
+            </label>
+
+            <button
+              className="primary-button cash-action"
+              disabled={corteAbierto ? !canCerrar : !canAbrir}
+              onClick={corteAbierto ? cerrarCorte : abrirCorte}
+              type="button"
+            >
+              {saving ? "Guardando..." : corteAbierto ? "Cerrar caja" : "Abrir caja"}
+            </button>
+          </section>
+
+          {/* Resumen del dia (solo admin) */}
+          <section className="cash-panel">
+            <h2>Resumen del dia</h2>
+            <div className="cash-summary">
+              <div>
+                <span>Saldo inicial</span>
+                <strong>{money(saldoBase)}</strong>
+              </div>
+              <div>
+                <span>Pagos recibidos</span>
+                <strong>{money(totalPagos)}</strong>
+              </div>
+              <div>
+                <span>Saldo esperado</span>
+                <strong>{money(saldoEsperado)}</strong>
+              </div>
+              <div className={diferencia < 0 ? "negative" : "positive"}>
+                <span>Diferencia</span>
+                <strong>{money(diferencia)}</strong>
+              </div>
+            </div>
+          </section>
+        </div>
+      ) : (
+        /* Empleado: Mi caja + Resumen (lado a lado) */
+        <div className="cash-grid">
+          <section className="cash-panel">
+            <h2>Mi caja</h2>
+            {corteAbierto ? (
+              <>
+                <div className="cash-current">
+                  <div>
+                    <span>Inicio</span>
+                    <strong>{formatTime(corteAbierto.horaInicio)}</strong>
+                  </div>
+                  <div>
+                    <span>Saldo inicial</span>
+                    <strong>{money(corteAbierto.saldoInicial)}</strong>
+                  </div>
+                </div>
+
+                <label className="pos-field floating money-field">
+                  <span>Saldo real</span>
+                  <input
+                    inputMode="decimal"
+                    type="text"
+                    value={saldoReal}
+                    onChange={(event) => setSaldoReal(normalizeMoney(event.target.value))}
+                  />
+                </label>
+
+                <label className="pos-field floating">
+                  <span>Descripcion</span>
+                  <input
+                    maxLength={100}
+                    type="text"
+                    value={descripcion}
+                    onChange={(event) => setDescripcion(event.target.value)}
+                  />
+                </label>
+
+                <button
+                  className="primary-button cash-action"
+                  disabled={!canCerrar}
+                  onClick={cerrarCorte}
+                  type="button"
+                >
+                  {saving ? "Guardando..." : "Cerrar caja"}
+                </button>
+              </>
+            ) : (
+              <div style={{ color: "#6b7280" }}>No tienes una caja asignada actualmente.</div>
+            )}
+          </section>
+
+          {corteAbierto && (
+            <section className="cash-panel">
+              <h2>Resumen del dia</h2>
+              <div className="cash-summary">
+                <div>
+                  <span>Saldo inicial</span>
+                  <strong>{money(corteAbierto.saldoInicial)}</strong>
+                </div>
+                <div>
+                  <span>Pagos recibidos</span>
+                  <strong>{money(totalPagos)}</strong>
+                </div>
+                <div>
+                  <span>Saldo esperado</span>
+                  <strong>{money(saldoEsperado)}</strong>
+                </div>
+                <div className={diferencia < 0 ? "negative" : "positive"}>
+                  <span>Diferencia</span>
+                  <strong>{money(diferencia)}</strong>
+                </div>
+              </div>
+            </section>
+          )}
+        </div>
+      )}
 
       <section className="cash-panel">
         <div className="tab-section-header">

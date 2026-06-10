@@ -876,16 +876,16 @@ export function InventarioPage() {
               <h2>Registrar Movimiento</h2>
               <form onSubmit={guardarMovimiento}>
                 <label className="pos-field floating">
-                  <span>Nombre del Material</span>
-                  <BuscadorMaterial materiales={materialesActivos} value={formulario.nombreMaterial} onChange={(v) => setFormulario((f) => ({ ...f, nombreMaterial: v }))} />
-                </label>
-
-                <label className="pos-field floating">
                   <span>Sucursal</span>
                   <select value={formulario.sucursalId} onChange={(e) => setFormulario((f) => ({ ...f, sucursalId: e.target.value }))}>
                     <option value="">Selecciona</option>
                     {sucursales.map((s) => <option key={s.idSucursal} value={s.idSucursal}>{s.nombre}</option>)}
                   </select>
+                </label>
+
+                <label className="pos-field floating">
+                  <span>Nombre del Material</span>
+                  <BuscadorMaterial materiales={materialesActivos} value={formulario.nombreMaterial} onChange={(v) => setFormulario((f) => ({ ...f, nombreMaterial: v }))} />
                 </label>
 
                 <div className="pos-field-row">
