@@ -1,6 +1,7 @@
 ﻿import { useEffect, useState } from "react";
 import {
   listarSucursales, crearSucursal, actualizarSucursal,
+  eliminarSucursal,
   listarGlobalValues, crearGlobalValue,
   actualizarGlobalValue
 } from "../api/configuracionApi.js";
@@ -14,11 +15,12 @@ import {
   crearRol
 } from "../api/empleadoApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
-import { esEmpleado } from "../auth/permissions.js";
+import { esAdministrador, esEmpleado } from "../auth/permissions.js";
 
 export function ConfiguracionPage() {
   const { session } = useAuth();
   const soloEmpleado = esEmpleado(session);
+  const puedeAdministrarSucursales = esAdministrador(session);
   const [tab, setTab] = useState("empresa");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -32,6 +34,7 @@ export function ConfiguracionPage() {
   const [modalEmpleado, setModalEmpleado] = useState(false);
   const [modalRol, setModalRol] = useState(false);
   const [sucursalEditando, setSucursalEditando] = useState(null);
+  const [sucursalAEliminar, setSucursalAEliminar] = useState(null);
   const [empleadoEditando, setEmpleadoEditando] = useState(null);
   const [empleadoExpandido, setEmpleadoExpandido] = useState(null);
   const [sucursalSeleccionada, setSucursalSeleccionada] = useState(null);
@@ -69,6 +72,7 @@ export function ConfiguracionPage() {
     telefono: "", correo: "",
     logoUrl: ""
   });
+  const [logoArchivoNombre, setLogoArchivoNombre] = useState("");
   const [formCuenta, setFormCuenta] = useState({
     nombre: session?.nombre || "",
     apellidoPaterno: "",
@@ -201,8 +205,8 @@ export function ConfiguracionPage() {
   }
 
   useEffect(() => {
-    setTab(esEmpleado ? "mi-cuenta" : "empresa");
-  }, [esEmpleado]);
+    setTab(soloEmpleado ? "mi-cuenta" : "empresa");
+  }, [soloEmpleado]);
 
   useEffect(() => {
     if (empleados.length > 0 && session?.empleadoId) {
@@ -439,6 +443,28 @@ export function ConfiguracionPage() {
     }
   }
 
+  async function confirmarEliminarSucursal() {
+    if (!sucursalAEliminar) return;
+
+    setSaving(true);
+    try {
+      const sucursalId = sucursalAEliminar.idSucursal || sucursalAEliminar.id;
+      await eliminarSucursal(sucursalId, session?.empleadoId);
+      const sucs = await listarSucursales();
+      setSucursales(safe(sucs));
+      setSucursalAEliminar(null);
+      if (Number(sucursalSeleccionada?.idSucursal || sucursalSeleccionada?.id) === Number(sucursalId)) {
+        setSucursalSeleccionada(null);
+      }
+      mostrarSuccess("Sucursal eliminada correctamente. Las ventas pasadas se conservan.");
+    } catch (err) {
+      setSucursalAEliminar(null);
+      mostrarError(err.message || String(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function asignarEmpleadoASucursal(empleado) {
     if (!sucursalSeleccionada) return;
     const sucursalId = String(sucursalSeleccionada.idSucursal || sucursalSeleccionada.id);
@@ -658,6 +684,33 @@ export function ConfiguracionPage() {
     }
   }
 
+  function cargarLogoDesdeArchivo(event) {
+    const archivo = event.target.files?.[0];
+    if (!archivo) return;
+
+    const formatosPermitidos = ["image/jpeg", "image/jpg", "image/png"];
+    if (!formatosPermitidos.includes(archivo.type)) {
+      mostrarError("El logo debe ser un archivo JPG, JPEG o PNG.");
+      event.target.value = "";
+      return;
+    }
+
+    if (archivo.size > 2 * 1024 * 1024) {
+      mostrarError("El logo no debe pesar más de 2MB.");
+      event.target.value = "";
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setFormEmpresa(f => ({ ...f, logoUrl: reader.result || "" }));
+      setLogoArchivoNombre(archivo.name);
+      mostrarSuccess("Logo cargado. Presiona Guardar Logo para conservarlo.");
+    };
+    reader.onerror = () => mostrarError("No se pudo leer el archivo del logo.");
+    reader.readAsDataURL(archivo);
+  }
+
   if (soloEmpleado) {
     return (
       <section className="page-stack">
@@ -742,7 +795,7 @@ export function ConfiguracionPage() {
       {success && <div className="pos-alert success">{success}</div>}
 
       <div className="inv-tabs">
-        {esEmpleado ? (
+        {soloEmpleado ? (
           <button
             className={tab === "mi-cuenta" ? "inv-tab active" : "inv-tab"}
             onClick={() => setTab("mi-cuenta")}
@@ -770,7 +823,7 @@ export function ConfiguracionPage() {
         )}
       </div>
 
-      {esEmpleado && tab === "mi-cuenta" && (
+      {soloEmpleado && tab === "mi-cuenta" && (
         <section className="pos-card" style={{ maxWidth: 900, margin: "0 auto" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
             <div>
@@ -844,7 +897,7 @@ export function ConfiguracionPage() {
         </section>
       )}
 
-      {!esEmpleado && tab === "empresa" && (
+      {!soloEmpleado && tab === "empresa" && (
         <div style={{display:"grid", gridTemplateColumns:"1fr 320px", gap:24, alignItems:"start"}}>
           <section className="pos-card">
             <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:24}}>
@@ -979,6 +1032,23 @@ export function ConfiguracionPage() {
               />
             </label>
 
+            <div className="logo-upload-control">
+              <span className="logo-upload-title">Subir logo JPG o PNG</span>
+              <div className="logo-upload-row">
+                <label className="logo-upload-button">
+                  Elegir archivo
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/jpg,image/png"
+                    onChange={cargarLogoDesdeArchivo}
+                  />
+                </label>
+                <span className="logo-upload-name">
+                  {logoArchivoNombre || "JPG/PNG, max. 2MB"}
+                </span>
+              </div>
+            </div>
+
             <button
               className="primary-button"
               type="button"
@@ -1001,7 +1071,7 @@ export function ConfiguracionPage() {
         </div>
       )}
 
-      {tab === "sucursales" && (
+      {!soloEmpleado && tab === "sucursales" && (
         <section className="settings-column">
           <div className="tab-section-header">
             <h2>Sucursales</h2>
@@ -1035,6 +1105,17 @@ export function ConfiguracionPage() {
                     >
                       Editar
                     </span>
+                    {puedeAdministrarSucursales && (
+                      <span
+                        className="danger-button branch-delete-action"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setSucursalAEliminar(s);
+                        }}
+                      >
+                        Eliminar
+                      </span>
+                    )}
                   </div>
                 </button>
               );
@@ -1142,6 +1223,38 @@ export function ConfiguracionPage() {
             <div className="modal-actions" style={{marginTop:20}}>
               <button className="ghost-button" onClick={() => setSucursalSeleccionada(null)} type="button">
                 Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {sucursalAEliminar && (
+        <div className="modal-overlay" onClick={() => setSucursalAEliminar(null)}>
+          <div className="modal-card delete-confirm-modal" onClick={e => e.stopPropagation()}>
+            <h2>Eliminar sucursal</h2>
+            <p>
+              ¿Seguro que quieres eliminar la sucursal <strong>{sucursalAEliminar.nombre}</strong>?
+            </p>
+            <p>
+              La sucursal se eliminará del sistema pero las ventas y registros pasados no se borrarán.
+            </p>
+            <div className="modal-actions">
+              <button
+                className="ghost-button"
+                disabled={saving}
+                onClick={() => setSucursalAEliminar(null)}
+                type="button"
+              >
+                Cancelar
+              </button>
+              <button
+                className="danger-button"
+                disabled={saving}
+                onClick={confirmarEliminarSucursal}
+                type="button"
+              >
+                {saving ? "Eliminando..." : "Confirmar eliminacion"}
               </button>
             </div>
           </div>

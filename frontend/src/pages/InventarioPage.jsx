@@ -557,7 +557,7 @@ export function InventarioPage() {
 
       <div className="inv-tabs">
         <button className={tabActivo === "materiales" ? "inv-tab active" : "inv-tab"} onClick={() => setTabActivo("materiales")} type="button">Materiales</button>
-        {!esEmpleado && (
+        {!soloEmpleado && (
           <button className={tabActivo === "movimientos" ? "inv-tab active" : "inv-tab"} onClick={() => setTabActivo("movimientos")} type="button">Movimientos</button>
         )}
       </div>
@@ -583,7 +583,7 @@ export function InventarioPage() {
             {!soloEmpleado && (
               <div className="toolbar-actions">
                 <button
-                  className="primary-button"
+                  className="primary-button compact-action-button"
                   onClick={abrirNuevo}
                   type="button"
                   disabled={loading}
@@ -662,7 +662,8 @@ export function InventarioPage() {
           </div>
 
           {!soloEmpleado && formularioAbierto && (
-            <section className="pos-card" style={{ marginTop: 18 }}>
+            <div className="modal-overlay" onClick={cancelarFormulario}>
+              <div className="modal-card customer-modal" onClick={(event) => event.stopPropagation()}>
               <h2>{materialEditando ? "Editar Material" : "Nuevo Material"}</h2>
               <form onSubmit={guardarMaterial}>
                 <label className="pos-field floating">
@@ -755,7 +756,8 @@ export function InventarioPage() {
                   <button className="ghost-button" type="button" onClick={cancelarFormulario}>Cancelar</button>
                 </div>
               </form>
-            </section>
+              </div>
+            </div>
           )}
         </>
       )}
@@ -817,7 +819,8 @@ export function InventarioPage() {
           </div>
 
           {!soloEmpleado && formularioAbierto && (
-            <section className="pos-card" style={{ marginTop: 18 }}>
+            <div className="modal-overlay" onClick={cancelarFormulario}>
+              <div className="modal-card customer-modal" onClick={(event) => event.stopPropagation()}>
               <h2>Registrar Movimiento</h2>
               <form onSubmit={guardarMovimiento}>
                 <label className="pos-field floating">
@@ -874,7 +877,8 @@ export function InventarioPage() {
                   <button className="ghost-button" type="button" onClick={cancelarFormulario}>Cancelar</button>
                 </div>
               </form>
-            </section>
+              </div>
+            </div>
           )}
         </>
       )}

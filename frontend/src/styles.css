@@ -782,6 +782,19 @@ a {
   padding: 7px 12px;
 }
 
+.branch-delete-action {
+  cursor: pointer;
+  font-size: 13px;
+  min-height: 32px;
+  padding: 7px 12px;
+}
+
+.compact-action-button {
+  font-size: 14px;
+  min-height: 38px;
+  padding: 8px 14px;
+}
+
 .existing-employee-picker {
   border: 1px solid #e5e7eb;
   box-shadow: none;
@@ -1333,6 +1346,52 @@ a {
 .delete-confirm-warning {
   color: #b91c1c !important;
   font-weight: 700;
+}
+
+.logo-upload-control {
+  border: 1px solid #d1d5db;
+  border-radius: 7px;
+  margin-top: 14px;
+  padding: 12px;
+  text-align: left;
+}
+
+.logo-upload-title {
+  color: #4b5563;
+  display: block;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.logo-upload-row {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+}
+
+.logo-upload-button {
+  background: #eef3fa;
+  border-radius: 8px;
+  color: #344252;
+  cursor: pointer;
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 12px;
+}
+
+.logo-upload-button input {
+  display: none;
+}
+
+.logo-upload-name {
+  color: #64748b;
+  font-size: 12px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pedido-payments-header {
