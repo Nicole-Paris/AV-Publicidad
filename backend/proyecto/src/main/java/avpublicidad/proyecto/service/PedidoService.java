@@ -4,12 +4,20 @@ import avpublicidad.proyecto.constants.PedidoConstants;
 import avpublicidad.proyecto.dto.PedidoRequest;
 import avpublicidad.proyecto.exception.ResourceNotFoundException;
 import avpublicidad.proyecto.model.Cliente;
+import avpublicidad.proyecto.model.DetallePedido;
+import avpublicidad.proyecto.model.Inventario;
+import avpublicidad.proyecto.model.MovimientoInventario;
+import avpublicidad.proyecto.model.Pago;
 import avpublicidad.proyecto.model.Pedido;
+import avpublicidad.proyecto.model.ServicioMaterial;
 import avpublicidad.proyecto.repository.ClienteRepository;
 import avpublicidad.proyecto.repository.DetallePedidoRepository;
 import avpublicidad.proyecto.repository.EmpleadoRepository;
+import avpublicidad.proyecto.repository.InventarioRepository;
+import avpublicidad.proyecto.repository.MovimientoInventarioRepository;
 import avpublicidad.proyecto.repository.PagoRepository;
 import avpublicidad.proyecto.repository.PedidoRepository;
+import avpublicidad.proyecto.repository.ServicioMaterialRepository;
 import avpublicidad.proyecto.repository.SucursalRepository;
 import jakarta.validation.ValidationException;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +40,9 @@ public class PedidoService {
     private final SucursalRepository sucursalRepository;
     private final PagoRepository pagoRepository;
     private final DetallePedidoRepository detallePedidoRepository;
+    private final ServicioMaterialRepository servicioMaterialRepository;
+    private final InventarioRepository inventarioRepository;
+    private final MovimientoInventarioRepository movimientoInventarioRepository;
 
     public List<Pedido> listar() {
         return pedidoRepository.findByDeletedAtIsNull().stream()
@@ -78,6 +89,7 @@ public class PedidoService {
         return agregarEstadoPago(pedidoGuardado);
     }
 
+    @Transactional
     public Pedido actualizar(Integer id, PedidoRequest request) {
         Pedido pedido = obtenerPorId(id);
         validarRelaciones(request);
@@ -90,6 +102,15 @@ public class PedidoService {
         validarFlujoEstado(pedido.getEstado(), estadoNuevo);
         validarPedidoEditable(pedido, request);
         validarRequisitosEstado(pedido, request, estadoNuevo);
+
+        boolean cancelandoPedido = PedidoConstants.ESTADO_CANCELADO.equals(estadoNuevo)
+                && !PedidoConstants.ESTADO_CANCELADO.equals(pedido.getEstado());
+
+        if (cancelandoPedido) {
+            restaurarMaterialesPedido(pedido, request);
+            eliminarPagosPedido(pedido.getIdPedido(), obtenerUsuarioRegistro(request, pedido));
+            revertirCreditoCliente(pedido);
+        }
 
         pedido.setFechaPedido(request.getFechaPedido());
         pedido.setFechaEntrega(request.getFechaEntrega());
@@ -116,6 +137,101 @@ public class PedidoService {
         }
         pedido.setDeletedAt(LocalDateTime.now());
         pedidoRepository.save(pedido);
+    }
+
+    private void restaurarMaterialesPedido(Pedido pedido, PedidoRequest request) {
+        Integer sucursalPedido = request.getSucursalId() != null ? request.getSucursalId() : pedido.getSucursalId();
+        List<DetallePedido> detalles = detallePedidoRepository.findByPedidoIdAndDeletedAtIsNull(pedido.getIdPedido());
+        if (detalles.isEmpty() || sucursalPedido == null) {
+            return;
+        }
+
+        List<ServicioMaterial> materialesDelServicio = servicioMaterialRepository.findByDeletedAtIsNull();
+
+        for (DetallePedido detalle : detalles) {
+            if (detalle.getServicioId() == null || detalle.getCantidad() == null || detalle.getCantidad().compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+
+            for (ServicioMaterial asignacion : materialesDelServicio) {
+                if (!detalle.getServicioId().equals(asignacion.getServicioId())) {
+                    continue;
+                }
+
+                BigDecimal cantidadRestaurada = asignacion.getCantidadUsada() == null
+                        ? BigDecimal.ZERO
+                        : asignacion.getCantidadUsada().multiply(detalle.getCantidad());
+
+                if (cantidadRestaurada.compareTo(BigDecimal.ZERO) <= 0) {
+                    continue;
+                }
+
+                inventarioRepository.findByMaterialIdAndSucursalIdAndDeletedAtIsNull(asignacion.getMaterialId(), sucursalPedido)
+                        .ifPresent(inventario -> {
+                            inventario.setStockActual(inventario.getStockActual().add(cantidadRestaurada));
+                            inventarioRepository.save(inventario);
+
+                            movimientoInventarioRepository.save(MovimientoInventario.builder()
+                                    .cantidad(cantidadRestaurada)
+                                    .fecha(LocalDateTime.now())
+                                    .tipo("Entrada")
+                                    .motivo("Cancelación de pedido #" + pedido.getIdPedido())
+                                    .inventarioId(inventario.getIdInventario())
+                                    .createdBy(obtenerUsuarioRegistro(request, pedido))
+                                    .build());
+                        });
+            }
+        }
+    }
+
+    private void eliminarPagosPedido(Integer pedidoId, Integer usuarioRegistro) {
+        List<Pago> pagos = pagoRepository.findByPedidoIdAndDeletedAtIsNull(pedidoId);
+        if (pagos.isEmpty()) {
+            return;
+        }
+
+        LocalDateTime ahora = LocalDateTime.now();
+        for (Pago pago : pagos) {
+            pago.setDeletedAt(ahora);
+            pago.setDeletedBy(usuarioRegistro);
+            pago.setUpdatedBy(usuarioRegistro);
+            pagoRepository.save(pago);
+        }
+    }
+
+    private void revertirCreditoCliente(Pedido pedido) {
+        if (!PedidoConstants.FORMA_PAGO_CREDITO.equals(pedido.getFormaPago())
+                || !PedidoConstants.TIPO_PEDIDO.equals(pedido.getTipoPedido())
+                || pedido.getClienteId() == null) {
+            return;
+        }
+
+        Cliente cliente = clienteRepository.findById(pedido.getClienteId())
+                .filter(clienteEncontrado -> clienteEncontrado.getDeletedAt() == null)
+                .orElse(null);
+
+        if (cliente == null || pedido.getTotal() == null) {
+            return;
+        }
+
+        BigDecimal creditoActual = cliente.getCreditoActual() == null ? BigDecimal.ZERO : cliente.getCreditoActual();
+        BigDecimal creditoRevertido = creditoActual.subtract(pedido.getTotal());
+        if (creditoRevertido.compareTo(BigDecimal.ZERO) < 0) {
+            creditoRevertido = BigDecimal.ZERO;
+        }
+
+        cliente.setCreditoActual(creditoRevertido);
+        clienteRepository.save(cliente);
+    }
+
+    private Integer obtenerUsuarioRegistro(PedidoRequest request, Pedido pedido) {
+        if (request.getUpdatedBy() != null) {
+            return request.getUpdatedBy();
+        }
+        if (request.getCreatedBy() != null) {
+            return request.getCreatedBy();
+        }
+        return pedido.getUpdatedBy() != null ? pedido.getUpdatedBy() : pedido.getCreatedBy();
     }
 
     private void validarRelaciones(PedidoRequest request) {

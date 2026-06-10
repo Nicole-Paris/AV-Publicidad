@@ -8,6 +8,9 @@ import {
 import { listarMateriales } from "../api/inventarioApi.js";
 import { listarEmpleados } from "../api/empleadoApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
+import { Pagination } from "../components/Pagination.jsx";
+
+const PAGE_SIZE = 8;
 
 export function ServiciosPage() {
   const { session } = useAuth();
@@ -22,6 +25,7 @@ export function ServiciosPage() {
   const [modalError, setModalError] = useState("");
   const [success, setSuccess] = useState("");
   const [buscar, setBuscar] = useState("");
+  const [paginaServicios, setPaginaServicios] = useState(1);
 
   const [modalServicio, setModalServicio] = useState(false);
   const [servicioEditando, setServicioEditando] = useState(null);
@@ -229,6 +233,15 @@ export function ServiciosPage() {
         nombreCategoria(s.categoriaServicioId).toLowerCase().includes(q)
       );
   }, [servicios, buscar, categorias, empleados, sucursalActivaId]);
+
+  const serviciosPaginados = useMemo(() => {
+    const inicio = (paginaServicios - 1) * PAGE_SIZE;
+    return serviciosFiltrados.slice(inicio, inicio + PAGE_SIZE);
+  }, [serviciosFiltrados, paginaServicios]);
+
+  useEffect(() => {
+    setPaginaServicios(1);
+  }, [buscar, sucursalActivaId]);
 
   const serviciosDisponibles = useMemo(() => {
     return servicios.filter((servicio) => registroDeSucursal(servicio) && (servicio.estado || "Activo") === "Activo");
@@ -466,7 +479,7 @@ export function ServiciosPage() {
             </tr>
           </thead>
           <tbody>
-            {serviciosFiltrados.map((s, i) => {
+            {serviciosPaginados.map((s, i) => {
               const mats = (serviciosMateriales || [])
                 .filter(sm => Number(sm.servicioId) === Number(s.idServicio || s.id));
               return (
@@ -552,6 +565,14 @@ export function ServiciosPage() {
           </tbody>
         </table>
       </div>
+
+      <Pagination
+        page={paginaServicios}
+        pageSize={PAGE_SIZE}
+        total={serviciosFiltrados.length}
+        onPageChange={setPaginaServicios}
+        disabled={loading}
+      />
 
       {modalServicio && (
         <div className="modal-overlay" onClick={() => {

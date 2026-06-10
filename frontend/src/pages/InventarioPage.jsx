@@ -15,8 +15,10 @@ import { listarSucursales } from "../api/catalogApi.js";
 import { listarEmpleados } from "../api/empleadoApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { esEmpleado } from "../auth/permissions.js";
+import { Pagination } from "../components/Pagination.jsx";
 
 const CURRENCY = new Intl.NumberFormat("es-MX", { currency: "MXN", style: "currency" });
+const PAGE_SIZE = 8;
 
 function money(value) {
   return CURRENCY.format(value || 0);
@@ -157,6 +159,8 @@ export function InventarioPage() {
 
   const [buscar, setBuscar] = useState("");
   const [categoriaFiltro, setCategoriaFiltro] = useState("");
+  const [paginaMateriales, setPaginaMateriales] = useState(1);
+  const [paginaMovimientos, setPaginaMovimientos] = useState(1);
   const sucursalActivaId = session?.sucursalIdSucursal || session?.sucursalId;
 
   const [nuevaCat, setNuevaCat] = useState({ visible: false, nombre: "", descripcion: "" });
@@ -256,6 +260,24 @@ export function InventarioPage() {
       return !sucursalActivaId || Number(inventario?.sucursalId) === Number(sucursalActivaId);
     });
   }, [movimientos, inventarios, sucursalActivaId]);
+
+  const materialesPaginados = useMemo(() => {
+    const inicio = (paginaMateriales - 1) * PAGE_SIZE;
+    return materialesFiltrados.slice(inicio, inicio + PAGE_SIZE);
+  }, [materialesFiltrados, paginaMateriales]);
+
+  const movimientosPaginados = useMemo(() => {
+    const inicio = (paginaMovimientos - 1) * PAGE_SIZE;
+    return movimientosFiltrados.slice(inicio, inicio + PAGE_SIZE);
+  }, [movimientosFiltrados, paginaMovimientos]);
+
+  useEffect(() => {
+    setPaginaMateriales(1);
+  }, [buscar, categoriaFiltro, sucursalActivaId]);
+
+  useEffect(() => {
+    setPaginaMovimientos(1);
+  }, [sucursalActivaId]);
 
   // helpers para buscar inventario por material (primera coincidencia)
   function inventarioParaMaterial(materialId) {
@@ -610,7 +632,7 @@ export function InventarioPage() {
                 </tr>
               </thead>
               <tbody>
-                {materialesFiltrados.map((m) => {
+                {materialesPaginados.map((m) => {
                   const inv = inventarioParaMaterial(m.idMaterial);
                   const stockActual = inv ? Number(inv.stockActual) : null;
                   const stockMin = inv ? Number(inv.stockMinimo) : null;
@@ -660,6 +682,14 @@ export function InventarioPage() {
               </tbody>
             </table>
           </div>
+
+          <Pagination
+            page={paginaMateriales}
+            pageSize={PAGE_SIZE}
+            total={materialesFiltrados.length}
+            onPageChange={setPaginaMateriales}
+            disabled={loading}
+          />
 
           {!soloEmpleado && formularioAbierto && (
             <div className="modal-overlay" onClick={cancelarFormulario}>
@@ -771,12 +801,12 @@ export function InventarioPage() {
             {!soloEmpleado && (
               <div className="toolbar-actions">
                 <button
-                  className="primary-button"
+                  className="primary-button compact-action-button"
                   onClick={abrirNuevo}
                   type="button"
                   disabled={loading}
                 >
-                  Registrar Movimiento
+                  Nuevo Movimiento
                 </button>
               </div>
             )}
@@ -795,7 +825,7 @@ export function InventarioPage() {
                 </tr>
               </thead>
               <tbody>
-                {movimientosFiltrados.map((m) => (
+                {movimientosPaginados.map((m) => (
                   <tr key={m.idMovimiento || m.id}>
                     <td>{m.idMovimiento || m.id}</td>
                     <td>{m.fecha ? new Date(m.fecha).toLocaleString() : "—"}</td>
@@ -817,6 +847,14 @@ export function InventarioPage() {
               </tbody>
             </table>
           </div>
+
+          <Pagination
+            page={paginaMovimientos}
+            pageSize={PAGE_SIZE}
+            total={movimientosFiltrados.length}
+            onPageChange={setPaginaMovimientos}
+            disabled={loading}
+          />
 
           {!soloEmpleado && formularioAbierto && (
             <div className="modal-overlay" onClick={cancelarFormulario}>

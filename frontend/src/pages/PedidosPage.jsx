@@ -6,9 +6,11 @@ import { listarClientes, listarServicios } from "../api/catalogApi.js";
 import { listarEmpleados } from "../api/empleadoApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { esEmpleado } from "../auth/permissions.js";
+import { Pagination } from "../components/Pagination.jsx";
 
 const ESTADOS_PEDIDO = ["Borrador", "Pendiente", "En proceso", "Terminado", "Entregado", "Cancelado"];
 const ESTADOS_PAGO = ["Pendiente pago", "Pagado"];
+const PAGE_SIZE = 6;
 
 const SIGUIENTES_ESTADOS = {
   Borrador: ["Pendiente", "Cancelado"],
@@ -48,6 +50,8 @@ export function PedidosPage() {
   const [filtroEstado, setFiltroEstado] = useState("");
   const [filtroEstadoPago, setFiltroEstadoPago] = useState("");
   const [buscarPago, setBuscarPago] = useState("");
+  const [paginaPedidos, setPaginaPedidos] = useState(1);
+  const [paginaPagos, setPaginaPagos] = useState(1);
   const [cambiandoEstado, setCambiandoEstado] = useState(null);
   const [pedidoExpandidoPagos, setPedidoExpandidoPagos] = useState(null);
   
@@ -270,6 +274,15 @@ export function PedidosPage() {
     });
   }, [pedidos, buscarPedido, filtroEstado, filtroEstadoPago, clientes, todosLosPagos, sucursalActivaId]);
 
+  const pedidosPaginados = useMemo(() => {
+    const inicio = (paginaPedidos - 1) * PAGE_SIZE;
+    return pedidosFiltrados.slice(inicio, inicio + PAGE_SIZE);
+  }, [pedidosFiltrados, paginaPedidos]);
+
+  useEffect(() => {
+    setPaginaPedidos(1);
+  }, [buscarPedido, filtroEstado, filtroEstadoPago, sucursalActivaId]);
+
   async function expandirPedido(idPedido) {
     if (pedidoExpandido === idPedido) {
       setPedidoExpandido(null);
@@ -444,6 +457,26 @@ export function PedidosPage() {
     });
   }, [todosLosPagos, buscarPago, pedidos, sucursalActivaId]);
 
+  const gruposPagos = useMemo(() => {
+    const grupos = {};
+    (pagosFiltrados || []).forEach(pago => {
+      const id = String(pago.pedidoId);
+      if (!grupos[id]) grupos[id] = [];
+      grupos[id].push(pago);
+    });
+
+    return Object.entries(grupos);
+  }, [pagosFiltrados]);
+
+  const pagosPaginados = useMemo(() => {
+    const inicio = (paginaPagos - 1) * PAGE_SIZE;
+    return gruposPagos.slice(inicio, inicio + PAGE_SIZE);
+  }, [gruposPagos, paginaPagos]);
+
+  useEffect(() => {
+    setPaginaPagos(1);
+  }, [buscarPago, sucursalActivaId]);
+
   return (
     <section className="page-stack">
       {success && <div className="pos-alert success">{success}</div>}
@@ -474,7 +507,7 @@ export function PedidosPage() {
           </div>
 
           <div className="pedidos-lista">
-            {pedidosFiltrados.map(pedido => {
+            {pedidosPaginados.map(pedido => {
               const cliente = clienteDePedido(pedido);
               const expandido = pedidoExpandido === pedido.idPedido;
               const totalPagado = totalPagadoPedido(pedido.idPedido);
@@ -632,6 +665,14 @@ export function PedidosPage() {
               );
             })}
           </div>
+
+          <Pagination
+            page={paginaPedidos}
+            pageSize={PAGE_SIZE}
+            total={pedidosFiltrados.length}
+            onPageChange={setPaginaPedidos}
+            disabled={loading}
+          />
         </>
       )}
 
@@ -651,19 +692,11 @@ export function PedidosPage() {
 
           {(() => {
             // Agrupar pagosFiltrados por pedidoId
-            const grupos = {};
-            (pagosFiltrados || []).forEach(pago => {
-              const id = String(pago.pedidoId);
-              if (!grupos[id]) grupos[id] = [];
-              grupos[id].push(pago);
-            });
-
-            const entradas = Object.entries(grupos);
-            if (entradas.length === 0) {
+            if (gruposPagos.length === 0) {
               return <p style={{color:"#64748b"}}>No hay pagos registrados.</p>;
             }
 
-            return entradas.map(([pedidoId, pagosGrupo]) => {
+            return pagosPaginados.map(([pedidoId, pagosGrupo]) => {
               const ped = pedidos.find(p => Number(p.idPedido) === Number(pedidoId));
               const cliente = ped ? clienteDePedido(ped) : null;
               const totalPagado = pagosGrupo.reduce((s,p) => s + Number(p.monto), 0);
@@ -724,6 +757,14 @@ export function PedidosPage() {
               );
             });
           })()}
+
+          <Pagination
+            page={paginaPagos}
+            pageSize={PAGE_SIZE}
+            total={gruposPagos.length}
+            onPageChange={setPaginaPagos}
+            disabled={loading}
+          />
         </>
       )}
 

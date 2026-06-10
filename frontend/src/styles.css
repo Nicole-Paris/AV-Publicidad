@@ -198,6 +198,56 @@ a {
   background: #e2e8f0;
 }
 
+.pagination-wrap {
+  display: flex;
+  justify-content: center;
+  margin: 18px 0 8px;
+}
+
+.pagination-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.pagination-page {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #dfe6ed;
+  border-radius: 999px;
+  color: #334155;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 14px;
+  font-weight: 700;
+  justify-content: center;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 0 10px;
+  transition: transform 0.12s ease, background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.pagination-page:hover:not(:disabled) {
+  background: #fff7f4;
+  border-color: #fb5a35;
+  color: #c2410c;
+  transform: translateY(-1px);
+}
+
+.pagination-page.active {
+  background: linear-gradient(135deg, #fb5a35 0%, #ff8c42 100%);
+  border-color: #fb5a35;
+  box-shadow: 0 10px 18px rgba(251, 90, 53, 0.18);
+  color: #ffffff;
+}
+
+.pagination-page:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
 .brand-mark {
   align-items: center;
   background: #1677c7;
@@ -263,6 +313,15 @@ a {
   gap: 12px;
 }
 
+.brand-button {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+
 .brand small,
 .eyebrow {
   color: #7c8a99;
@@ -302,6 +361,61 @@ a {
   justify-content: space-between;
   min-height: 68px;
   padding: 14px 28px;
+}
+
+.topbar-title {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+}
+
+.page-badge {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.page-badge .eyebrow {
+  color: #64748b;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.page-badge strong {
+  color: #0f172a;
+  font-size: 1.1rem;
+  line-height: 1.1;
+}
+
+.back-button {
+  align-items: center;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  border: 1px solid #dfe6ed;
+  border-radius: 999px;
+  box-shadow: 0 10px 18px rgba(15, 23, 42, 0.08);
+  color: #0f172a;
+  cursor: pointer;
+  display: inline-flex;
+  gap: 8px;
+  justify-content: center;
+  min-height: 40px;
+  padding: 8px 12px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.back-button:hover {
+  border-color: #fb5a35;
+  box-shadow: 0 14px 22px rgba(251, 90, 53, 0.18);
+  color: #c2410c;
+  transform: translateY(-1px);
+}
+
+.back-button span {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .content {

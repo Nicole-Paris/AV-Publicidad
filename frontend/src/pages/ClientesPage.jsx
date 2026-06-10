@@ -5,6 +5,7 @@ import { listarTodosPagos } from "../api/pagoApi.js";
 import { listarPedidos } from "../api/pedidoApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { esEmpleado } from "../auth/permissions.js";
+import { Pagination } from "../components/Pagination.jsx";
 
 function normalizarTexto(value) {
   return (value || "")
@@ -19,6 +20,8 @@ function nombreCliente(cliente) {
     .filter(Boolean)
     .join(" ");
 }
+
+const PAGE_SIZE = 8;
 
 function money(value) {
   return new Intl.NumberFormat("es-MX", {
@@ -41,6 +44,7 @@ export function ClientesPage() {
   const [buscar, setBuscar] = useState("");
   const [filtroTipo, setFiltroTipo] = useState("");
   const [filtroCredito, setFiltroCredito] = useState("");
+  const [paginaActual, setPaginaActual] = useState(1);
   const [modalCliente, setModalCliente] = useState(false);
   const [clienteEditando, setClienteEditando] = useState(null);
   const [clienteAEliminar, setClienteAEliminar] = useState(null);
@@ -332,6 +336,15 @@ export function ClientesPage() {
       });
   }, [clientes, buscar, filtroTipo, filtroCredito, empleados, sucursalActivaId]);
 
+  const clientesPaginados = useMemo(() => {
+    const inicio = (paginaActual - 1) * PAGE_SIZE;
+    return clientesFiltrados.slice(inicio, inicio + PAGE_SIZE);
+  }, [clientesFiltrados, paginaActual]);
+
+  useEffect(() => {
+    setPaginaActual(1);
+  }, [buscar, filtroTipo, filtroCredito, sucursalActivaId]);
+
   return (
     <section className="page-stack">
       {success && <div className="pos-alert success">{success}</div>}
@@ -380,7 +393,7 @@ export function ClientesPage() {
             </tr>
           </thead>
           <tbody>
-            {clientesFiltrados.map((cliente) => (
+            {clientesPaginados.map((cliente) => (
               <Fragment key={cliente.idCliente}>
                 <tr key={cliente.idCliente}>
                   <td>{cliente.idCliente}</td>
@@ -470,6 +483,14 @@ export function ClientesPage() {
           </tbody>
         </table>
       </div>
+
+      <Pagination
+        page={paginaActual}
+        pageSize={PAGE_SIZE}
+        total={clientesFiltrados.length}
+        onPageChange={setPaginaActual}
+        disabled={loading}
+      />
 
       {modalCliente && (
         <div className="modal-overlay" onClick={() => {

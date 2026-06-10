@@ -79,10 +79,6 @@ export function AppLayout() {
     ? "Panel Principal"
     : linksVisibles.find((link) => location.pathname.startsWith(link.to))?.label || "AV Publicidad";
 
-  function goBack() {
-    navigate(esEmpleado ? "/pedidos" : "/dashboard");
-  }
-
   function handleBranchChange(sucursal) {
     cambiarSucursal(Number(sucursal.idSucursal));
     setBranchMenuOpen(false);
@@ -101,7 +97,12 @@ export function AppLayout() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="brand">
+        <button
+          type="button"
+          className="brand brand-button"
+          onClick={() => navigate("/dashboard")}
+          aria-label="Ir al panel principal"
+        >
           {logoUrl ? (
             <img
               src={logoUrl}
@@ -116,7 +117,7 @@ export function AppLayout() {
             <span className="brand-mark">av</span>
           )}
           <strong>AV Publicidad</strong>
-        </div>
+        </button>
 
         <nav className="nav-list">
           {linksVisibles.map((link) => (
@@ -133,12 +134,10 @@ export function AppLayout() {
       <div className="workspace">
         <header className="topbar">
           <div className="topbar-title">
-            {!isDashboard && !(esEmpleado && location.pathname.startsWith("/pedidos")) && (
-              <button className="back-button" type="button" onClick={goBack} aria-label="Volver">
-                <AppIcon name="arrowLeft" size={20} />
-              </button>
-            )}
-            <strong>{pageTitle}</strong>
+            <div className="page-badge">
+              <span className="eyebrow">Sección</span>
+              <strong>{pageTitle}</strong>
+            </div>
           </div>
 
           <div className="topbar-actions">

@@ -3,12 +3,18 @@ package avpublicidad.proyecto.service;
 import avpublicidad.proyecto.constants.PedidoConstants;
 import avpublicidad.proyecto.dto.PedidoRequest;
 import avpublicidad.proyecto.model.DetallePedido;
+import avpublicidad.proyecto.model.Inventario;
+import avpublicidad.proyecto.model.Pago;
 import avpublicidad.proyecto.model.Pedido;
+import avpublicidad.proyecto.model.ServicioMaterial;
 import avpublicidad.proyecto.repository.ClienteRepository;
 import avpublicidad.proyecto.repository.DetallePedidoRepository;
 import avpublicidad.proyecto.repository.EmpleadoRepository;
+import avpublicidad.proyecto.repository.InventarioRepository;
+import avpublicidad.proyecto.repository.MovimientoInventarioRepository;
 import avpublicidad.proyecto.repository.PagoRepository;
 import avpublicidad.proyecto.repository.PedidoRepository;
+import avpublicidad.proyecto.repository.ServicioMaterialRepository;
 import avpublicidad.proyecto.repository.SucursalRepository;
 import jakarta.validation.ValidationException;
 import org.junit.jupiter.api.Test;
@@ -25,6 +31,9 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -47,6 +56,15 @@ class PedidoServiceTest {
 
     @Mock
     private DetallePedidoRepository detallePedidoRepository;
+
+    @Mock
+    private ServicioMaterialRepository servicioMaterialRepository;
+
+    @Mock
+    private InventarioRepository inventarioRepository;
+
+    @Mock
+    private MovimientoInventarioRepository movimientoInventarioRepository;
 
     @InjectMocks
     private PedidoService pedidoService;
@@ -126,6 +144,57 @@ class PedidoServiceTest {
     }
 
     @Test
+    void actualizar_aCancelado_debeRestaurarInventarioYEliminarPagos() {
+        PedidoRequest request = requestValido();
+        request.setEstado(PedidoConstants.ESTADO_CANCELADO);
+        request.setMotivoCancelacion("Cliente desistió");
+        request.setSucursalId(5);
+        request.setUpdatedBy(9);
+        relacionesExistentes();
+        when(sucursalRepository.existsById(5)).thenReturn(true);
+
+        Pedido pedidoExistente = pedidoExistente(PedidoConstants.ESTADO_PENDIENTE);
+        pedidoExistente.setSucursalId(5);
+
+        DetallePedido detalle = detallePedido();
+        detalle.setServicioId(7);
+        detalle.setCantidad(new BigDecimal("2"));
+
+        Inventario inventario = Inventario.builder()
+                .idInventario(11)
+                .materialId(3)
+                .sucursalId(5)
+                .stockActual(new BigDecimal("10.00"))
+                .build();
+
+        ServicioMaterial servicioMaterial = ServicioMaterial.builder()
+                .servicioId(7)
+                .materialId(3)
+                .cantidadUsada(new BigDecimal("1.50"))
+                .build();
+
+        Pago pago = Pago.builder()
+                .idPago(22)
+                .pedidoId(1)
+                .monto(new BigDecimal("100.00"))
+                .deletedAt(null)
+                .build();
+
+        when(pedidoRepository.findById(1)).thenReturn(Optional.of(pedidoExistente));
+        when(detallePedidoRepository.findByPedidoIdAndDeletedAtIsNull(1)).thenReturn(List.of(detalle));
+        when(servicioMaterialRepository.findByDeletedAtIsNull()).thenReturn(List.of(servicioMaterial));
+        when(inventarioRepository.findByMaterialIdAndSucursalIdAndDeletedAtIsNull(3, 5)).thenReturn(Optional.of(inventario));
+        when(pagoRepository.findByPedidoIdAndDeletedAtIsNull(1)).thenReturn(List.of(pago));
+        when(pedidoRepository.save(any(Pedido.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(pagoRepository.save(any(Pago.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        pedidoService.actualizar(1, request);
+
+        verify(inventarioRepository).save(argThat(item -> item.getStockActual().compareTo(new BigDecimal("13.00")) == 0));
+        verify(pagoRepository).save(argThat(item -> item.getDeletedAt() != null && item.getDeletedBy().equals(9)));
+    }
+
+    @Test
     void actualizar_deCanceladoAPendiente_debeRechazarPorqueCanceladoEsFinal() {
         PedidoRequest request = requestValido();
         request.setEstado(PedidoConstants.ESTADO_PENDIENTE);
@@ -154,9 +223,10 @@ class PedidoServiceTest {
     }
 
     private void relacionesExistentes() {
-        when(clienteRepository.existsById(1)).thenReturn(true);
-        when(empleadoRepository.existsById(1)).thenReturn(true);
-        when(sucursalRepository.existsById(1)).thenReturn(true);
+        lenient().when(clienteRepository.existsById(1)).thenReturn(true);
+        lenient().when(empleadoRepository.existsById(1)).thenReturn(true);
+        lenient().when(sucursalRepository.existsById(1)).thenReturn(true);
+        lenient().when(sucursalRepository.existsById(5)).thenReturn(true);
     }
 
     private Pedido pedidoExistente(String estado) {

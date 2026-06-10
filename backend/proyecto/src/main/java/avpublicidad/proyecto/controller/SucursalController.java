@@ -48,6 +48,11 @@ public class SucursalController {
 
     @DeleteMapping("/{id}")
     public void eliminar(@PathVariable Integer id, @RequestParam(required = false) Integer deletedBy) {
+        if (deletedBy == null) {
+            sucursalService.eliminar(id);
+            return;
+        }
+
         sucursalService.eliminar(id, deletedBy);
     }
 }
