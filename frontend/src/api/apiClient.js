@@ -22,7 +22,12 @@ export async function apiRequest(path, options = {}) {
   const data = isJson ? await response.json() : await response.text();
 
   if (!response.ok) {
-    const message = data?.message || data?.error || "No se pudo completar la solicitud";
+    const fieldErrors = data?.errors
+      ? Object.entries(data.errors)
+          .map(([field, message]) => `${field}: ${message}`)
+          .join(". ")
+      : "";
+    const message = fieldErrors || data?.message || data?.error || "No se pudo completar la solicitud";
     throw new Error(message);
   }
 

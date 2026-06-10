@@ -74,6 +74,7 @@ export function ConfiguracionPage() {
     telefono: "", correo: "",
     logoUrl: ""
   });
+  const [empresaEditando, setEmpresaEditando] = useState(false);
   const [logoArchivoNombre, setLogoArchivoNombre] = useState("");
   const [formCuenta, setFormCuenta] = useState({
     nombre: session?.nombre || "",
@@ -95,6 +96,35 @@ export function ConfiguracionPage() {
   function getValor(nombre) {
     const gv = globalValues.find(g => g.nombre === nombre);
     return gv ? gv.valor : "";
+  }
+
+  function globalValuePorNombre(nombre) {
+    return globalValues.find(g => g.nombre === nombre);
+  }
+
+  function auditoriaEmpresa() {
+    const nombres = ["nombreEmpresa", "razonSocial", "rfc", "regimenFiscal", "direccionFiscal", "telefono", "correo", "logoUrl"];
+    const valores = nombres.map(globalValuePorNombre).filter(Boolean);
+    if (valores.length === 0) {
+      return {};
+    }
+
+    const primero = [...valores].sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0))[0];
+    const ultimoEditado = [...valores]
+      .filter(item => item.updatedAt || item.updatedBy)
+      .sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0))[0];
+
+    return {
+      createdBy: primero?.createdBy,
+      createdAt: primero?.createdAt,
+      updatedBy: ultimoEditado?.updatedBy,
+      updatedAt: ultimoEditado?.updatedAt
+    };
+  }
+
+  function valorEmpresa(nombre) {
+    const valor = formEmpresa[nombre];
+    return valor && valor.toString().trim() ? valor : "-";
   }
 
   function nombreEmpleado(empleado) {
@@ -300,8 +330,8 @@ export function ConfiguracionPage() {
     }
 
     const rfc = (formEmpresa.rfc || "").trim();
-    if (rfc && !/^[A-Z0-9]{12}$/.test(rfc)) {
-      mostrarError("El RFC debe tener exactamente 12 caracteres alfanuméricos.");
+    if (rfc && !/^[A-Z0-9]{12,13}$/.test(rfc)) {
+      mostrarError("El RFC debe tener 12 o 13 caracteres alfanuméricos.");
       return;
     }
 
@@ -334,6 +364,7 @@ export function ConfiguracionPage() {
             tipo: existente.tipo || "empresa",
             nombre,
             valor: valor.toString().trim(),
+            createdBy: existente.createdBy || session.empleadoId,
             updatedBy: session.empleadoId
           });
         } else {
@@ -362,6 +393,7 @@ export function ConfiguracionPage() {
       }));
 
       mostrarSuccess("Datos guardados correctamente.");
+      setEmpresaEditando(false);
     } catch (err) {
       mostrarError(err.message || String(err));
     } finally {
@@ -753,6 +785,8 @@ export function ConfiguracionPage() {
     reader.readAsDataURL(archivo);
   }
 
+  const auditoriaDatosEmpresa = auditoriaEmpresa();
+
   if (soloEmpleado) {
     return (
       <section className="page-stack">
@@ -944,90 +978,127 @@ export function ConfiguracionPage() {
           <section className="pos-card">
             <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:24}}>
               <h2 style={{margin:0}}>Datos Fiscales</h2>
+              {!empresaEditando && (
+                <button className="ghost-button" type="button" onClick={() => setEmpresaEditando(true)}>
+                  Editar
+                </button>
+              )}
             </div>
 
-            <div className="pos-field-row">
-              <label className="pos-field floating">
-                <span>Nombre de la Empresa</span>
-                <input
-                  type="text"
-                  value={formEmpresa.nombreEmpresa}
-                  onChange={e => setFormEmpresa(f => ({...f, nombreEmpresa: e.target.value}))}
-                />
-              </label>
-              <label className="pos-field floating">
-                <span>Razón Social</span>
-                <input
-                  type="text"
-                  value={formEmpresa.razonSocial}
-                  onChange={e => setFormEmpresa(f => ({...f, razonSocial: e.target.value}))}
-                />
-              </label>
-            </div>
+            {!empresaEditando ? (
+              <>
+                <div className="audit-grid">
+                  <div><span>Nombre de la Empresa</span><strong>{valorEmpresa("nombreEmpresa")}</strong></div>
+                  <div><span>Razón Social</span><strong>{valorEmpresa("razonSocial")}</strong></div>
+                  <div><span>RFC</span><strong>{valorEmpresa("rfc")}</strong></div>
+                  <div><span>Régimen Fiscal</span><strong>{valorEmpresa("regimenFiscal")}</strong></div>
+                  <div><span>Dirección Fiscal</span><strong>{valorEmpresa("direccionFiscal")}</strong></div>
+                  <div><span>Teléfono</span><strong>{valorEmpresa("telefono")}</strong></div>
+                  <div><span>Correo Electrónico</span><strong>{valorEmpresa("correo")}</strong></div>
+                </div>
 
-            <div className="pos-field-row">
-              <label className="pos-field floating">
-                <span>RFC</span>
-                <input
-                  type="text"
-                  maxLength={12}
-                  value={formEmpresa.rfc}
-                  onChange={e => setFormEmpresa(f => ({
-                    ...f,
-                    rfc: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0,12)
-                  }))}
-                />
-              </label>
-              <label className="pos-field floating">
-                <span>Régimen Fiscal</span>
-                <input
-                  type="text"
-                  value={formEmpresa.regimenFiscal}
-                  onChange={e => setFormEmpresa(f => ({...f, regimenFiscal: e.target.value}))}
-                />
-              </label>
-            </div>
+                <h2 style={{margin:"24px 0 16px"}}>Auditoría</h2>
+                <div className="audit-grid">
+                  <div><span>Creado por</span><strong>{nombreEmpleadoPorId(auditoriaDatosEmpresa.createdBy)}</strong></div>
+                  <div><span>Creación</span><strong>{fechaHora(auditoriaDatosEmpresa.createdAt)}</strong></div>
+                  <div><span>Editado por</span><strong>{nombreEmpleadoPorId(auditoriaDatosEmpresa.updatedBy)}</strong></div>
+                  <div><span>Última edición</span><strong>{fechaHora(auditoriaDatosEmpresa.updatedAt)}</strong></div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="pos-field-row">
+                  <label className="pos-field floating">
+                    <span>Nombre de la Empresa</span>
+                    <input
+                      type="text"
+                      value={formEmpresa.nombreEmpresa}
+                      onChange={e => setFormEmpresa(f => ({...f, nombreEmpresa: e.target.value}))}
+                    />
+                  </label>
+                  <label className="pos-field floating">
+                    <span>Razón Social</span>
+                    <input
+                      type="text"
+                      value={formEmpresa.razonSocial}
+                      onChange={e => setFormEmpresa(f => ({...f, razonSocial: e.target.value}))}
+                    />
+                  </label>
+                </div>
 
-            <h2 style={{margin:"24px 0 16px"}}>Datos de Contacto</h2>
+                <div className="pos-field-row">
+                  <label className="pos-field floating">
+                    <span>RFC</span>
+                    <input
+                      type="text"
+                      maxLength={13}
+                      value={formEmpresa.rfc}
+                      onChange={e => setFormEmpresa(f => ({
+                        ...f,
+                        rfc: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0,13)
+                      }))}
+                    />
+                  </label>
+                  <label className="pos-field floating">
+                    <span>Régimen Fiscal</span>
+                    <input
+                      type="text"
+                      value={formEmpresa.regimenFiscal}
+                      onChange={e => setFormEmpresa(f => ({...f, regimenFiscal: e.target.value}))}
+                    />
+                  </label>
+                </div>
 
-            <label className="pos-field floating">
-              <span>Dirección Fiscal</span>
-              <input
-                type="text"
-                value={formEmpresa.direccionFiscal}
-                onChange={e => setFormEmpresa(f => ({...f, direccionFiscal: e.target.value}))}
-              />
-            </label>
+                <h2 style={{margin:"24px 0 16px"}}>Datos de Contacto</h2>
 
-            <div className="pos-field-row">
-              <label className="pos-field floating">
-                <span>Teléfono</span>
-                <input
-                  type="text"
-                  value={formEmpresa.telefono}
-                  onChange={e => setFormEmpresa(f => ({...f, telefono: e.target.value}))}
-                />
-              </label>
-              <label className="pos-field floating">
-                <span>Correo Electrónico</span>
-                <input
-                  type="email"
-                  value={formEmpresa.correo}
-                  onChange={e => setFormEmpresa(f => ({...f, correo: e.target.value}))}
-                />
-              </label>
-            </div>
+                <label className="pos-field floating">
+                  <span>Dirección Fiscal</span>
+                  <input
+                    type="text"
+                    value={formEmpresa.direccionFiscal}
+                    onChange={e => setFormEmpresa(f => ({...f, direccionFiscal: e.target.value}))}
+                  />
+                </label>
 
-            <div style={{display:"flex", justifyContent:"flex-end", marginTop:24}}>
-              <button
-                className="primary-button"
-                type="button"
-                disabled={saving || loading}
-                onClick={guardarEmpresa}
-              >
-                {saving ? "Guardando..." : "Guardar Cambios"}
-              </button>
-            </div>
+                <div className="pos-field-row">
+                  <label className="pos-field floating">
+                    <span>Teléfono</span>
+                    <input
+                      type="text"
+                      value={formEmpresa.telefono}
+                      onChange={e => setFormEmpresa(f => ({...f, telefono: e.target.value.replace(/\D/g, "").slice(0,10)}))}
+                    />
+                  </label>
+                  <label className="pos-field floating">
+                    <span>Correo Electrónico</span>
+                    <input
+                      type="email"
+                      value={formEmpresa.correo}
+                      onChange={e => setFormEmpresa(f => ({...f, correo: e.target.value}))}
+                    />
+                  </label>
+                </div>
+
+                <div style={{display:"flex", justifyContent:"flex-end", gap:12, marginTop:24}}>
+                  <button
+                    className="ghost-button"
+                    type="button"
+                    disabled={saving}
+                    onClick={() => setEmpresaEditando(false)}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    className="primary-button"
+                    type="button"
+                    disabled={saving || loading}
+                    onClick={guardarEmpresa}
+                  >
+                    {saving ? "Guardando..." : "Guardar Cambios"}
+                  </button>
+                </div>
+              </>
+            )}
           </section>
 
           <section className="pos-card" style={{textAlign:"center"}}>
