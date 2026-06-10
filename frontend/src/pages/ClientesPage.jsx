@@ -21,7 +21,7 @@ function nombreCliente(cliente) {
     .join(" ");
 }
 
-const PAGE_SIZE = 8;
+const PAGE_SIZE = 30;
 
 function money(value) {
   return new Intl.NumberFormat("es-MX", {

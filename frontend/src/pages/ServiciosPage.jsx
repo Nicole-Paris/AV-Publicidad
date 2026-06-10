@@ -10,7 +10,7 @@ import { listarEmpleados } from "../api/empleadoApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { Pagination } from "../components/Pagination.jsx";
 
-const PAGE_SIZE = 8;
+const PAGE_SIZE = 30;
 
 export function ServiciosPage() {
   const { session } = useAuth();
@@ -579,7 +579,7 @@ export function ServiciosPage() {
           setModalServicio(false);
           setServicioEditando(null);
         }}>
-          <div className="modal-card" onClick={e => e.stopPropagation()}>
+          <div className="modal-card service-edit-modal" onClick={e => e.stopPropagation()}>
             <h2>{servicioEditando ? "Editar Servicio" : "Nuevo Servicio"}</h2>
             <label className="pos-field floating">
               <span>Nombre</span>

@@ -10,7 +10,7 @@ import { Pagination } from "../components/Pagination.jsx";
 
 const ESTADOS_PEDIDO = ["Borrador", "Pendiente", "En proceso", "Terminado", "Entregado", "Cancelado"];
 const ESTADOS_PAGO = ["Pendiente pago", "Pagado"];
-const PAGE_SIZE = 6;
+const PAGE_SIZE = 30;
 
 const SIGUIENTES_ESTADOS = {
   Borrador: ["Pendiente", "Cancelado"],

@@ -18,7 +18,8 @@ import { esEmpleado } from "../auth/permissions.js";
 import { Pagination } from "../components/Pagination.jsx";
 
 const CURRENCY = new Intl.NumberFormat("es-MX", { currency: "MXN", style: "currency" });
-const PAGE_SIZE = 8;
+const PAGE_SIZE = 30;
+const MOVEMENTS_PAGE_SIZE = 30;
 
 function money(value) {
   return CURRENCY.format(value || 0);
@@ -54,6 +55,10 @@ function limpiarCantidadMovimiento(value) {
   const limpio = String(value || "").replace(/[+-]/g, "").replace(/[^\d.]/g, "");
   const partes = limpio.split(".");
   return partes.length > 1 ? `${partes[0]}.${partes.slice(1).join("")}` : limpio;
+}
+
+function idMovimiento(movimiento) {
+  return movimiento?.idMovimientoInventario || movimiento?.idMovimiento || movimiento?.id;
 }
 
 /* Componente interno: BuscadorMaterial */
@@ -253,12 +258,21 @@ export function InventarioPage() {
   }, [materiales, inventarios, buscar, categoriaFiltro, sucursalActivaId]);
 
   const movimientosFiltrados = useMemo(() => {
-    return movimientos.filter((movimiento) => {
-      const inventario = inventarios.find((inv) =>
-        Number(inv.idInventario || inv.id) === Number(movimiento.inventarioId)
-      );
-      return !sucursalActivaId || Number(inventario?.sucursalId) === Number(sucursalActivaId);
-    });
+    return movimientos
+      .filter((movimiento) => {
+        const inventario = inventarios.find((inv) =>
+          Number(inv.idInventario || inv.id) === Number(movimiento.inventarioId)
+        );
+        return !sucursalActivaId || Number(inventario?.sucursalId) === Number(sucursalActivaId);
+      })
+      .sort((a, b) => {
+        const fechaA = new Date(a.fecha || a.createdAt || 0).getTime();
+        const fechaB = new Date(b.fecha || b.createdAt || 0).getTime();
+        if (fechaB !== fechaA) {
+          return fechaB - fechaA;
+        }
+        return Number(idMovimiento(b) || 0) - Number(idMovimiento(a) || 0);
+      });
   }, [movimientos, inventarios, sucursalActivaId]);
 
   const materialesPaginados = useMemo(() => {
@@ -267,8 +281,8 @@ export function InventarioPage() {
   }, [materialesFiltrados, paginaMateriales]);
 
   const movimientosPaginados = useMemo(() => {
-    const inicio = (paginaMovimientos - 1) * PAGE_SIZE;
-    return movimientosFiltrados.slice(inicio, inicio + PAGE_SIZE);
+    const inicio = (paginaMovimientos - 1) * MOVEMENTS_PAGE_SIZE;
+    return movimientosFiltrados.slice(inicio, inicio + MOVEMENTS_PAGE_SIZE);
   }, [movimientosFiltrados, paginaMovimientos]);
 
   useEffect(() => {
@@ -826,8 +840,8 @@ export function InventarioPage() {
               </thead>
               <tbody>
                 {movimientosPaginados.map((m) => (
-                  <tr key={m.idMovimiento || m.id}>
-                    <td>{m.idMovimiento || m.id}</td>
+                  <tr key={idMovimiento(m)}>
+                    <td>{idMovimiento(m)}</td>
                     <td>{m.fecha ? new Date(m.fecha).toLocaleString() : "—"}</td>
                     <td>{m.tipo}</td>
                     <td>{m.cantidad}</td>
@@ -836,7 +850,7 @@ export function InventarioPage() {
                       <button
                         aria-label="Ver auditoria del movimiento"
                         className="audit-toggle"
-                        onClick={() => abrirAuditoria(`Movimiento ${m.idMovimiento || m.id}`, m, [["Inventario", m.inventarioId || "-"]])}
+                        onClick={() => abrirAuditoria(`Movimiento ${idMovimiento(m)}`, m, [["Inventario", m.inventarioId || "-"]])}
                         type="button"
                       >
                         ▼
@@ -850,7 +864,7 @@ export function InventarioPage() {
 
           <Pagination
             page={paginaMovimientos}
-            pageSize={PAGE_SIZE}
+            pageSize={MOVEMENTS_PAGE_SIZE}
             total={movimientosFiltrados.length}
             onPageChange={setPaginaMovimientos}
             disabled={loading}

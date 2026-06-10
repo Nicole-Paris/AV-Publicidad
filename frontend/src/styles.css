@@ -2775,6 +2775,13 @@ a {
   max-width: 760px;
 }
 
+.service-edit-modal {
+  max-height: min(86vh, 820px);
+  max-width: 720px;
+  overflow-y: auto;
+  padding-bottom: 28px;
+}
+
 .modal-grid {
   display: grid;
   gap: 0 16px;
