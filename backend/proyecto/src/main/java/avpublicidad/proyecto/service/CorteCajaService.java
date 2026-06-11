@@ -14,12 +14,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 
 @Service
 @RequiredArgsConstructor
 public class CorteCajaService {
+
+    private static final int MAX_CAJAS_ABIERTAS_POR_EMPLEADO = 1;
 
     private final CorteCajaRepository corteCajaRepository;
     private final EmpleadoRepository empleadoRepository;
@@ -36,6 +40,8 @@ public class CorteCajaService {
     }
 
     public CorteCaja crear(CorteCajaRequest request) {
+        request.setFecha(LocalDate.now());
+        request.setHoraInicio(LocalTime.now().withNano(0));
         validarEmpleado(request.getEmpleadoId());
         validarReglasNegocio(request, null);
 
@@ -59,11 +65,11 @@ public class CorteCajaService {
 
     public CorteCaja actualizar(Integer id, CorteCajaRequest request) {
         CorteCaja corteCaja = obtenerPorId(id);
+        request.setFecha(corteCaja.getFecha());
+        request.setHoraInicio(corteCaja.getHoraInicio());
         validarEmpleado(request.getEmpleadoId());
         validarReglasNegocio(request, id);
 
-        corteCaja.setFecha(request.getFecha());
-        corteCaja.setHoraInicio(request.getHoraInicio());
         corteCaja.setHoraFin(request.getHoraFin());
         corteCaja.setSaldoInicial(request.getSaldoInicial());
         corteCaja.setDiferenciaSaldo(calcularDiferencia(request));
@@ -94,6 +100,16 @@ public class CorteCajaService {
         if (request.getHoraFin() != null && request.getHoraInicio() != null
                 && request.getHoraFin().isBefore(request.getHoraInicio())) {
             throw new ValidationException("La hora de fin no puede ser anterior a la hora de inicio");
+        }
+
+        if (request.getHoraFin() == null) {
+            long cajasAbiertas = corteCajaRepository.countCajasAbiertasPorEmpleado(
+                    request.getEmpleadoId(),
+                    corteActualId
+            );
+            if (cajasAbiertas >= MAX_CAJAS_ABIERTAS_POR_EMPLEADO) {
+                throw new ValidationException("Este empleado ya tiene una caja abierta. Cierra esa caja antes de abrir otra");
+            }
         }
 
         if (request.getHoraFin() != null) {

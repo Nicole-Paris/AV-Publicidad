@@ -20,7 +20,6 @@ public class MovimientoInventarioRequest {
     @Digits(integer = 8, fraction = 2)
     private BigDecimal cantidad;
 
-    @NotNull
     private LocalDateTime fecha;
 
     @NotBlank

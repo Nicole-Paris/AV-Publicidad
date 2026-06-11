@@ -30,6 +30,8 @@ public class SucursalService {
     }
 
     public Sucursal crear(SucursalRequest request) {
+        validarNombreUnico(request.getNombre(), null);
+
         Sucursal sucursal = Sucursal.builder()
                 .nombre(request.getNombre())
                 .direccion(request.getDireccion())
@@ -46,6 +48,7 @@ public class SucursalService {
 
     public Sucursal actualizar(Integer id, SucursalRequest request) {
         Sucursal sucursal = obtenerPorId(id);
+        validarNombreUnico(request.getNombre(), id);
 
         sucursal.setNombre(request.getNombre());
         sucursal.setDireccion(request.getDireccion());
@@ -73,5 +76,17 @@ public class SucursalService {
 
     public void eliminar(Integer id) {
         eliminar(id, null);
+    }
+
+    private void validarNombreUnico(String nombre, Integer sucursalActualId) {
+        if (nombre == null || nombre.isBlank()) {
+            return;
+        }
+
+        sucursalRepository.findByNombreIgnoreCaseAndDeletedAtIsNull(nombre.trim())
+                .filter(sucursal -> !sucursal.getIdSucursal().equals(sucursalActualId))
+                .ifPresent(sucursal -> {
+                    throw new ValidationException("Ya existe una sucursal activa con ese nombre");
+                });
     }
 }

@@ -29,6 +29,8 @@ public class CategoriaServicioService {
     }
 
     public CategoriaServicio crear(CategoriaServicioRequest request) {
+        validarNombreUnico(request.getNombre(), null);
+
         CategoriaServicio categoria = CategoriaServicio.builder()
                 .nombre(request.getNombre())
                 .descripcion(request.getDescripcion())
@@ -43,6 +45,7 @@ public class CategoriaServicioService {
 
     public CategoriaServicio actualizar(Integer id, CategoriaServicioRequest request) {
         CategoriaServicio categoria = obtenerPorId(id);
+        validarNombreUnico(request.getNombre(), id);
 
         categoria.setNombre(request.getNombre());
         categoria.setDescripcion(request.getDescripcion());
@@ -75,5 +78,17 @@ public class CategoriaServicioService {
         }
 
         throw new ValidationException("El estado debe ser Activo o Inactivo");
+    }
+
+    private void validarNombreUnico(String nombre, Integer categoriaActualId) {
+        if (nombre == null || nombre.isBlank()) {
+            return;
+        }
+
+        categoriaServicioRepository.findByNombreIgnoreCaseAndDeletedAtIsNull(nombre.trim())
+                .filter(categoria -> !categoria.getIdCategoriaServicio().equals(categoriaActualId))
+                .ifPresent(categoria -> {
+                    throw new ValidationException("Ya existe una categoria de servicio activa con ese nombre");
+                });
     }
 }

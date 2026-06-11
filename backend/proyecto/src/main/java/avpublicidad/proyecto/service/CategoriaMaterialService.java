@@ -29,6 +29,8 @@ public class CategoriaMaterialService {
     }
 
     public CategoriaMaterial crear(CategoriaMaterialRequest request) {
+        validarNombreUnico(request.getNombre(), null);
+
         CategoriaMaterial categoria = CategoriaMaterial.builder()
                 .nombre(request.getNombre())
                 .estado(normalizarEstado(request.getEstado()))
@@ -43,6 +45,7 @@ public class CategoriaMaterialService {
 
     public CategoriaMaterial actualizar(Integer id, CategoriaMaterialRequest request) {
         CategoriaMaterial categoria = obtenerPorId(id);
+        validarNombreUnico(request.getNombre(), id);
 
         categoria.setNombre(request.getNombre());
         categoria.setEstado(normalizarEstado(request.getEstado()));
@@ -74,5 +77,17 @@ public class CategoriaMaterialService {
         }
 
         throw new ValidationException("El estado debe ser Activo o Inactivo");
+    }
+
+    private void validarNombreUnico(String nombre, Integer categoriaActualId) {
+        if (nombre == null || nombre.isBlank()) {
+            return;
+        }
+
+        categoriaMaterialRepository.findByNombreIgnoreCaseAndDeletedAtIsNull(nombre.trim())
+                .filter(categoria -> !categoria.getIdCategoriaMaterial().equals(categoriaActualId))
+                .ifPresent(categoria -> {
+                    throw new ValidationException("Ya existe una categoria de material activa con ese nombre");
+                });
     }
 }

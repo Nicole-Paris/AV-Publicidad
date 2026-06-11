@@ -161,6 +161,36 @@ export function ConfiguracionPage() {
     );
   }
 
+  function sucursalesDeEmpleado(empleado) {
+    const sucursalesIds = new Set();
+    if (empleado?.sucursalIdSucursal) {
+      sucursalesIds.add(Number(empleado.sucursalIdSucursal));
+    }
+
+    Object.entries(empleadosPorSucursalExtra).forEach(([sucursalId, empleadoIds]) => {
+      if ((empleadoIds || []).map(Number).includes(Number(empleado.idEmpleado))) {
+        sucursalesIds.add(Number(sucursalId));
+      }
+    });
+
+    return Array.from(sucursalesIds);
+  }
+
+  function quitarEmpleadoExtraDeSucursal(empleadoId, sucursalId) {
+    const key = String(sucursalId);
+    const nextIds = (empleadosPorSucursalExtra[key] || [])
+      .map(Number)
+      .filter(id => id !== Number(empleadoId));
+    const next = { ...empleadosPorSucursalExtra, [key]: nextIds };
+
+    if (nextIds.length === 0) {
+      delete next[key];
+    }
+
+    setEmpleadosPorSucursalExtra(next);
+    localStorage.setItem("av_empleados_sucursales_extra", JSON.stringify(next));
+  }
+
   function empleadosParaAgregar(sucursalId) {
     const query = busquedaEmpleadoExistente.trim().toLowerCase();
     if (!query) return [];
@@ -453,6 +483,16 @@ export function ConfiguracionPage() {
     if (!formSucursal.direccion.trim()) {
       mostrarError("Escribe la dirección."); return;
     }
+    const nombreNormalizado = formSucursal.nombre.trim().toLowerCase();
+    const sucursalDuplicada = sucursales.some(sucursal => {
+      const idActual = sucursalEditando ? Number(sucursalEditando.idSucursal || sucursalEditando.id) : null;
+      const idSucursal = Number(sucursal.idSucursal || sucursal.id);
+      return sucursal.nombre?.trim().toLowerCase() === nombreNormalizado && idSucursal !== idActual;
+    });
+    if (sucursalDuplicada) {
+      mostrarError("Ya existe una sucursal activa con ese nombre.");
+      return;
+    }
     const cp = (formSucursal.codigoPostal || "").trim();
     const tel = (formSucursal.telefono || "").trim();
     if (!/^\d{5}$/.test(cp)) {
@@ -648,11 +688,54 @@ export function ConfiguracionPage() {
   }
 
   async function borrarEmpleado(empleado) {
-    const confirmar = window.confirm(`¿Eliminar a ${nombreEmpleado(empleado)}?`);
+    const sucursalActualId = sucursalSeleccionada
+      ? Number(sucursalSeleccionada.idSucursal || sucursalSeleccionada.id)
+      : Number(empleado.sucursalIdSucursal);
+    const sucursalesLigadas = sucursalesDeEmpleado(empleado);
+    const estaEnSucursalComoExtra = (empleadosPorSucursalExtra[String(sucursalActualId)] || [])
+      .map(Number)
+      .includes(Number(empleado.idEmpleado));
+    const tieneOtrasSucursales = sucursalesLigadas.some(id => Number(id) !== Number(sucursalActualId));
+    const accion = tieneOtrasSucursales
+      ? `quitar a ${nombreEmpleado(empleado)} de esta sucursal`
+      : `eliminar a ${nombreEmpleado(empleado)}`;
+    const confirmar = window.confirm(`¿Seguro que quieres ${accion}?`);
     if (!confirmar) return;
 
     setSaving(true);
     try {
+      if (estaEnSucursalComoExtra) {
+        quitarEmpleadoExtraDeSucursal(empleado.idEmpleado, sucursalActualId);
+        setEmpleadoExpandido(null);
+        setSucursalSeleccionada(current => current ? { ...current } : current);
+        mostrarSuccess("Empleado quitado de esta sucursal correctamente.");
+        return;
+      }
+
+      if (tieneOtrasSucursales) {
+        const nuevaSucursalId = sucursalesLigadas.find(id => Number(id) !== Number(sucursalActualId));
+        await actualizarEmpleado(empleado.idEmpleado, {
+          nombre: empleado.nombre,
+          apellidoPaterno: empleado.apellidoPaterno,
+          apellidoMaterno: empleado.apellidoMaterno || "",
+          telefono: empleado.telefono,
+          correo: empleado.correo,
+          horaEntrada: empleado.horaEntrada,
+          horaSalida: empleado.horaSalida,
+          rolId: Number(empleado.rolId),
+          sucursalIdSucursal: Number(nuevaSucursalId),
+          createdBy: empleado.createdBy || session.empleadoId,
+          updatedBy: session.empleadoId
+        });
+        quitarEmpleadoExtraDeSucursal(empleado.idEmpleado, nuevaSucursalId);
+        const emps = await listarEmpleados();
+        setEmpleados(safe(emps));
+        setEmpleadoExpandido(null);
+        setSucursalSeleccionada(current => current ? { ...current } : current);
+        mostrarSuccess("Empleado quitado de esta sucursal correctamente.");
+        return;
+      }
+
       // Verificar caja abierta
       const cortes = await listarCortesPorEmpleado(empleado.idEmpleado);
       if ((cortes || []).some(c => !c.horaFin)) {

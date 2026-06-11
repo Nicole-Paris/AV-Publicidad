@@ -838,6 +838,7 @@ export function PuntoVentaPage() {
           <label className="pos-field floating compact-field">
             <span>Unidad</span>
             <select
+              disabled
               name="unidadDetalle"
               onChange={updateDetalle}
               value={detalle.unidadDetalle}

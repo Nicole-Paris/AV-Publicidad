@@ -5,6 +5,7 @@ import {
   crearMaterial,
   actualizarMaterial,
   crearCategoriaMaterial,
+  actualizarCategoriaMaterial,
   listarInventarios,
   crearInventario,
   actualizarInventario,
@@ -168,7 +169,9 @@ export function InventarioPage() {
   const [paginaMovimientos, setPaginaMovimientos] = useState(1);
   const sucursalActivaId = session?.sucursalIdSucursal || session?.sucursalId;
 
-  const [nuevaCat, setNuevaCat] = useState({ visible: false, nombre: "", descripcion: "" });
+  const [nuevaCat, setNuevaCat] = useState({
+    visible: false, editando: null, nombre: "", descripcion: "", estado: "Activo"
+  });
 
   // modal error
   const [modalError, setModalError] = useState("");
@@ -336,28 +339,71 @@ export function InventarioPage() {
     [materiales]
   );
 
+  function abrirNuevaCategoriaMaterial() {
+    setNuevaCat({ visible: true, editando: null, nombre: "", descripcion: "", estado: "Activo" });
+  }
+
+  function abrirEditarCategoriaMaterial() {
+    const categoria = categorias.find((item) =>
+      Number(item.idCategoriaMaterial || item.id) === Number(formulario.categoriaMaterialId)
+    );
+    if (!categoria) {
+      mostrarError("Selecciona una categoría para editar.");
+      return;
+    }
+
+    setNuevaCat({
+      visible: true,
+      editando: categoria,
+      nombre: categoria.nombre || "",
+      descripcion: categoria.descripcion || "",
+      estado: categoria.estado || "Activo"
+    });
+  }
+
   // acciones de guardado
   async function guardarNuevaCategoria() {
     if (!nuevaCat.nombre.trim()) {
       mostrarError("Escribe un nombre para la categoría.");
       return;
     }
+    const nombreNormalizado = nuevaCat.nombre.trim().toLowerCase();
+    const categoriaDuplicada = categorias.some((categoria) => {
+      const idCategoria = Number(categoria.idCategoriaMaterial || categoria.id);
+      const idEditando = nuevaCat.editando
+        ? Number(nuevaCat.editando.idCategoriaMaterial || nuevaCat.editando.id)
+        : null;
+      return (categoria.nombre || "").trim().toLowerCase() === nombreNormalizado
+        && idCategoria !== idEditando;
+    });
+    if (categoriaDuplicada) {
+      mostrarError("Ya existe una categoría de material con ese nombre.");
+      return;
+    }
     setSaving(true);
     setError("");
     try {
-      const creada = await crearCategoriaMaterial({
+      const payload = {
         nombre: nuevaCat.nombre.trim(),
         descripcion: nuevaCat.descripcion.trim(),
-        estado: "Activo",
-        createdBy: session.empleadoId
-      });
+        estado: nuevaCat.estado || "Activo",
+        createdBy: nuevaCat.editando?.createdBy || session.empleadoId,
+        updatedBy: nuevaCat.editando ? session.empleadoId : null
+      };
+
+      if (nuevaCat.editando) {
+        await actualizarCategoriaMaterial(nuevaCat.editando.idCategoriaMaterial || nuevaCat.editando.id, payload);
+      } else {
+        await crearCategoriaMaterial(payload);
+      }
+
       const cats = await listarCategoriasMaterial();
       setCategorias(cats);
       // seleccionar automáticamente la categoría recién creada
       const nueva = cats.find(c => (c.nombre || "").trim() === nuevaCat.nombre.trim());
       if (nueva) setFormulario(f => ({ ...f, categoriaMaterialId: nueva.idCategoriaMaterial || nueva.id }));
-      setNuevaCat({ visible: false, nombre: "", descripcion: "" });
-      mostrarSuccess("Categoría creada y seleccionada.");
+      setNuevaCat({ visible: false, editando: null, nombre: "", descripcion: "", estado: "Activo" });
+      mostrarSuccess(nuevaCat.editando ? "Categoría actualizada." : "Categoría creada y seleccionada.");
     } catch (err) {
       mostrarError(err.message || String(err));
     } finally {
@@ -521,7 +567,6 @@ export function InventarioPage() {
       }
       await crearMovimiento({
         cantidad: Number(formulario.cantidad),
-        fecha: formulario.fecha,
         tipo: formulario.tipo,
         motivo: formulario.motivo,
         inventarioId: Number(inv.idInventario),
@@ -542,7 +587,7 @@ export function InventarioPage() {
       setMovimientos(movs);
       setSucursales(sucs);
 
-      setFormulario((f) => ({ ...f, nombreMaterial: "", inventarioId: "", tipo: "Entrada", cantidad: "", motivo: "", fecha: nowLocalDateTime(), sucursalId: "" }));
+      setFormulario((f) => ({ ...f, nombreMaterial: "", inventarioId: "", tipo: "Entrada", cantidad: "", motivo: "", sucursalId: "" }));
       setFormularioAbierto(false);
       mostrarSuccess("Movimiento registrado correctamente.");
     } catch (err) {
@@ -758,7 +803,7 @@ export function InventarioPage() {
                       onChange={(e) => {
                         const v = e.target.value;
                         if (v === "__nueva__") {
-                          setNuevaCat(c => ({ ...c, visible: true }));
+                          abrirNuevaCategoriaMaterial();
                           setFormulario(f => ({ ...f, categoriaMaterialId: "" }));
                           return;
                         }
@@ -772,6 +817,16 @@ export function InventarioPage() {
                       <option value="__nueva__">+ Nueva categoría...</option>
                     </select>
                   </label>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", paddingTop: 8 }}>
+                    <button
+                      className="ghost-button"
+                      type="button"
+                      disabled={!formulario.categoriaMaterialId}
+                      onClick={abrirEditarCategoriaMaterial}
+                    >
+                      Editar categoría
+                    </button>
+                  </div>
 
                   <label className="pos-field floating">
                     <span>Estado</span>
@@ -919,11 +974,6 @@ export function InventarioPage() {
                   <input type="text" value={formulario.motivo} onChange={(e) => setFormulario((f) => ({ ...f, motivo: e.target.value }))} />
                 </label>
 
-                <label className="pos-field floating">
-                  <span>Fecha</span>
-                  <input type="datetime-local" value={formulario.fecha} onChange={(e) => setFormulario((f) => ({ ...f, fecha: e.target.value }))} />
-                </label>
-
                 <div style={{ display: "flex", gap: 12, marginTop: 12 }}>
                   <button className="primary-button" type="submit" disabled={saving}>{saving ? "Guardando..." : "Guardar"}</button>
                   <button className="ghost-button" type="button" onClick={cancelarFormulario}>Cancelar</button>
@@ -937,9 +987,11 @@ export function InventarioPage() {
 
       {/* Modal flotante para nueva categoría */}
       {nuevaCat.visible && (
-        <div className="modal-overlay" onClick={() => setNuevaCat({ visible: false, nombre: "", descripcion: "" })}>
+        <div className="modal-overlay" onClick={() => setNuevaCat({
+          visible: false, editando: null, nombre: "", descripcion: "", estado: "Activo"
+        })}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-            <h2>Nueva Categoría</h2>
+            <h2>{nuevaCat.editando ? "Editar Categoría" : "Nueva Categoría"}</h2>
             <label className="pos-field floating">
               <span>Nombre</span>
               <input type="text" value={nuevaCat.nombre} onChange={e => setNuevaCat(c => ({ ...c, nombre: e.target.value }))} />
@@ -948,9 +1000,26 @@ export function InventarioPage() {
               <span>Descripción</span>
               <input type="text" value={nuevaCat.descripcion} onChange={e => setNuevaCat(c => ({ ...c, descripcion: e.target.value }))} />
             </label>
+            <label className="pos-field floating">
+              <span>Estado</span>
+              <select value={nuevaCat.estado} onChange={e => setNuevaCat(c => ({ ...c, estado: e.target.value }))}>
+                <option>Activo</option>
+                <option>Inactivo</option>
+              </select>
+            </label>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 20 }}>
-              <button className="ghost-button" type="button" onClick={() => setNuevaCat({ visible: false, nombre: "", descripcion: "" })}>Cancelar</button>
-              <button className="primary-button" type="button" disabled={saving} onClick={guardarNuevaCategoria}>{saving ? "Guardando..." : "Guardar categoría"}</button>
+              <button
+                className="ghost-button"
+                type="button"
+                onClick={() => setNuevaCat({
+                  visible: false, editando: null, nombre: "", descripcion: "", estado: "Activo"
+                })}
+              >
+                Cancelar
+              </button>
+              <button className="primary-button" type="button" disabled={saving} onClick={guardarNuevaCategoria}>
+                {saving ? "Guardando..." : nuevaCat.editando ? "Guardar cambios" : "Guardar categoría"}
+              </button>
             </div>
           </div>
         </div>

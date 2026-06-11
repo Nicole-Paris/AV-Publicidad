@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   listarServicios, crearServicio,
-  listarCategoriaServicio, crearCategoriaServicio,
+  listarCategoriaServicio, crearCategoriaServicio, actualizarCategoriaServicio,
   listarServiciosMateriales, crearServicioMaterial,
   actualizarServicio, actualizarServicioMaterial, eliminarServicioMaterial
 } from "../api/catalogApi.js";
@@ -42,7 +42,7 @@ export function ServiciosPage() {
   });
 
   const [nuevaCat, setNuevaCat] = useState({
-    visible: false, nombre: "", descripcion: ""
+    visible: false, editando: null, nombre: "", descripcion: "", estado: "Activo"
   });
 
   const [updatingEstadoId, setUpdatingEstadoId] = useState(null);
@@ -161,6 +161,28 @@ export function ServiciosPage() {
       categoriaServicioId: servicio.categoriaServicioId ? String(servicio.categoriaServicioId) : ""
     });
     setModalServicio(true);
+  }
+
+  function abrirNuevaCategoria() {
+    setNuevaCat({ visible: true, editando: null, nombre: "", descripcion: "", estado: "Activo" });
+  }
+
+  function abrirEditarCategoriaServicio() {
+    const categoria = categorias.find(c =>
+      Number(c.idCategoriaServicio || c.id) === Number(formServicio.categoriaServicioId)
+    );
+    if (!categoria) {
+      mostrarError("Selecciona una categoría para editar.");
+      return;
+    }
+
+    setNuevaCat({
+      visible: true,
+      editando: categoria,
+      nombre: categoria.nombre || "",
+      descripcion: categoria.descripcion || "",
+      estado: categoria.estado || "Activo"
+    });
   }
 
   function agregarMaterialEditandoServicio() {
@@ -394,14 +416,35 @@ export function ServiciosPage() {
     if (!nuevaCat.nombre.trim()) {
       mostrarError("Escribe un nombre para la categoría."); return;
     }
+    const nombreNormalizado = nuevaCat.nombre.trim().toLowerCase();
+    const categoriaDuplicada = categorias.some(categoria => {
+      const idCategoria = Number(categoria.idCategoriaServicio || categoria.id);
+      const idEditando = nuevaCat.editando
+        ? Number(nuevaCat.editando.idCategoriaServicio || nuevaCat.editando.id)
+        : null;
+      return (categoria.nombre || "").trim().toLowerCase() === nombreNormalizado
+        && idCategoria !== idEditando;
+    });
+    if (categoriaDuplicada) {
+      mostrarError("Ya existe una categoría de servicio con ese nombre.");
+      return;
+    }
     setSaving(true);
     try {
-      await crearCategoriaServicio({
+      const payload = {
         nombre: nuevaCat.nombre.trim(),
         descripcion: nuevaCat.descripcion.trim(),
-        estado: "Activo",
-        createdBy: session.empleadoId
-      });
+        estado: nuevaCat.estado || "Activo",
+        createdBy: nuevaCat.editando?.createdBy || session.empleadoId,
+        updatedBy: nuevaCat.editando ? session.empleadoId : null
+      };
+
+      if (nuevaCat.editando) {
+        await actualizarCategoriaServicio(nuevaCat.editando.idCategoriaServicio || nuevaCat.editando.id, payload);
+      } else {
+        await crearCategoriaServicio(payload);
+      }
+
       const cats = await listarCategoriaServicio();
       setCategorias(safe(cats));
       const nueva = safe(cats).find(c => c.nombre === nuevaCat.nombre.trim());
@@ -411,8 +454,8 @@ export function ServiciosPage() {
           categoriaServicioId: String(nueva.idCategoriaServicio || nueva.id)
         }));
       }
-      setNuevaCat({ visible: false, nombre: "", descripcion: "" });
-      mostrarSuccess("Categoría creada.");
+      setNuevaCat({ visible: false, editando: null, nombre: "", descripcion: "", estado: "Activo" });
+      mostrarSuccess(nuevaCat.editando ? "Categoría actualizada." : "Categoría creada.");
     } catch (err) {
       mostrarError(err.message || String(err));
     } finally {
@@ -645,7 +688,7 @@ export function ServiciosPage() {
                 value={formServicio.categoriaServicioId}
                 onChange={e => {
                   if (e.target.value === "__nueva__") {
-                    setNuevaCat({ visible: true, nombre: "", descripcion: "" });
+                    abrirNuevaCategoria();
                     return;
                   }
                   setFormServicio(f => ({
@@ -665,6 +708,16 @@ export function ServiciosPage() {
                 <option value="__nueva__">+ Nueva categoría...</option>
               </select>
             </label>
+            <div style={{ display: "flex", justifyContent: "center", marginTop: -8, marginBottom: 12 }}>
+              <button
+                className="ghost-button"
+                type="button"
+                disabled={!formServicio.categoriaServicioId}
+                onClick={abrirEditarCategoriaServicio}
+              >
+                Editar categoría
+              </button>
+            </div>
             {servicioEditando && (
               <div className="service-material-editor">
                 <div className="tab-section-header">
@@ -852,10 +905,10 @@ export function ServiciosPage() {
 
       {nuevaCat.visible && (
         <div className="modal-overlay" onClick={() => setNuevaCat({
-          visible: false, nombre: "", descripcion: ""
+          visible: false, editando: null, nombre: "", descripcion: "", estado: "Activo"
         })}>
           <div className="modal-card" onClick={e => e.stopPropagation()}>
-            <h2>Nueva Categoría</h2>
+            <h2>{nuevaCat.editando ? "Editar Categoría" : "Nueva Categoría"}</h2>
             <label className="pos-field floating">
               <span>Nombre</span>
               <input
@@ -876,6 +929,18 @@ export function ServiciosPage() {
                 }))}
               />
             </label>
+            <label className="pos-field floating">
+              <span>Estado</span>
+              <select
+                value={nuevaCat.estado}
+                onChange={e => setNuevaCat(c => ({
+                  ...c, estado: e.target.value
+                }))}
+              >
+                <option>Activo</option>
+                <option>Inactivo</option>
+              </select>
+            </label>
             <div style={{
               display: "flex", justifyContent: "flex-end",
               gap: 12,
@@ -886,7 +951,7 @@ export function ServiciosPage() {
                 className="ghost-button"
                 type="button"
                 onClick={() => setNuevaCat({
-                  visible: false, nombre: "", descripcion: ""
+                  visible: false, editando: null, nombre: "", descripcion: "", estado: "Activo"
                 })}
               >
                 Cancelar
@@ -897,7 +962,7 @@ export function ServiciosPage() {
                 disabled={saving}
                 onClick={guardarNuevaCategoria}
               >
-                {saving ? "Guardando..." : "Guardar categoría"}
+                {saving ? "Guardando..." : nuevaCat.editando ? "Guardar cambios" : "Guardar categoría"}
               </button>
             </div>
           </div>

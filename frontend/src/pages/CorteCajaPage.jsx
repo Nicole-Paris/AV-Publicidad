@@ -28,11 +28,26 @@ function formatTime(value) {
 function normalizeMoney(value) {
   const limpio = String(value || "").replace(/[^\d.]/g, "");
   const partes = limpio.split(".");
-  return partes.length > 1 ? `${partes[0]}.${partes.slice(1).join("")}` : limpio;
+  const entero = (partes[0] || "").slice(0, 8);
+  if (partes.length > 1) {
+    return `${entero}.${partes.slice(1).join("").slice(0, 2)}`;
+  }
+  return entero;
 }
 
 function toAmount(value) {
   return Number(value || 0);
+}
+
+function friendlyCashError(error) {
+  const message = error?.message || String(error || "");
+  if (message.toLowerCase().includes("valor numérico fuera de límites")) {
+    return "El monto es demasiado grande. Usa máximo 8 dígitos y 2 decimales.";
+  }
+  if (message.toLowerCase().includes("valor numerico fuera de limites")) {
+    return "El monto es demasiado grande. Usa máximo 8 dígitos y 2 decimales.";
+  }
+  return message;
 }
 
 export function CorteCajaPage() {
@@ -76,7 +91,7 @@ export function CorteCajaPage() {
         setAssignedEmpleadoId("");
         setPedidos(pedidosData || []);
       } catch (err) {
-        if (active) setError(err.message);
+        if (active) setError(friendlyCashError(err));
       } finally {
         if (active) setLoading(false);
       }
@@ -182,7 +197,7 @@ export function CorteCajaPage() {
       await recargar();
       setSuccess("Corte abierto correctamente.");
     } catch (err) {
-      setError(err.message);
+      setError(friendlyCashError(err));
     } finally {
       setSaving(false);
     }
@@ -224,7 +239,7 @@ export function CorteCajaPage() {
       await recargar();
       setSuccess("Corte cerrado correctamente.");
     } catch (err) {
-      setError(err.message);
+      setError(friendlyCashError(err));
     } finally {
       setSaving(false);
     }
@@ -248,9 +263,9 @@ export function CorteCajaPage() {
           <label>
             <span>Fecha de corte</span>
             <input
+              disabled
               type="date"
               value={fechaFiltro}
-              onChange={(event) => setFechaFiltro(event.target.value)}
             />
           </label>
           <div className={corteAbierto ? "cash-status open" : "cash-status closed"}>

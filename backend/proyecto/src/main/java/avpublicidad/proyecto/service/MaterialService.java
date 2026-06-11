@@ -1,10 +1,12 @@
 package avpublicidad.proyecto.service;
 
 import avpublicidad.proyecto.constants.MaterialConstants;
+import avpublicidad.proyecto.constants.PedidoConstants;
 import avpublicidad.proyecto.dto.MaterialRequest;
 import avpublicidad.proyecto.exception.ResourceNotFoundException;
 import avpublicidad.proyecto.model.Material;
 import avpublicidad.proyecto.repository.CategoriaMaterialRepository;
+import avpublicidad.proyecto.repository.DetallePedidoRepository;
 import avpublicidad.proyecto.repository.MaterialRepository;
 import jakarta.validation.ValidationException;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +23,7 @@ public class MaterialService {
 
     private final MaterialRepository materialRepository;
     private final CategoriaMaterialRepository categoriaMaterialRepository;
+    private final DetallePedidoRepository detallePedidoRepository;
 
     public List<Material> listar() {
         return materialRepository.findByDeletedAtIsNull();
@@ -34,6 +37,7 @@ public class MaterialService {
 
     public Material crear(MaterialRequest request) {
         validarCategoria(request.getCategoriaMaterialId());
+        validarNombreUnico(request.getNombre(), null);
 
         Material material = Material.builder()
                 .nombre(request.getNombre())
@@ -52,10 +56,13 @@ public class MaterialService {
     public Material actualizar(Integer id, MaterialRequest request) {
         Material material = obtenerPorId(id);
         validarCategoria(request.getCategoriaMaterialId());
+        validarNombreUnico(request.getNombre(), id);
+        String estadoNormalizado = normalizarEstado(request.getEstado());
+        validarCambioANoDisponible(material, estadoNormalizado);
 
         material.setNombre(request.getNombre());
         material.setUnidad(normalizarUnidad(request.getUnidad()));
-        material.setEstado(normalizarEstado(request.getEstado()));
+        material.setEstado(estadoNormalizado);
         material.setCostoUnitario(request.getCostoUnitario());
         material.setCategoriaMaterialId(request.getCategoriaMaterialId());
         material.setCreatedBy(request.getCreatedBy());
@@ -110,5 +117,37 @@ public class MaterialService {
         }
 
         throw new ValidationException("El estado debe ser Disponible o No disponible");
+    }
+
+    private void validarNombreUnico(String nombre, Integer materialActualId) {
+        if (nombre == null || nombre.isBlank()) {
+            return;
+        }
+
+        materialRepository.findByNombreIgnoreCaseAndDeletedAtIsNull(nombre.trim())
+                .filter(material -> !material.getIdMaterial().equals(materialActualId))
+                .ifPresent(material -> {
+                    throw new ValidationException("Ya existe un material activo con ese nombre");
+                });
+    }
+
+    private void validarCambioANoDisponible(Material material, String estadoNuevo) {
+        if (!MaterialConstants.ESTADO_DISPONIBLE.equals(material.getEstado())
+                || !MaterialConstants.ESTADO_NO_DISPONIBLE.equals(estadoNuevo)) {
+            return;
+        }
+
+        long pedidosActivos = detallePedidoRepository.countPedidosActivosPorMaterial(
+                material.getIdMaterial(),
+                List.of(
+                        PedidoConstants.ESTADO_CANCELADO,
+                        PedidoConstants.ESTADO_TERMINADO,
+                        PedidoConstants.ESTADO_ENTREGADO
+                )
+        );
+
+        if (pedidosActivos > 0) {
+            throw new ValidationException("No se puede poner inactivo un material que se esta usando en pedidos activos; primero cancela o termina esos pedidos");
+        }
     }
 }
