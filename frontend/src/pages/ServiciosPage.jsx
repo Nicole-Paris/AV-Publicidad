@@ -318,7 +318,24 @@ export function ServiciosPage() {
         await actualizarServicio(servicioEditando.idServicio || servicioEditando.id, payload);
         await guardarMaterialesEditandoServicio(servicioEditando.idServicio || servicioEditando.id);
       } else {
-        await crearServicio(payload);
+        const nuevoServicio = await crearServicio(payload);
+        let nuevoServicioId = nuevoServicio?.idServicio || nuevoServicio?.id;
+
+        if (!nuevoServicioId && materialesEditandoServicio.filter(item => !item.deleted).length > 0) {
+          const serviciosRefrescados = safe(await listarServicios());
+          const servicioCreado = [...serviciosRefrescados]
+            .filter(registroDeSucursal)
+            .reverse()
+            .find(servicio =>
+              (servicio.nombre || "").trim().toLowerCase() === formServicio.nombre.trim().toLowerCase() &&
+              Number(servicio.categoriaServicioId) === Number(formServicio.categoriaServicioId)
+            );
+          nuevoServicioId = servicioCreado?.idServicio || servicioCreado?.id;
+        }
+
+        if (nuevoServicioId) {
+          await guardarMaterialesEditandoServicio(nuevoServicioId);
+        }
       }
       const svs = await listarServicios();
       const svMats = await listarServiciosMateriales();
@@ -832,7 +849,7 @@ export function ServiciosPage() {
                 <option value="__nueva__">+ Nueva categoría...</option>
               </select>
             </label>
-            {servicioEditando && (
+            {(
               <div className="service-material-editor">
                 <div className="tab-section-header">
                   <h3>Materiales usados</h3>

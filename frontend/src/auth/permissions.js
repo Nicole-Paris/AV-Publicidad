@@ -9,14 +9,9 @@ export function esAdministrador(session) {
 export function puedeAccederRuta(session, pathname) {
   if (!esEmpleado(session)) return true;
   const rutasPermitidas = [
-    "/dashboard",
-    "/punto-venta",
     "/pedidos",
     "/clientes",
     "/inventario",
-    "/servicios",
-    "/cortes-caja",
-    "/reportes",
     "/configuracion"
   ];
   return rutasPermitidas.some(

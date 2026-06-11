@@ -30,17 +30,14 @@ export function AppLayout() {
   const linksVisibles = esEmpleado(session)
     ? links.filter((link) =>
         [
-          "/punto-venta",
           "/pedidos",
           "/clientes",
           "/inventario",
-          "/servicios",
-          "/cortes-caja",
-          "/reportes",
           "/configuracion"
         ].includes(link.to)
       )
     : links;
+  const rutaInicio = esEmpleado(session) ? "/pedidos" : "/dashboard";
   const sucursalesSesionCount = sucursalesSesion.length;
 
   useEffect(() => {
@@ -116,8 +113,8 @@ export function AppLayout() {
         <button
           type="button"
           className="brand brand-button"
-          onClick={() => navigate("/dashboard")}
-          aria-label="Ir al panel principal"
+          onClick={() => navigate(rutaInicio)}
+          aria-label={esEmpleado(session) ? "Ir a pedidos" : "Ir al panel principal"}
         >
           {logoUrl ? (
             <img

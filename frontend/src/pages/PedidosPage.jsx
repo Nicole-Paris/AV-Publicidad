@@ -265,15 +265,14 @@ export function PedidosPage() {
     const q = (buscarPedido || "").trim().toLowerCase();
     return pedidos.filter(p => {
       const matchSucursal = !sucursalActivaId || Number(p.sucursalId) === Number(sucursalActivaId);
-      const matchEmpleado = !soloEmpleado || Number(p.createdBy) === Number(session?.empleadoId);
       const cliente = clienteDePedido(p);
       const nombre = cliente ? nombreCliente(cliente).toLowerCase() : "";
       const matchBuscar = !q || nombre.includes(q) || String(p.idPedido).includes(q);
       const matchEstado = !filtroEstado || p.estado === filtroEstado;
       const matchEstadoPago = !filtroEstadoPago || estadoPagoPedido(p) === filtroEstadoPago;
-      return matchSucursal && matchEmpleado && matchBuscar && matchEstado && matchEstadoPago;
+      return matchSucursal && matchBuscar && matchEstado && matchEstadoPago;
     });
-  }, [pedidos, buscarPedido, filtroEstado, filtroEstadoPago, clientes, todosLosPagos, sucursalActivaId, soloEmpleado, session?.empleadoId]);
+  }, [pedidos, buscarPedido, filtroEstado, filtroEstadoPago, clientes, todosLosPagos, sucursalActivaId]);
 
   const pedidosPaginados = useMemo(() => {
     const inicio = (paginaPedidos - 1) * PAGE_SIZE;
@@ -453,11 +452,10 @@ export function PedidosPage() {
     return (todosLosPagos || []).filter(p => {
       const pedidoPago = pedidos.find(pedido => Number(pedido.idPedido) === Number(p.pedidoId));
       const matchSucursal = !sucursalActivaId || Number(pedidoPago?.sucursalId) === Number(sucursalActivaId);
-      const matchEmpleado = !soloEmpleado || Number(pedidoPago?.createdBy) === Number(session?.empleadoId);
       const matchBuscar = !q || String(p.pedidoId).includes(q) || (p.formaPago || "").toLowerCase().includes(q) || (p.conceptoPago || "").toLowerCase().includes(q);
-      return matchSucursal && matchEmpleado && matchBuscar;
+      return matchSucursal && matchBuscar;
     });
-  }, [todosLosPagos, buscarPago, pedidos, sucursalActivaId, soloEmpleado, session?.empleadoId]);
+  }, [todosLosPagos, buscarPago, pedidos, sucursalActivaId]);
 
   const gruposPagos = useMemo(() => {
     const grupos = {};

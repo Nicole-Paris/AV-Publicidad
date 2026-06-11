@@ -12,7 +12,11 @@ import { ServiciosPage } from "../pages/ServiciosPage.jsx";
 import { ClientesPage } from "../pages/ClientesPage.jsx";
 import { ConfiguracionPage } from "../pages/ConfiguracionPage.jsx";
 import { ReportesPage } from "../pages/ReportesPage.jsx";
-import { puedeAccederRuta } from "../auth/permissions.js";
+import { esEmpleado, puedeAccederRuta } from "../auth/permissions.js";
+
+function rutaInicio(session) {
+  return esEmpleado(session) ? "/pedidos" : "/dashboard";
+}
 
 function ProtectedRoute({ children }) {
   const location = useLocation();
@@ -23,17 +27,17 @@ function ProtectedRoute({ children }) {
   }
 
   if (!puedeAccederRuta(session, location.pathname)) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={rutaInicio(session)} replace />;
   }
 
   return children;
 }
 
 function PublicRoute({ children }) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, session } = useAuth();
 
   if (isAuthenticated) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={rutaInicio(session)} replace />;
   }
 
   return children;
@@ -59,7 +63,7 @@ export function AppRoutes() {
           </ProtectedRoute>
         }
       >
-        <Route index element={<Navigate to="/dashboard" replace />} />
+        <Route index element={<InicioRedirect />} />
         <Route path="dashboard" element={<DashboardPage />} />
         <Route path="punto-venta" element={<PuntoVentaPage />} />
         <Route path="clientes" element={<ClientesPage />} />
@@ -74,7 +78,17 @@ export function AppRoutes() {
         <Route path="configuracion" element={<ConfiguracionPage />} />
       </Route>
 
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      <Route path="*" element={<FallbackRedirect />} />
     </Routes>
   );
+}
+
+function InicioRedirect() {
+  const { session } = useAuth();
+  return <Navigate to={rutaInicio(session)} replace />;
+}
+
+function FallbackRedirect() {
+  const { session } = useAuth();
+  return <Navigate to={rutaInicio(session)} replace />;
 }

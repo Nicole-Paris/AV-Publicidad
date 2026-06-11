@@ -683,20 +683,16 @@ export function ConfiguracionPage() {
       mostrarError("No se pudo encontrar la informacion del empleado.");
       return;
     }
-    if (!formEmpleado.telefono.trim()) {
-      mostrarError("Escribe tu telefono.");
+    if (!formEmpleado.contrasena.trim()) {
+      mostrarError("Escribe tu nueva contraseña.");
       return;
     }
 
     setSaving(true);
     try {
       const payload = {
-        telefono: formEmpleado.telefono.trim()
+        contrasena: formEmpleado.contrasena.trim()
       };
-
-      if (formEmpleado.contrasena.trim()) {
-        payload.contrasena = formEmpleado.contrasena.trim();
-      }
 
       const actualizado = await actualizarCuentaEmpleado(empleadoEditando.idEmpleado, payload);
       setEmpleados(prev => prev.map(empleado =>
@@ -706,7 +702,7 @@ export function ConfiguracionPage() {
       ));
       setEmpleadoEditando(actualizado);
       setFormEmpleado(f => ({ ...f, contrasena: "" }));
-      mostrarSuccess("Informacion actualizada correctamente.");
+      mostrarSuccess("Contraseña actualizada correctamente.");
     } catch (err) {
       mostrarError(err.message || String(err));
     } finally {
@@ -910,34 +906,26 @@ export function ConfiguracionPage() {
                 <div><span>Correo</span><strong>{empleadoEditando?.correo || "-"}</strong></div>
                 <div><span>Rol</span><strong>{nombreRol(empleadoEditando?.rolId)}</strong></div>
                 <div><span>Sucursal</span><strong>{nombreSucursal(empleadoEditando?.sucursalIdSucursal)}</strong></div>
+                <div><span>Telefono</span><strong>{empleadoEditando?.telefono || "-"}</strong></div>
                 <div><span>Hora entrada</span><strong>{empleadoEditando?.horaEntrada?.slice(0, 5) || "-"}</strong></div>
                 <div><span>Hora salida</span><strong>{empleadoEditando?.horaSalida?.slice(0, 5) || "-"}</strong></div>
               </div>
 
               <div className="modal-grid account-edit-grid">
                 <label className="pos-field floating">
-                  <span>Telefono</span>
-                  <input
-                    maxLength={10}
-                    value={formEmpleado.telefono}
-                    onChange={e => setFormEmpleado(f => ({...f, telefono: e.target.value.replace(/\D/g, "").slice(0, 10)}))}
-                    type="text"
-                  />
-                </label>
-                <label className="pos-field floating">
                   <span>Nueva contraseña</span>
                   <input
                     value={formEmpleado.contrasena}
                     onChange={e => setFormEmpleado(f => ({...f, contrasena: e.target.value}))}
                     type="password"
-                    placeholder="Dejar vacio para no cambiar"
+                    placeholder="Escribe tu nueva contraseña"
                   />
                 </label>
               </div>
 
               <div className="modal-actions">
                 <button className="primary-button" disabled={saving || loading} onClick={guardarMiCuenta} type="button">
-                  {saving ? "Guardando..." : "Guardar cambios"}
+                  {saving ? "Guardando..." : "Cambiar contraseña"}
                 </button>
               </div>
             </>
