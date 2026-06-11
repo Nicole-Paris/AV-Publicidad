@@ -27,6 +27,8 @@ export function ServiciosPage() {
   const [modalError, setModalError] = useState("");
   const [success, setSuccess] = useState("");
   const [buscar, setBuscar] = useState("");
+  const [buscarCategoria, setBuscarCategoria] = useState("");
+  const [estadoCategoriaFiltro, setEstadoCategoriaFiltro] = useState("");
   const [paginaServicios, setPaginaServicios] = useState(1);
 
   const [modalServicio, setModalServicio] = useState(false);
@@ -121,6 +123,14 @@ export function ServiciosPage() {
     return partes.length > 1 ? `${partes[0]}.${partes.slice(1).join("")}` : limpio;
   }
 
+  function normalizarTexto(value) {
+    return (value || "")
+      .toString()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+  }
+
   const sucursalActivaId = session?.sucursalIdSucursal || session?.sucursalId;
 
   function registroDeSucursal(registro) {
@@ -165,24 +175,6 @@ export function ServiciosPage() {
 
   function abrirNuevaCategoria() {
     setNuevaCat({ visible: true, editando: null, nombre: "", descripcion: "", estado: "Activo" });
-  }
-
-  function abrirEditarCategoriaServicio() {
-    const categoria = categorias.find(c =>
-      Number(c.idCategoriaServicio || c.id) === Number(formServicio.categoriaServicioId)
-    );
-    if (!categoria) {
-      mostrarError("Selecciona una categoría para editar.");
-      return;
-    }
-
-    setNuevaCat({
-      visible: true,
-      editando: categoria,
-      nombre: categoria.nombre || "",
-      descripcion: categoria.descripcion || "",
-      estado: categoria.estado || "Activo"
-    });
   }
 
   function agregarMaterialEditandoServicio() {
@@ -262,6 +254,17 @@ export function ServiciosPage() {
     const inicio = (paginaServicios - 1) * PAGE_SIZE;
     return serviciosFiltrados.slice(inicio, inicio + PAGE_SIZE);
   }, [serviciosFiltrados, paginaServicios]);
+
+  const categoriasFiltradas = useMemo(() => {
+    const q = normalizarTexto(buscarCategoria.trim());
+    return categorias
+      .filter(categoria => !estadoCategoriaFiltro || categoria.estado === estadoCategoriaFiltro)
+      .filter(categoria => {
+        if (!q) return true;
+        return normalizarTexto(categoria.nombre).includes(q)
+          || normalizarTexto(categoria.descripcion).includes(q);
+      });
+  }, [categorias, buscarCategoria, estadoCategoriaFiltro]);
 
   useEffect(() => {
     setPaginaServicios(1);
@@ -429,6 +432,17 @@ export function ServiciosPage() {
       mostrarError("Ya existe una categoría de servicio con ese nombre.");
       return;
     }
+    if (nuevaCat.editando && nuevaCat.estado === "Inactivo") {
+      const idCategoriaEditando = Number(nuevaCat.editando.idCategoriaServicio || nuevaCat.editando.id);
+      const tieneServiciosLigados = servicios.some(servicio =>
+        Number(servicio.categoriaServicioId) === idCategoriaEditando && !servicio.deletedAt
+      );
+      const estabaActiva = (nuevaCat.editando.estado || "Activo") !== "Inactivo";
+      if (estabaActiva && tieneServiciosLigados) {
+        mostrarError("No se puede inactivar la categoría porque tiene servicios ligados.");
+        return;
+      }
+    }
     setSaving(true);
     try {
       const payload = {
@@ -501,33 +515,42 @@ export function ServiciosPage() {
         <div className="pos-alert success">{success}</div>
       )}
 
-      {/* barra superior: búsqueda */}
-      <div className="inv-toolbar">
-        <input
-          placeholder="Buscar servicio..."
-          value={buscar}
-          onChange={e => setBuscar(e.target.value)}
-          style={{ flex: 1 }}
-          disabled={loading}
-        />
-        <div />
-        <div className="toolbar-actions">
-          {!soloEmpleado && (
-            <button
-              className="primary-button"
-              onClick={() => tab === "servicios"
-                ? abrirNuevoServicio()
-                : setModalMaterial(true)
-              }
-              type="button"
-              disabled={loading}
-            >
-              {tab === "servicios" ? "+ Nuevo Servicio" : "+ Asignar Material"}
-            </button>
-          )}
-        </div>
+      <div className="inv-tabs">
+        <button className={tab === "servicios" ? "inv-tab active" : "inv-tab"} onClick={() => setTab("servicios")} type="button">
+          Servicios
+        </button>
+        <button className={tab === "categorias" ? "inv-tab active" : "inv-tab"} onClick={() => setTab("categorias")} type="button">
+          Categorías
+        </button>
       </div>
 
+      {tab === "servicios" && (
+        <div className="inv-toolbar">
+          <input
+            placeholder="Buscar servicio..."
+            value={buscar}
+            onChange={e => setBuscar(e.target.value)}
+            style={{ flex: 1 }}
+            disabled={loading}
+          />
+          <div />
+          <div className="toolbar-actions">
+            {!soloEmpleado && (
+              <button
+                className="primary-button"
+                onClick={abrirNuevoServicio}
+                type="button"
+                disabled={loading}
+              >
+                + Nuevo Servicio
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {tab === "servicios" && (
+      <>
       <div className="inv-table-wrap">
         <table className="inv-table">
           <thead>
@@ -654,6 +677,107 @@ export function ServiciosPage() {
         onPageChange={setPaginaServicios}
         disabled={loading}
       />
+      </>
+      )}
+
+      {tab === "categorias" && (
+        <>
+          <div className="inv-toolbar">
+            <input
+              placeholder="Buscar categoría por nombre o descripción"
+              value={buscarCategoria}
+              onChange={e => setBuscarCategoria(e.target.value)}
+              disabled={loading}
+            />
+            <select
+              value={estadoCategoriaFiltro}
+              onChange={e => setEstadoCategoriaFiltro(e.target.value)}
+              disabled={loading}
+            >
+              <option value="">Todos los estados</option>
+              <option value="Activo">Activo</option>
+              <option value="Inactivo">Inactivo</option>
+            </select>
+            {!soloEmpleado && (
+              <div className="toolbar-actions">
+                <button
+                  className="primary-button compact-action-button"
+                  onClick={abrirNuevaCategoria}
+                  type="button"
+                  disabled={loading}
+                >
+                  + Nueva Categoría
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="inv-table-wrap">
+            <table className="inv-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Nombre</th>
+                  <th>Descripción</th>
+                  <th>Estado</th>
+                  {!soloEmpleado && <th>Acciones</th>}
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {categoriasFiltradas.map(categoria => (
+                  <tr key={categoria.idCategoriaServicio || categoria.id}>
+                    <td>{categoria.idCategoriaServicio || categoria.id}</td>
+                    <td style={{ fontWeight: 700 }}>{categoria.nombre}</td>
+                    <td>{categoria.descripcion || "-"}</td>
+                    <td>
+                      <span className={categoria.estado === "Activo" ? "inv-badge ok" : "inv-badge neutral"}>
+                        {categoria.estado || "Activo"}
+                      </span>
+                    </td>
+                    {!soloEmpleado && (
+                      <td>
+                        <div className="table-actions">
+                          <button
+                            className="ghost-button"
+                            onClick={() => setNuevaCat({
+                              visible: true,
+                              editando: categoria,
+                              nombre: categoria.nombre || "",
+                              descripcion: categoria.descripcion || "",
+                              estado: categoria.estado || "Activo"
+                            })}
+                            type="button"
+                          >
+                            Editar
+                          </button>
+                        </div>
+                      </td>
+                    )}
+                    <td>
+                      <button
+                        aria-label="Ver auditoria de la categoría"
+                        className="audit-toggle"
+                        onClick={() => abrirAuditoria(`Categoría ${categoria.idCategoriaServicio || categoria.id}`, categoria)}
+                        type="button"
+                      >
+                        ▼
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {categoriasFiltradas.length === 0 && !loading && (
+                  <tr>
+                    <td colSpan={soloEmpleado ? 5 : 6} style={{ textAlign: "center", color: "#64748b", padding: 24 }}>
+                      Sin categorías que coincidan con la búsqueda.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
 
       {modalServicio && (
         <div className="modal-overlay" onClick={() => {
@@ -708,16 +832,6 @@ export function ServiciosPage() {
                 <option value="__nueva__">+ Nueva categoría...</option>
               </select>
             </label>
-            <div style={{ display: "flex", justifyContent: "center", marginTop: -8, marginBottom: 12 }}>
-              <button
-                className="ghost-button"
-                type="button"
-                disabled={!formServicio.categoriaServicioId}
-                onClick={abrirEditarCategoriaServicio}
-              >
-                Editar categoría
-              </button>
-            </div>
             {servicioEditando && (
               <div className="service-material-editor">
                 <div className="tab-section-header">

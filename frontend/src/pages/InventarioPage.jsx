@@ -12,7 +12,6 @@ import {
   listarMovimientos,
   crearMovimiento
 } from "../api/inventarioApi.js";
-import { listarSucursales } from "../api/catalogApi.js";
 import { listarEmpleados } from "../api/empleadoApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { esEmpleado } from "../auth/permissions.js";
@@ -156,7 +155,6 @@ export function InventarioPage() {
   const [categorias, setCategorias] = useState([]);
   const [inventarios, setInventarios] = useState([]);
   const [movimientos, setMovimientos] = useState([]);
-  const [sucursales, setSucursales] = useState([]);
   const [empleados, setEmpleados] = useState([]);
   const [materialExpandido, setMaterialExpandido] = useState(null);
   const [movimientoExpandido, setMovimientoExpandido] = useState(null);
@@ -165,6 +163,8 @@ export function InventarioPage() {
 
   const [buscar, setBuscar] = useState("");
   const [categoriaFiltro, setCategoriaFiltro] = useState("");
+  const [buscarCategoria, setBuscarCategoria] = useState("");
+  const [estadoCategoriaFiltro, setEstadoCategoriaFiltro] = useState("");
   const [paginaMateriales, setPaginaMateriales] = useState(1);
   const [paginaMovimientos, setPaginaMovimientos] = useState(1);
   const sucursalActivaId = session?.sucursalIdSucursal || session?.sucursalId;
@@ -182,7 +182,6 @@ export function InventarioPage() {
 
   const [formulario, setFormulario] = useState({
     // materiales
-    sucursalId: "",
     nombre: "",
     unidad: "Metros",
     costoUnitario: "",
@@ -218,12 +217,11 @@ export function InventarioPage() {
       setLoading(true);
       setError("");
       try {
-        const [cats, mats, invs, movs, sucs, emps] = await Promise.all([
+        const [cats, mats, invs, movs, emps] = await Promise.all([
           listarCategoriasMaterial(),
           listarMateriales(),
           listarInventarios(),
           listarMovimientos(),
-          listarSucursales(),
           listarEmpleados()
         ]);
         if (!active) return;
@@ -231,7 +229,6 @@ export function InventarioPage() {
         setMateriales(mats);
         setInventarios(invs);
         setMovimientos(movs);
-        setSucursales(sucs);
         setEmpleados(Array.isArray(emps) ? emps : []);
       } catch (err) {
         if (active) mostrarError(err.message || String(err));
@@ -277,6 +274,17 @@ export function InventarioPage() {
         return Number(idMovimiento(b) || 0) - Number(idMovimiento(a) || 0);
       });
   }, [movimientos, inventarios, sucursalActivaId]);
+
+  const categoriasFiltradas = useMemo(() => {
+    const q = normalizarTexto(buscarCategoria.trim());
+    return categorias
+      .filter((categoria) => !estadoCategoriaFiltro || categoria.estado === estadoCategoriaFiltro)
+      .filter((categoria) => {
+        if (!q) return true;
+        return normalizarTexto(categoria.nombre).includes(q)
+          || normalizarTexto(categoria.descripcion).includes(q);
+      });
+  }, [categorias, buscarCategoria, estadoCategoriaFiltro]);
 
   const materialesPaginados = useMemo(() => {
     const inicio = (paginaMateriales - 1) * PAGE_SIZE;
@@ -343,24 +351,6 @@ export function InventarioPage() {
     setNuevaCat({ visible: true, editando: null, nombre: "", descripcion: "", estado: "Activo" });
   }
 
-  function abrirEditarCategoriaMaterial() {
-    const categoria = categorias.find((item) =>
-      Number(item.idCategoriaMaterial || item.id) === Number(formulario.categoriaMaterialId)
-    );
-    if (!categoria) {
-      mostrarError("Selecciona una categoría para editar.");
-      return;
-    }
-
-    setNuevaCat({
-      visible: true,
-      editando: categoria,
-      nombre: categoria.nombre || "",
-      descripcion: categoria.descripcion || "",
-      estado: categoria.estado || "Activo"
-    });
-  }
-
   // acciones de guardado
   async function guardarNuevaCategoria() {
     if (!nuevaCat.nombre.trim()) {
@@ -380,6 +370,18 @@ export function InventarioPage() {
       mostrarError("Ya existe una categoría de material con ese nombre.");
       return;
     }
+    if (nuevaCat.editando && nuevaCat.estado === "Inactivo") {
+      const idCategoriaEditando = Number(nuevaCat.editando.idCategoriaMaterial || nuevaCat.editando.id);
+      const tieneMaterialesLigados = materiales.some((material) =>
+        Number(material.categoriaMaterialId) === idCategoriaEditando && !material.deletedAt
+      );
+      const estabaActiva = (nuevaCat.editando.estado || "Activo") !== "Inactivo";
+      if (estabaActiva && tieneMaterialesLigados) {
+        mostrarError("No se puede inactivar la categoría porque tiene materiales ligados.");
+        return;
+      }
+    }
+
     setSaving(true);
     setError("");
     try {
@@ -426,8 +428,8 @@ export function InventarioPage() {
     e?.preventDefault();
     setError("");
     setSuccess("");
-    if (!formulario.sucursalId) {
-      mostrarError("Selecciona una sucursal.");
+    if (!sucursalActivaId) {
+      mostrarError("No hay una sucursal activa para registrar el material.");
       return;
     }
     if (!formulario.nombre || !formulario.costoUnitario || !formulario.categoriaMaterialId) {
@@ -451,7 +453,7 @@ export function InventarioPage() {
         ? await actualizarMaterial(materialEditando.material.idMaterial || materialEditando.material.id, payloadMaterial)
         : await crearMaterial({
             ...payloadMaterial,
-            sucursalId: Number(formulario.sucursalId)
+            sucursalId: Number(sucursalActivaId)
           });
 
       // crear inventario inicial para el material recién creado
@@ -461,7 +463,7 @@ export function InventarioPage() {
           stockActual: Number(formulario.stockActual || 0),
           stockMinimo: Number(formulario.stockMinimo || 0),
           materialId: Number(idMaterialNuevo),
-          sucursalId: Number(formulario.sucursalId),
+          sucursalId: Number(sucursalActivaId),
           createdBy: session.empleadoId
         });
       }
@@ -470,30 +472,27 @@ export function InventarioPage() {
           stockActual: Number(formulario.stockActual || 0),
           stockMinimo: Number(formulario.stockMinimo || 0),
           materialId: Number(materialEditando.material.idMaterial || materialEditando.material.id),
-          sucursalId: Number(formulario.sucursalId || materialEditando.inventario.sucursalId),
+          sucursalId: Number(sucursalActivaId || materialEditando.inventario.sucursalId),
           createdBy: materialEditando.inventario.createdBy || session.empleadoId,
           updatedBy: session.empleadoId
         });
       }
 
       // recargar todo en paralelo
-      const [cats, mats, invs, movs, sucs] = await Promise.all([
+      const [cats, mats, invs, movs] = await Promise.all([
         listarCategoriasMaterial(),
         listarMateriales(),
         listarInventarios(),
-        listarMovimientos(),
-        listarSucursales()
+        listarMovimientos()
       ]);
       setCategorias(cats);
       setMateriales(mats);
       setInventarios(invs);
       setMovimientos(movs);
-      setSucursales(sucs);
 
       // limpiar y cerrar
       setFormulario((f) => ({
         ...f,
-        sucursalId: "",
         nombre: "",
         unidad: "Metros",
         costoUnitario: "",
@@ -517,8 +516,12 @@ export function InventarioPage() {
     e?.preventDefault();
     setError("");
     setSuccess("");
-    if (!formulario.nombreMaterial || !formulario.cantidad || !formulario.sucursalId) {
-      mostrarError("Selecciona material, sucursal y cantidad.");
+    if (!sucursalActivaId) {
+      mostrarError("No hay una sucursal activa para registrar el movimiento.");
+      return;
+    }
+    if (!formulario.nombreMaterial || !formulario.cantidad) {
+      mostrarError("Selecciona material y cantidad.");
       return;
     }
     if (!formulario.motivo || !formulario.motivo.trim()) {
@@ -553,7 +556,7 @@ export function InventarioPage() {
       const inv = inventarios.find(
         (i) =>
           Number(i.materialId) === Number(mat.idMaterial) &&
-          Number(i.sucursalId) === Number(formulario.sucursalId)
+          Number(i.sucursalId) === Number(sucursalActivaId)
       );
       if (!inv) {
         mostrarError("No hay inventario registrado para ese material en esa sucursal.");
@@ -574,20 +577,18 @@ export function InventarioPage() {
       });
 
       // recargar todo en paralelo
-      const [cats, mats, invs, movs, sucs] = await Promise.all([
+      const [cats, mats, invs, movs] = await Promise.all([
         listarCategoriasMaterial(),
         listarMateriales(),
         listarInventarios(),
-        listarMovimientos(),
-        listarSucursales()
+        listarMovimientos()
       ]);
       setCategorias(cats);
       setMateriales(mats);
       setInventarios(invs);
       setMovimientos(movs);
-      setSucursales(sucs);
 
-      setFormulario((f) => ({ ...f, nombreMaterial: "", inventarioId: "", tipo: "Entrada", cantidad: "", motivo: "", sucursalId: "" }));
+      setFormulario((f) => ({ ...f, nombreMaterial: "", inventarioId: "", tipo: "Entrada", cantidad: "", motivo: "" }));
       setFormularioAbierto(false);
       mostrarSuccess("Movimiento registrado correctamente.");
     } catch (err) {
@@ -611,7 +612,6 @@ export function InventarioPage() {
     setMaterialEditando({ material, inventario: inv || null });
     setFormulario((f) => ({
       ...f,
-      sucursalId: inv?.sucursalId ? String(inv.sucursalId) : "",
       nombre: material.nombre || "",
       unidad: material.unidad || "Metros",
       costoUnitario: String(material.costoUnitario ?? ""),
@@ -638,6 +638,7 @@ export function InventarioPage() {
 
       <div className="inv-tabs">
         <button className={tabActivo === "materiales" ? "inv-tab active" : "inv-tab"} onClick={() => setTabActivo("materiales")} type="button">Materiales</button>
+        <button className={tabActivo === "categorias" ? "inv-tab active" : "inv-tab"} onClick={() => setTabActivo("categorias")} type="button">Categorías</button>
         {!soloEmpleado && (
           <button className={tabActivo === "movimientos" ? "inv-tab active" : "inv-tab"} onClick={() => setTabActivo("movimientos")} type="button">Movimientos</button>
         )}
@@ -756,14 +757,6 @@ export function InventarioPage() {
               <h2>{materialEditando ? "Editar Material" : "Nuevo Material"}</h2>
               <form onSubmit={guardarMaterial}>
                 <label className="pos-field floating">
-                  <span>Sucursal</span>
-                  <select value={formulario.sucursalId} onChange={(e) => setFormulario((f) => ({ ...f, sucursalId: e.target.value }))}>
-                    <option value="">Selecciona</option>
-                    {sucursales.map((s) => <option key={s.idSucursal} value={s.idSucursal}>{s.nombre}</option>)}
-                  </select>
-                </label>
-
-                <label className="pos-field floating">
                   <span>Nombre</span>
                   <input name="nombre" value={formulario.nombre} onChange={(e) => setFormulario((f) => ({ ...f, nombre: e.target.value }))} type="text" />
                 </label>
@@ -817,17 +810,6 @@ export function InventarioPage() {
                       <option value="__nueva__">+ Nueva categoría...</option>
                     </select>
                   </label>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", paddingTop: 8 }}>
-                    <button
-                      className="ghost-button"
-                      type="button"
-                      disabled={!formulario.categoriaMaterialId}
-                      onClick={abrirEditarCategoriaMaterial}
-                    >
-                      Editar categoría
-                    </button>
-                  </div>
-
                   <label className="pos-field floating">
                     <span>Estado</span>
                     <select value={formulario.estado} onChange={(e) => setFormulario((f) => ({ ...f, estado: e.target.value }))}>
@@ -858,6 +840,108 @@ export function InventarioPage() {
               </div>
             </div>
           )}
+        </>
+      )}
+
+      {/* Categorías */}
+      {tabActivo === "categorias" && (
+        <>
+          <div className="inv-toolbar">
+            <input
+              placeholder="Buscar categoría por nombre o descripción"
+              value={buscarCategoria}
+              onChange={(e) => setBuscarCategoria(e.target.value)}
+              disabled={loading}
+            />
+            <select
+              value={estadoCategoriaFiltro}
+              onChange={(e) => setEstadoCategoriaFiltro(e.target.value)}
+              disabled={loading}
+            >
+              <option value="">Todos los estados</option>
+              <option value="Activo">Activo</option>
+              <option value="Inactivo">Inactivo</option>
+            </select>
+            {!soloEmpleado && (
+              <div className="toolbar-actions">
+                <button
+                  className="primary-button compact-action-button"
+                  onClick={abrirNuevaCategoriaMaterial}
+                  type="button"
+                  disabled={loading}
+                >
+                  + Nueva Categoría
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="inv-table-wrap">
+            <table className="inv-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Nombre</th>
+                  <th>Descripción</th>
+                  <th>Estado</th>
+                  {!soloEmpleado && <th>Acciones</th>}
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {categoriasFiltradas.map((categoria) => (
+                  <tr key={categoria.idCategoriaMaterial || categoria.id}>
+                    <td>{categoria.idCategoriaMaterial || categoria.id}</td>
+                    <td style={{ fontWeight: 700 }}>{categoria.nombre}</td>
+                    <td>{categoria.descripcion || "-"}</td>
+                    <td>
+                      <span className={categoria.estado === "Activo" ? "inv-badge ok" : "inv-badge neutral"}>
+                        {categoria.estado || "Activo"}
+                      </span>
+                    </td>
+                    {!soloEmpleado && (
+                      <td>
+                        <div className="table-actions">
+                          <button
+                            className="ghost-button"
+                            onClick={() => {
+                              setNuevaCat({
+                                visible: true,
+                                editando: categoria,
+                                nombre: categoria.nombre || "",
+                                descripcion: categoria.descripcion || "",
+                                estado: categoria.estado || "Activo"
+                              });
+                            }}
+                            type="button"
+                          >
+                            Editar
+                          </button>
+                        </div>
+                      </td>
+                    )}
+                    <td>
+                      <button
+                        aria-label="Ver auditoria de la categoría"
+                        className="audit-toggle"
+                        onClick={() => abrirAuditoria(`Categoría ${categoria.idCategoriaMaterial || categoria.id}`, categoria)}
+                        type="button"
+                      >
+                        ▼
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {categoriasFiltradas.length === 0 && !loading && (
+                  <tr>
+                    <td colSpan={soloEmpleado ? 5 : 6} style={{ textAlign: "center", color: "#64748b", padding: 24 }}>
+                      Sin categorías que coincidan con la búsqueda.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
 
@@ -930,14 +1014,6 @@ export function InventarioPage() {
               <div className="modal-card customer-modal" onClick={(event) => event.stopPropagation()}>
               <h2>Registrar Movimiento</h2>
               <form onSubmit={guardarMovimiento}>
-                <label className="pos-field floating">
-                  <span>Sucursal</span>
-                  <select value={formulario.sucursalId} onChange={(e) => setFormulario((f) => ({ ...f, sucursalId: e.target.value }))}>
-                    <option value="">Selecciona</option>
-                    {sucursales.map((s) => <option key={s.idSucursal} value={s.idSucursal}>{s.nombre}</option>)}
-                  </select>
-                </label>
-
                 <label className="pos-field floating">
                   <span>Nombre del Material</span>
                   <BuscadorMaterial materiales={materialesActivos} value={formulario.nombreMaterial} onChange={(v) => setFormulario((f) => ({ ...f, nombreMaterial: v }))} />

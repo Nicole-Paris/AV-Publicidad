@@ -11,4 +11,6 @@ public interface ServicioRepository extends JpaRepository<Servicio, Integer> {
     List<Servicio> findByDeletedAtIsNull();
 
     Optional<Servicio> findByNombreIgnoreCaseAndDeletedAtIsNull(String nombre);
+
+    boolean existsByCategoriaServicioIdAndDeletedAtIsNull(Integer categoriaServicioId);
 }

@@ -38,6 +38,7 @@ export function ConfiguracionPage() {
   const [sucursalEditando, setSucursalEditando] = useState(null);
   const [sucursalAEliminar, setSucursalAEliminar] = useState(null);
   const [empleadoEditando, setEmpleadoEditando] = useState(null);
+  const [empleadoAEliminar, setEmpleadoAEliminar] = useState(null);
   const [empleadoExpandido, setEmpleadoExpandido] = useState(null);
   const [sucursalSeleccionada, setSucursalSeleccionada] = useState(null);
   const [busquedaEmpleadoExistente, setBusquedaEmpleadoExistente] = useState("");
@@ -153,7 +154,16 @@ export function ConfiguracionPage() {
     return value ? new Date(value).toLocaleString("es-MX") : "-";
   }
 
+  function sucursalExiste(sucursalId) {
+    return sucursales.some(sucursal =>
+      Number(sucursal.idSucursal || sucursal.id) === Number(sucursalId)
+    );
+  }
+
   function empleadosDeSucursal(sucursalId) {
+    if (!sucursalExiste(sucursalId)) {
+      return [];
+    }
     const extras = empleadosPorSucursalExtra[String(sucursalId)] || [];
     return empleados.filter(empleado =>
       Number(empleado.sucursalIdSucursal) === Number(sucursalId) ||
@@ -163,12 +173,15 @@ export function ConfiguracionPage() {
 
   function sucursalesDeEmpleado(empleado) {
     const sucursalesIds = new Set();
-    if (empleado?.sucursalIdSucursal) {
+    if (empleado?.sucursalIdSucursal && sucursalExiste(empleado.sucursalIdSucursal)) {
       sucursalesIds.add(Number(empleado.sucursalIdSucursal));
     }
 
     Object.entries(empleadosPorSucursalExtra).forEach(([sucursalId, empleadoIds]) => {
-      if ((empleadoIds || []).map(Number).includes(Number(empleado.idEmpleado))) {
+      if (
+        sucursalExiste(sucursalId) &&
+        (empleadoIds || []).map(Number).includes(Number(empleado.idEmpleado))
+      ) {
         sucursalesIds.add(Number(sucursalId));
       }
     });
@@ -264,6 +277,10 @@ export function ConfiguracionPage() {
       sucursalIdSucursal: empleado.sucursalIdSucursal ? String(empleado.sucursalIdSucursal) : ""
     });
     setModalEmpleado(true);
+  }
+
+  function solicitarEliminarEmpleado(empleado) {
+    setEmpleadoAEliminar(empleado);
   }
 
   useEffect(() => {
@@ -538,9 +555,15 @@ export function ConfiguracionPage() {
   async function confirmarEliminarSucursal() {
     if (!sucursalAEliminar) return;
 
+    const sucursalId = sucursalAEliminar.idSucursal || sucursalAEliminar.id;
+    const empleadosAsignados = empleadosDeSucursal(sucursalId).length;
+    if (empleadosAsignados > 0) {
+      mostrarError(`No se puede eliminar la sucursal porque tiene ${empleadosAsignados} empleado${empleadosAsignados === 1 ? "" : "s"} asignado${empleadosAsignados === 1 ? "" : "s"}.`);
+      return;
+    }
+
     setSaving(true);
     try {
-      const sucursalId = sucursalAEliminar.idSucursal || sucursalAEliminar.id;
       await eliminarSucursal(sucursalId, session?.empleadoId);
       const sucs = await listarSucursales();
       setSucursales(safe(sucs));
@@ -550,8 +573,12 @@ export function ConfiguracionPage() {
       }
       mostrarSuccess("Sucursal eliminada correctamente. Las ventas pasadas se conservan.");
     } catch (err) {
-      setSucursalAEliminar(null);
-      mostrarError(err.message || String(err));
+      const mensaje = err.message || String(err);
+      if (mensaje.toLowerCase().includes("empleados")) {
+        mostrarError("No se puede eliminar la sucursal porque tiene empleados asignados.");
+      } else {
+        mostrarError(mensaje);
+      }
     } finally {
       setSaving(false);
     }
@@ -696,18 +723,13 @@ export function ConfiguracionPage() {
       .map(Number)
       .includes(Number(empleado.idEmpleado));
     const tieneOtrasSucursales = sucursalesLigadas.some(id => Number(id) !== Number(sucursalActualId));
-    const accion = tieneOtrasSucursales
-      ? `quitar a ${nombreEmpleado(empleado)} de esta sucursal`
-      : `eliminar a ${nombreEmpleado(empleado)}`;
-    const confirmar = window.confirm(`¿Seguro que quieres ${accion}?`);
-    if (!confirmar) return;
-
     setSaving(true);
     try {
       if (estaEnSucursalComoExtra) {
         quitarEmpleadoExtraDeSucursal(empleado.idEmpleado, sucursalActualId);
         setEmpleadoExpandido(null);
         setSucursalSeleccionada(current => current ? { ...current } : current);
+        setEmpleadoAEliminar(null);
         mostrarSuccess("Empleado quitado de esta sucursal correctamente.");
         return;
       }
@@ -732,6 +754,7 @@ export function ConfiguracionPage() {
         setEmpleados(safe(emps));
         setEmpleadoExpandido(null);
         setSucursalSeleccionada(current => current ? { ...current } : current);
+        setEmpleadoAEliminar(null);
         mostrarSuccess("Empleado quitado de esta sucursal correctamente.");
         return;
       }
@@ -760,6 +783,7 @@ export function ConfiguracionPage() {
       setEmpleados(safe(emps));
       setEmpleadoExpandido(null);
       setSucursalSeleccionada(current => current ? { ...current } : current);
+      setEmpleadoAEliminar(null);
       mostrarSuccess("Empleado eliminado correctamente.");
     } catch (err) {
       mostrarError(err.message || String(err));
@@ -1387,7 +1411,7 @@ export function ConfiguracionPage() {
                         <button className="ghost-button" onClick={() => abrirEditarEmpleado(empleado)} type="button">
                           Editar
                         </button>
-                        <button className="danger-button" disabled={saving} onClick={() => borrarEmpleado(empleado)} type="button">
+                        <button className="danger-button" disabled={saving} onClick={() => solicitarEliminarEmpleado(empleado)} type="button">
                           Eliminar
                         </button>
                         <button
@@ -1421,6 +1445,63 @@ export function ConfiguracionPage() {
                 Cerrar
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {empleadoAEliminar && (
+        <div className="modal-overlay" onClick={() => setEmpleadoAEliminar(null)}>
+          <div className="modal-card delete-confirm-modal" onClick={e => e.stopPropagation()}>
+            {(() => {
+              const sucursalActualId = sucursalSeleccionada
+                ? Number(sucursalSeleccionada.idSucursal || sucursalSeleccionada.id)
+                : Number(empleadoAEliminar.sucursalIdSucursal);
+              const tieneOtrasSucursales = sucursalesDeEmpleado(empleadoAEliminar)
+                .some(id => Number(id) !== Number(sucursalActualId));
+
+              return (
+                <>
+                  <h2>{tieneOtrasSucursales ? "Quitar empleado de sucursal" : "Eliminar empleado"}</h2>
+                  {tieneOtrasSucursales ? (
+                    <>
+                      <p>
+                        ¿Seguro que quieres quitar de esta sucursal a <strong>{nombreEmpleado(empleadoAEliminar)}</strong>?
+                      </p>
+                      <p>
+                        El empleado seguirá disponible en sus otras sucursales.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p>
+                        Este empleado solo está asignado a esta sucursal. Si lo eliminas ya no se podrá recuperar.
+                      </p>
+                      <p>
+                        ¿Seguro que quieres eliminar a <strong>{nombreEmpleado(empleadoAEliminar)}</strong>?
+                      </p>
+                    </>
+                  )}
+                  <div className="modal-actions">
+                    <button
+                      className="ghost-button"
+                      disabled={saving}
+                      onClick={() => setEmpleadoAEliminar(null)}
+                      type="button"
+                    >
+                      {tieneOtrasSucursales ? "Cancelar" : "No eliminar"}
+                    </button>
+                    <button
+                      className="danger-button"
+                      disabled={saving}
+                      onClick={() => borrarEmpleado(empleadoAEliminar)}
+                      type="button"
+                    >
+                      {saving ? "Procesando..." : tieneOtrasSucursales ? "Confirmar" : "Sí eliminar"}
+                    </button>
+                  </div>
+                </>
+              );
+            })()}
           </div>
         </div>
       )}

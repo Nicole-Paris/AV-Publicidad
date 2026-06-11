@@ -68,6 +68,7 @@ export function CorteCajaPage() {
   const [saldoInicial, setSaldoInicial] = useState("");
   const [saldoReal, setSaldoReal] = useState("");
   const [descripcion, setDescripcion] = useState("");
+  const [cajaSeleccionadaId, setCajaSeleccionadaId] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -106,17 +107,6 @@ export function CorteCajaPage() {
 
   const sucursalActivaId = session?.sucursalIdSucursal || session?.sucursalId;
 
-  const pagosDelDia = useMemo(() => {
-    return pagos.filter(
-      (pago) => {
-        const pedido = pedidos.find((item) => Number(item.idPedido) === Number(pago.pedidoId));
-        return pago.fecha === fechaFiltro &&
-          Number(pago.empleadoIdEmpleado) === Number(session?.empleadoId) &&
-          (!sucursalActivaId || Number(pedido?.sucursalId) === Number(sucursalActivaId));
-      }
-    );
-  }, [fechaFiltro, pagos, pedidos, session, sucursalActivaId]);
-
   // para empleados buscar su corte abierto (sin filtrar por fecha)
   const corteAbierto = useMemo(() => {
     if (isEmpleado) {
@@ -140,17 +130,50 @@ export function CorteCajaPage() {
     return cortes.filter((corte) => {
       const empleado = empleados.find((item) => Number(item.idEmpleado) === Number(corte.empleadoId));
       return corte.fecha === fechaFiltro &&
-        (!sucursalActivaId || Number(empleado?.sucursalIdSucursal) === Number(sucursalActivaId));
+      (!sucursalActivaId || Number(empleado?.sucursalIdSucursal) === Number(sucursalActivaId));
     });
   }, [cortes, empleados, fechaFiltro, sucursalActivaId, isEmpleado, session]);
 
+  const cajasAbiertas = useMemo(() => {
+    return cortes.filter((corte) => {
+      if (corte.horaFin) {
+        return false;
+      }
+      if (isEmpleado) {
+        return Number(corte.empleadoId) === Number(session?.empleadoId);
+      }
+      const empleado = empleados.find((item) => Number(item.idEmpleado) === Number(corte.empleadoId));
+      return !sucursalActivaId || Number(empleado?.sucursalIdSucursal) === Number(sucursalActivaId);
+    });
+  }, [cortes, empleados, sucursalActivaId, isEmpleado, session]);
+
+  const cajaSeleccionada = useMemo(() => {
+    return cajasAbiertas.find((corte) => Number(corte.idCorteCaja) === Number(cajaSeleccionadaId)) || null;
+  }, [cajasAbiertas, cajaSeleccionadaId]);
+
+  const corteEnRevision = isAdmin ? cajaSeleccionada : corteAbierto;
+
+  const pagosDelDia = useMemo(() => {
+    const empleadoIdResumen = corteEnRevision?.empleadoId || session?.empleadoId;
+    const fechaResumen = corteEnRevision?.fecha || fechaFiltro;
+
+    return pagos.filter(
+      (pago) => {
+        const pedido = pedidos.find((item) => Number(item.idPedido) === Number(pago.pedidoId));
+        return pago.fecha === fechaResumen &&
+          Number(pago.empleadoIdEmpleado) === Number(empleadoIdResumen) &&
+          (!sucursalActivaId || Number(pedido?.sucursalId) === Number(sucursalActivaId));
+      }
+    );
+  }, [fechaFiltro, pagos, pedidos, session, sucursalActivaId, corteEnRevision]);
+
   const totalPagos = pagosDelDia.reduce((total, pago) => total + toAmount(pago.monto), 0);
-  const saldoBase = corteAbierto ? toAmount(corteAbierto.saldoInicial) : toAmount(saldoInicial);
+  const saldoBase = corteEnRevision ? toAmount(corteEnRevision.saldoInicial) : toAmount(saldoInicial);
   const saldoEsperado = saldoBase + totalPagos;
   const diferencia = saldoReal === "" ? 0 : toAmount(saldoReal) - saldoEsperado;
   // Solo el admin puede abrir cajas. Si es admin requiere asignar empleado destino.
-  const canAbrir = isAdmin && !loading && !saving && !corteAbierto && toAmount(saldoInicial) >= 0 && saldoInicial !== "" && Boolean(assignedEmpleadoId);
-  const canCerrar = !loading && !saving && corteAbierto && saldoReal !== "";
+  const canAbrir = isAdmin && !loading && !saving && !corteEnRevision && toAmount(saldoInicial) >= 0 && saldoInicial !== "" && Boolean(assignedEmpleadoId);
+  const canCerrar = !loading && !saving && corteEnRevision && saldoReal !== "";
 
   async function recargar() {
     const [cortesData, pagosData, empleadosData, pedidosData] = await Promise.all([
@@ -174,6 +197,22 @@ export function CorteCajaPage() {
     return [empleado.nombre, empleado.apellidoPaterno, empleado.apellidoMaterno]
       .filter(Boolean)
       .join(" ");
+  }
+
+  function pagosDeCorte(corte) {
+    if (!corte) {
+      return [];
+    }
+    return pagos.filter((pago) => {
+      const pedido = pedidos.find((item) => Number(item.idPedido) === Number(pago.pedidoId));
+      return pago.fecha === corte.fecha &&
+        Number(pago.empleadoIdEmpleado) === Number(corte.empleadoId) &&
+        (!sucursalActivaId || Number(pedido?.sucursalId) === Number(sucursalActivaId));
+    });
+  }
+
+  function totalPagosDeCorte(corte) {
+    return pagosDeCorte(corte).reduce((total, pago) => total + toAmount(pago.monto), 0);
   }
 
   async function abrirCorte() {
@@ -210,7 +249,7 @@ export function CorteCajaPage() {
     setSuccess("");
 
     // Solo el empleado asignado puede cerrar su corte
-    if (String(corteAbierto.empleadoId) !== String(session?.empleadoId)) {
+    if (!isAdmin && String(corteEnRevision.empleadoId) !== String(session?.empleadoId)) {
       setError("Solo el empleado asignado puede cerrar este corte de caja.");
       setSaving(false);
       return;
@@ -218,24 +257,25 @@ export function CorteCajaPage() {
 
     try {
       const horaFinActual = nowTime();
-      const horaInicio = corteAbierto.horaInicio || "00:00:00";
+      const horaInicio = corteEnRevision.horaInicio || "00:00:00";
       const horaFin = horaFinActual < horaInicio ? "23:59:59" : horaFinActual;
 
-      await actualizarCorteCaja(corteAbierto.idCorteCaja, {
-        fecha: corteAbierto.fecha,
+      await actualizarCorteCaja(corteEnRevision.idCorteCaja, {
+        fecha: corteEnRevision.fecha,
         horaInicio,
         horaFin,
-        saldoInicial: Number(corteAbierto.saldoInicial).toFixed(2),
+        saldoInicial: Number(corteEnRevision.saldoInicial).toFixed(2),
         saldoEsperado: saldoEsperado.toFixed(2),
         saldoReal: toAmount(saldoReal).toFixed(2),
         diferenciaSaldo: diferencia.toFixed(2),
         descripcion,
-        empleadoId: session.empleadoId,
-        createdBy: corteAbierto.createdBy || session.empleadoId,
+        empleadoId: corteEnRevision.empleadoId,
+        createdBy: corteEnRevision.createdBy || session.empleadoId,
         updatedBy: session.empleadoId
       });
       setSaldoReal("");
       setDescripcion("");
+      setCajaSeleccionadaId("");
       await recargar();
       setSuccess("Corte cerrado correctamente.");
     } catch (err) {
@@ -268,8 +308,8 @@ export function CorteCajaPage() {
               value={fechaFiltro}
             />
           </label>
-          <div className={corteAbierto ? "cash-status open" : "cash-status closed"}>
-            {corteAbierto ? "Caja abierta" : "Sin caja abierta"}
+          <div className={cajasAbiertas.length > 0 ? "cash-status open" : "cash-status closed"}>
+            {cajasAbiertas.length > 0 ? `${cajasAbiertas.length} caja${cajasAbiertas.length === 1 ? "" : "s"} abierta${cajasAbiertas.length === 1 ? "" : "s"}` : "Sin caja abierta"}
           </div>
         </div>
       )}
@@ -278,19 +318,38 @@ export function CorteCajaPage() {
         <div className="cash-grid">
           {/* Panel Abrir/Cerrar caja (admin) */}
           <section className="cash-panel">
-            <h2>{corteAbierto ? "Cerrar caja" : "Abrir caja"}</h2>
+            <h2>{corteEnRevision ? "Revisar y cerrar caja" : "Abrir caja"}</h2>
 
-            {corteAbierto ? (
-              <div className="cash-current">
-                <div>
-                  <span>Inicio</span>
-                  <strong>{formatTime(corteAbierto.horaInicio)}</strong>
+            {corteEnRevision ? (
+              <>
+                <div className="cash-current">
+                  <div>
+                    <span>Empleado</span>
+                    <strong>{nombreEmpleado(corteEnRevision.empleadoId)}</strong>
+                  </div>
+                  <div>
+                    <span>Inicio</span>
+                    <strong>{formatTime(corteEnRevision.horaInicio)}</strong>
+                  </div>
+                  <div>
+                    <span>Saldo inicial</span>
+                    <strong>{money(corteEnRevision.saldoInicial)}</strong>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center" }}>
+                    <button
+                      className="ghost-button"
+                      type="button"
+                      onClick={() => {
+                        setCajaSeleccionadaId("");
+                        setSaldoReal("");
+                        setDescripcion("");
+                      }}
+                    >
+                      Abrir otra caja
+                    </button>
+                  </div>
                 </div>
-                <div>
-                  <span>Saldo inicial</span>
-                  <strong>{money(corteAbierto.saldoInicial)}</strong>
-                </div>
-              </div>
+              </>
             ) : (
               <>
                 {/* Select de empleado dentro del formulario de Abrir caja */}
@@ -321,7 +380,7 @@ export function CorteCajaPage() {
               </>
             )}
 
-            {corteAbierto && (
+            {corteEnRevision && (
               <label className="pos-field floating money-field">
                 <span>Saldo real</span>
                 <input
@@ -345,11 +404,11 @@ export function CorteCajaPage() {
 
             <button
               className="primary-button cash-action"
-              disabled={corteAbierto ? !canCerrar : !canAbrir}
-              onClick={corteAbierto ? cerrarCorte : abrirCorte}
+              disabled={corteEnRevision ? !canCerrar : !canAbrir}
+              onClick={corteEnRevision ? cerrarCorte : abrirCorte}
               type="button"
             >
-              {saving ? "Guardando..." : corteAbierto ? "Cerrar caja" : "Abrir caja"}
+              {saving ? "Guardando..." : corteEnRevision ? "Cerrar caja" : "Abrir caja"}
             </button>
           </section>
 
@@ -381,16 +440,16 @@ export function CorteCajaPage() {
         <div className="cash-grid">
           <section className="cash-panel">
             <h2>Mi caja</h2>
-            {corteAbierto ? (
+            {corteEnRevision ? (
               <>
                 <div className="cash-current">
                   <div>
                     <span>Inicio</span>
-                    <strong>{formatTime(corteAbierto.horaInicio)}</strong>
+                    <strong>{formatTime(corteEnRevision.horaInicio)}</strong>
                   </div>
                   <div>
                     <span>Saldo inicial</span>
-                    <strong>{money(corteAbierto.saldoInicial)}</strong>
+                    <strong>{money(corteEnRevision.saldoInicial)}</strong>
                   </div>
                 </div>
 
@@ -428,13 +487,13 @@ export function CorteCajaPage() {
             )}
           </section>
 
-          {corteAbierto && (
+          {corteEnRevision && (
             <section className="cash-panel">
               <h2>Resumen del dia</h2>
               <div className="cash-summary">
                 <div>
                   <span>Saldo inicial</span>
-                  <strong>{money(corteAbierto.saldoInicial)}</strong>
+                  <strong>{money(corteEnRevision.saldoInicial)}</strong>
                 </div>
                 <div>
                   <span>Pagos recibidos</span>
@@ -453,6 +512,66 @@ export function CorteCajaPage() {
           )}
         </div>
       )}
+
+      <section className="cash-panel">
+        <div className="tab-section-header">
+          <h2>Cajas abiertas</h2>
+          <span className="cash-count">{cajasAbiertas.length} abiertas</span>
+        </div>
+        <div className="cash-history">
+          {cajasAbiertas.length === 0 ? (
+            <p>No hay cajas abiertas actualmente.</p>
+          ) : (
+            cajasAbiertas.map((corte) => {
+              const pagosCorte = totalPagosDeCorte(corte);
+              const esperado = toAmount(corte.saldoInicial) + pagosCorte;
+              return (
+                <article
+                  className="cash-history-card"
+                  key={corte.idCorteCaja}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => {
+                    setCajaSeleccionadaId(corte.idCorteCaja);
+                    setSaldoReal("");
+                    setDescripcion(corte.descripcion || "");
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      setCajaSeleccionadaId(corte.idCorteCaja);
+                      setSaldoReal("");
+                      setDescripcion(corte.descripcion || "");
+                    }
+                  }}
+                  style={{
+                    cursor: "pointer",
+                    borderColor: Number(cajaSeleccionadaId) === Number(corte.idCorteCaja) ? "#ff5733" : undefined
+                  }}
+                >
+                  <div className="cash-history-main">
+                    <strong>#{corte.idCorteCaja}</strong>
+                    <span>Fecha: {corte.fecha}</span>
+                    <span>Inicio: {formatTime(corte.horaInicio)}</span>
+                    <span>Empleado: {nombreEmpleado(corte.empleadoId)}</span>
+                  </div>
+                  <div>
+                    <span>Saldo inicial</span>
+                    <strong>{money(corte.saldoInicial)}</strong>
+                  </div>
+                  <div>
+                    <span>Pagos recibidos</span>
+                    <strong>{money(pagosCorte)}</strong>
+                  </div>
+                  <div>
+                    <span>Esperado actual</span>
+                    <strong>{money(esperado)}</strong>
+                  </div>
+                </article>
+              );
+            })
+          )}
+        </div>
+      </section>
 
       <section className="cash-panel">
         <div className="tab-section-header">
@@ -528,6 +647,7 @@ export function CorteCajaPage() {
           )}
         </div>
       </section>
+
     </section>
   );
 }

@@ -5,6 +5,7 @@ import avpublicidad.proyecto.dto.CategoriaMaterialRequest;
 import avpublicidad.proyecto.exception.ResourceNotFoundException;
 import avpublicidad.proyecto.model.CategoriaMaterial;
 import avpublicidad.proyecto.repository.CategoriaMaterialRepository;
+import avpublicidad.proyecto.repository.MaterialRepository;
 import jakarta.validation.ValidationException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -17,6 +18,7 @@ import java.util.List;
 public class CategoriaMaterialService {
 
     private final CategoriaMaterialRepository categoriaMaterialRepository;
+    private final MaterialRepository materialRepository;
 
     public List<CategoriaMaterial> listar() {
         return categoriaMaterialRepository.findByDeletedAtIsNull();
@@ -46,9 +48,16 @@ public class CategoriaMaterialService {
     public CategoriaMaterial actualizar(Integer id, CategoriaMaterialRequest request) {
         CategoriaMaterial categoria = obtenerPorId(id);
         validarNombreUnico(request.getNombre(), id);
+        String estadoNormalizado = normalizarEstado(request.getEstado());
+
+        if (EstadoConstants.INACTIVO.equals(estadoNormalizado)
+                && !EstadoConstants.INACTIVO.equals(categoria.getEstado())
+                && materialRepository.existsByCategoriaMaterialIdAndDeletedAtIsNull(id)) {
+            throw new ValidationException("No se puede inactivar la categoria porque tiene materiales ligados");
+        }
 
         categoria.setNombre(request.getNombre());
-        categoria.setEstado(normalizarEstado(request.getEstado()));
+        categoria.setEstado(estadoNormalizado);
         categoria.setDescripcion(request.getDescripcion());
         categoria.setCreatedBy(request.getCreatedBy());
         categoria.setUpdatedBy(request.getUpdatedBy());
