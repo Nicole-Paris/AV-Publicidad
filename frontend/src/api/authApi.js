@@ -12,3 +12,17 @@ export function logoutRequest() {
     method: "POST"
   });
 }
+
+export function enviarCodigoRecuperacion(correo) {
+  return apiRequest("/auth/recuperacion/codigo", {
+    method: "POST",
+    body: JSON.stringify({ correo })
+  });
+}
+
+export function restablecerContrasena(payload) {
+  return apiRequest("/auth/recuperacion/restablecer", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}

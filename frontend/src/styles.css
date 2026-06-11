@@ -2821,6 +2821,10 @@ a {
   max-width: 360px;
   text-align: center;
 }
+
+.modal-error-card.recovery-card {
+  max-width: 500px;
+}
 .modal-error-icon {
   font-size: 36px;
   margin: 0 0 12px;
@@ -2830,4 +2834,50 @@ a {
   font-weight: 600;
   color: #344252;
   margin: 0 0 20px;
+}
+
+.modal-title {
+  margin: 0 0 14px;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.recovery-form {
+  display: grid;
+  gap: 16px;
+  text-align: left;
+}
+
+.recovery-email-field {
+  display: block;
+  justify-self: center;
+  max-width: 420px;
+  width: min(100%, 420px);
+}
+
+.recovery-email-field input {
+  background: #ffffff;
+  border: 1px solid #c8c8c8;
+  border-radius: 4px;
+  color: #030816;
+  font-size: 20px;
+  min-height: 70px;
+  padding: 0 16px;
+  width: 100%;
+}
+
+.recovery-form .modal-error-msg {
+  margin: 0;
+  text-align: center;
+}
+
+.form-success {
+  background: #ecfdf3;
+  border: 1px solid #b8f0c8;
+  border-radius: 8px;
+  color: #087a32;
+  font-weight: 700;
+  margin: 0;
+  padding: 12px;
+  text-align: center;
 }
