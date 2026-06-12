@@ -293,6 +293,27 @@ export function PuntoVentaPage() {
       mostrarError("Escribe el telefono del cliente.");
       return;
     }
+    if (!/^\d{10}$/.test(formCliente.telefono.trim())) {
+      mostrarError("El teléfono debe tener exactamente 10 dígitos numéricos.");
+      return;
+    }
+
+    const rfc = formCliente.rfc.trim();
+    if (rfc && !/^[A-Z0-9]{12,13}$/.test(rfc.toUpperCase())) {
+      mostrarError("El RFC debe tener 12 caracteres (empresa) o 13 (persona física), solo letras y números.");
+      return;
+    }
+
+    const cp = formCliente.codigoPostal.trim();
+    if (cp && !/^\d{5}$/.test(cp)) {
+      mostrarError("El código postal debe tener exactamente 5 dígitos numéricos.");
+      return;
+    }
+
+    if (formCliente.tieneCredito && (!formCliente.limiteCredito || Number(formCliente.limiteCredito) <= 0)) {
+      mostrarError("El límite de crédito debe ser mayor a 0 cuando el cliente tiene crédito.");
+      return;
+    }
     if (Number(formCliente.limiteCredito || 0) < 0) {
       mostrarError("El limite de credito no puede ser negativo.");
       return;
@@ -962,7 +983,16 @@ export function PuntoVentaPage() {
               </label>
               <label className="pos-field floating">
                 <span>Telefono</span>
-                <input name="telefono" onChange={updateClienteForm} type="text" value={formCliente.telefono} />
+                <input
+                  name="telefono"
+                  onChange={(event) => setFormCliente((current) => ({
+                    ...current,
+                    telefono: event.target.value.replace(/\D/g, "").slice(0, 10)
+                  }))}
+                  type="text"
+                  maxLength={10}
+                  value={formCliente.telefono}
+                />
               </label>
               <label className="pos-field floating">
                 <span>Tipo</span>
@@ -973,11 +1003,29 @@ export function PuntoVentaPage() {
               </label>
               <label className="pos-field floating">
                 <span>RFC</span>
-                <input name="rfc" onChange={updateClienteForm} type="text" value={formCliente.rfc} />
+                <input
+                  name="rfc"
+                  onChange={(event) => setFormCliente((current) => ({
+                    ...current,
+                    rfc: event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 13)
+                  }))}
+                  type="text"
+                  maxLength={13}
+                  value={formCliente.rfc}
+                />
               </label>
               <label className="pos-field floating">
                 <span>Codigo postal</span>
-                <input name="codigoPostal" onChange={updateClienteForm} type="text" value={formCliente.codigoPostal} />
+                <input
+                  name="codigoPostal"
+                  onChange={(event) => setFormCliente((current) => ({
+                    ...current,
+                    codigoPostal: event.target.value.replace(/\D/g, "").slice(0, 5)
+                  }))}
+                  type="text"
+                  maxLength={5}
+                  value={formCliente.codigoPostal}
+                />
               </label>
               <label className="pos-field floating">
                 <span>Direccion</span>

@@ -45,12 +45,11 @@ export function AuthProvider({ children }) {
       const rol = ((session?.rol || "") + "").toLowerCase();
       if (session?.empleadoId && rol !== "administrador") {
         const cortes = await listarCortesPorEmpleado(session.empleadoId);
-        console.log("Cortes encontrados:", cortes);
-        console.log("Rol actual:", rol);
         const abierta = (cortes || []).find(c => !c.horaFin);
         if (abierta) {
-          // evita cerrar sesión para empleados con corte abierto
-          throw new Error("No puedes cerrar sesión: tienes una caja asignada sin cerrar.");
+          const err = new Error("Tienes una caja asignada abierta. La caja seguirá abierta hasta que la cierres.");
+          err.tipo = "caja_abierta_advertencia";
+          throw err;
         }
       }
     } catch (err) {

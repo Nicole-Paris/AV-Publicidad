@@ -64,7 +64,7 @@ function idMovimiento(movimiento) {
 /* Componente interno: BuscadorMaterial */
 function BuscadorMaterial({ materiales, value, onChange, placeholder = "Escribe el nombre..." }) {
   const [query, setQuery] = useState(value || "");
-  const [open, setOpen] = useState(false);
+  const [sugerenciasVisibles, setSugerenciasVisibles] = useState(false);
   const ref = useRef(null);
 
   useEffect(() => {
@@ -75,7 +75,7 @@ function BuscadorMaterial({ materiales, value, onChange, placeholder = "Escribe 
     function onDoc(e) {
       if (!ref.current) return;
       if (!ref.current.contains(e.target)) {
-        setOpen(false);
+        setSugerenciasVisibles(false);
       }
     }
     document.addEventListener("click", onDoc);
@@ -92,13 +92,13 @@ function BuscadorMaterial({ materiales, value, onChange, placeholder = "Escribe 
     const v = e.target.value;
     setQuery(v);
     onChange(v);
-    setOpen(Boolean(v.trim() && matches.length > 0));
+    setSugerenciasVisibles(Boolean(v.trim()));
   }
 
   function handleSelect(name) {
     setQuery(name);
     onChange(name);
-    setOpen(false);
+    setSugerenciasVisibles(false);
   }
 
   return (
@@ -108,9 +108,14 @@ function BuscadorMaterial({ materiales, value, onChange, placeholder = "Escribe 
         placeholder={placeholder}
         value={query}
         onChange={handleChange}
-        onFocus={() => setOpen(Boolean(query.trim() && matches.length > 0))}
+        onBlur={() => setTimeout(() => setSugerenciasVisibles(false), 150)}
+        onFocus={() => {
+          if (query.trim()) {
+            setSugerenciasVisibles(true);
+          }
+        }}
       />
-      {open && matches.length > 0 && (
+      {sugerenciasVisibles && matches.length > 0 && (
         <div
           style={{
             position: "absolute",
