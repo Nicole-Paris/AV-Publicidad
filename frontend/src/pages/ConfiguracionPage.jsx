@@ -851,6 +851,7 @@ export function ConfiguracionPage() {
   }
 
   const auditoriaDatosEmpresa = auditoriaEmpresa();
+  const logoVisible = formEmpresa.logoUrl?.toString().trim() || "";
 
   if (soloEmpleado) {
     return (
@@ -1163,14 +1164,14 @@ export function ConfiguracionPage() {
 
             <div style={{
               width:120, height:120, borderRadius:16,
-              background: formEmpresa.logoUrl ? "transparent" : "#fb5a35",
+              background: logoVisible ? "transparent" : "#fb5a35",
               display:"flex", alignItems:"center", justifyContent:"center",
               margin:"0 auto 16px", overflow:"hidden",
-              border: formEmpresa.logoUrl ? "2px dashed #e2e2e2" : "none"
+              border: logoVisible ? "2px dashed #e2e2e2" : "none"
             }}>
-              {formEmpresa.logoUrl ? (
+              {logoVisible ? (
                 <img
-                  src={formEmpresa.logoUrl}
+                  src={logoVisible}
                   alt="Logo"
                   style={{
                     width:"100%", height:"100%", objectFit:"contain",
@@ -1192,42 +1193,46 @@ export function ConfiguracionPage() {
               )}
             </div>
 
-            <label className="pos-field floating">
-              <span>URL del Logotipo</span>
-              <input
-                type="text"
-                value={formEmpresa.logoUrl}
-                onChange={e => setFormEmpresa(f => ({...f, logoUrl: e.target.value}))}
-                placeholder="https://ejemplo.com/logo.png"
-              />
-            </label>
-
-            <div className="logo-upload-control">
-              <span className="logo-upload-title">Subir logo JPG o PNG</span>
-              <div className="logo-upload-row">
-                <label className="logo-upload-button">
-                  Elegir archivo
+            {empresaEditando && (
+              <>
+                <label className="pos-field floating">
+                  <span>URL del Logotipo</span>
                   <input
-                    type="file"
-                    accept="image/jpeg,image/jpg,image/png"
-                    onChange={cargarLogoDesdeArchivo}
+                    type="text"
+                    value={formEmpresa.logoUrl}
+                    onChange={e => setFormEmpresa(f => ({...f, logoUrl: e.target.value}))}
+                    placeholder="https://ejemplo.com/logo.png"
                   />
                 </label>
-                <span className="logo-upload-name">
-                  {logoArchivoNombre || "JPG/PNG, max. 2MB"}
-                </span>
-              </div>
-            </div>
 
-            <button
-              className="primary-button"
-              type="button"
-              disabled={saving}
-              style={{width:"100%", marginTop:12}}
-              onClick={guardarSoloLogo}
-            >
-              {saving ? "Guardando..." : "Guardar Logo"}
-            </button>
+                <div className="logo-upload-control">
+                  <span className="logo-upload-title">Subir logo JPG o PNG</span>
+                  <div className="logo-upload-row">
+                    <label className="logo-upload-button">
+                      Elegir archivo
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/jpg,image/png"
+                        onChange={cargarLogoDesdeArchivo}
+                      />
+                    </label>
+                    <span className="logo-upload-name">
+                      {logoArchivoNombre || "JPG/PNG, max. 2MB"}
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  className="primary-button"
+                  type="button"
+                  disabled={saving}
+                  style={{width:"100%", marginTop:12}}
+                  onClick={guardarSoloLogo}
+                >
+                  {saving ? "Guardando..." : "Guardar Logo"}
+                </button>
+              </>
+            )}
 
             <div style={{marginTop:12, color:"#6b7280", fontSize:14, lineHeight:1.4}}>
               <p>

@@ -14,6 +14,8 @@ public interface CorteCajaRepository extends JpaRepository<CorteCaja, Integer> {
 
     List<CorteCaja> findByEmpleadoIdAndFechaAndHoraFinIsNotNullAndDeletedAtIsNull(Integer empleadoId, LocalDate fecha);
 
+    boolean existsByEmpleadoIdAndHoraFinIsNullAndDeletedAtIsNull(Integer empleadoId);
+
     @Query("""
             select count(corte)
             from CorteCaja corte

@@ -1,7 +1,9 @@
 package avpublicidad.proyecto.config;
 
 import avpublicidad.proyecto.constants.RolConstants;
+import avpublicidad.proyecto.repository.EmpleadoRepository;
 import avpublicidad.proyecto.security.JwtAuthenticationFilter;
+import avpublicidad.proyecto.service.JwtService;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -23,18 +25,23 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(
             HttpSecurity http,
-            ObjectProvider<JwtAuthenticationFilter> jwtAuthenticationFilterProvider
+            ObjectProvider<JwtService> jwtServiceProvider,
+            ObjectProvider<EmpleadoRepository> empleadoRepositoryProvider
     ) throws Exception {
-        JwtAuthenticationFilter jwtAuthenticationFilter = jwtAuthenticationFilterProvider.getIfAvailable();
+        JwtService jwtService = jwtServiceProvider.getIfAvailable();
+        EmpleadoRepository empleadoRepository = empleadoRepositoryProvider.getIfAvailable();
 
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
 
-        if (jwtAuthenticationFilter == null) {
+        if (jwtService == null || empleadoRepository == null) {
             http.authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
             return http.build();
         }
+
+        JwtAuthenticationFilter jwtAuthenticationFilter =
+                new JwtAuthenticationFilter(jwtService, empleadoRepository);
 
         http.authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()

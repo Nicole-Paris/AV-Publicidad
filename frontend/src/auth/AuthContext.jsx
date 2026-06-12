@@ -40,14 +40,12 @@ export function AuthProvider({ children }) {
   }, []);
 
   const logout = useCallback(async function logout() {
-    // comprobar cortes abiertos solo para usuarios NO administradores
     try {
-      const rol = ((session?.rol || "") + "").toLowerCase();
-      if (session?.empleadoId && rol !== "administrador") {
+      if (session?.empleadoId) {
         const cortes = await listarCortesPorEmpleado(session.empleadoId);
         const abierta = (cortes || []).find(c => !c.horaFin);
         if (abierta) {
-          const err = new Error("Tienes una caja asignada abierta. Puedes cerrar sesión pero la caja seguirá abierta hasta que un administrador la cierre");
+          const err = new Error("Tienes una caja asignada abierta puedes cerrar sesión pero la caja seguirá abierta hasta que se cierre.");
           err.tipo = "caja_abierta_advertencia";
           throw err;
         }

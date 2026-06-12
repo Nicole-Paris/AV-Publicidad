@@ -142,6 +142,11 @@ function BuscadorMaterial({ materiales, value, onChange, placeholder = "Escribe 
           ))}
         </div>
       )}
+      {sugerenciasVisibles && query.trim() && matches.length === 0 && (
+        <div className="client-suggestions-empty" style={{ marginTop: 8 }}>
+          Material no encontrado.
+        </div>
+      )}
     </div>
   );
 }
@@ -165,6 +170,7 @@ export function InventarioPage() {
   const [movimientoExpandido, setMovimientoExpandido] = useState(null);
   const [auditModal, setAuditModal] = useState(null);
   const [materialEditando, setMaterialEditando] = useState(null);
+  const [confirmarMaterialInactivo, setConfirmarMaterialInactivo] = useState(false);
 
   const [buscar, setBuscar] = useState("");
   const [categoriaFiltro, setCategoriaFiltro] = useState("");
@@ -419,17 +425,27 @@ export function InventarioPage() {
   }
 
   function guardarNuevaUnidad() {
-    if (!nuevaUnidad.nombre.trim()) {
-      mostrarError("Escribe un nombre para la unidad.");
+    const nombre = nuevaUnidad.nombre.trim();
+    if (!nombre) {
+      mostrarError("El nombre de la unidad es obligatorio.");
       return;
     }
-    const nombre = nuevaUnidad.nombre.trim();
+
+    const unidadesDisponibles = ["Metros", "Piezas", "Litros", "Kg", "Rollos", ...unidadesExtra];
+    const unidadDuplicada = unidadesDisponibles.some(
+      unidad => normalizarTexto(unidad) === normalizarTexto(nombre)
+    );
+    if (unidadDuplicada) {
+      mostrarError("Ya existe una unidad con ese nombre.");
+      return;
+    }
+
     setUnidadesExtra(u => [...u, nombre]);
     setFormulario(f => ({ ...f, unidad: nombre }));
     setNuevaUnidad({ visible: false, nombre: "" });
   }
 
-  async function guardarMaterial(e) {
+  async function guardarMaterial(e, stockConfirmado = false) {
     e?.preventDefault();
     setError("");
     setSuccess("");
@@ -441,9 +457,19 @@ export function InventarioPage() {
       mostrarError("Completa nombre, costo y categoría.");
       return;
     }
+    const esEdicion = Boolean(materialEditando);
+    const seEstaInactivando = esEdicion
+      && materialActivo(materialEditando.material)
+      && formulario.estado === "Inactivo";
+    const stockActual = Number(materialEditando?.inventario?.stockActual ?? formulario.stockActual ?? 0);
+
+    if (seEstaInactivando && stockActual > 0 && !stockConfirmado) {
+      setConfirmarMaterialInactivo(true);
+      return;
+    }
+
     setSaving(true);
     try {
-      const esEdicion = Boolean(materialEditando);
       const payloadMaterial = {
         nombre: formulario.nombre,
         unidad: formulario.unidad,
@@ -472,7 +498,7 @@ export function InventarioPage() {
           createdBy: session.empleadoId
         });
       }
-      if (esEdicion && materialEditando.inventario) {
+      if (esEdicion && materialEditando.inventario && formulario.estado !== "Inactivo") {
         await actualizarInventario(materialEditando.inventario.idInventario || materialEditando.inventario.id, {
           stockActual: Number(formulario.stockActual || 0),
           stockMinimo: Number(formulario.stockMinimo || 0),
@@ -509,6 +535,7 @@ export function InventarioPage() {
       }));
       setMaterialEditando(null);
       setFormularioAbierto(false);
+      setConfirmarMaterialInactivo(false);
       mostrarSuccess(esEdicion ? "Material actualizado correctamente." : "Material creado correctamente.");
     } catch (err) {
       mostrarError(err.message || String(err));
@@ -702,8 +729,12 @@ export function InventarioPage() {
                   const stockActual = inv ? Number(inv.stockActual) : null;
                   const stockMin = inv ? Number(inv.stockMinimo) : null;
                   const bajo = inv && stockActual <= stockMin;
+                  const activo = materialActivo(m);
                   return (
-                    <tr key={m.idMaterial} style={bajo ? { background: "#fff7ed" } : undefined}>
+                    <tr
+                      key={m.idMaterial}
+                      style={!activo ? { background: "#f3f4f6" } : bajo ? { background: "#fff7ed" } : undefined}
+                    >
                       <td>{m.idMaterial}</td>
                       <td>
                         {bajo && <span aria-hidden>⚠ </span>}
@@ -714,7 +745,9 @@ export function InventarioPage() {
                       <td style={bajo ? { color: "#c2410c", fontWeight: 700 } : undefined}>{stockActual === null || stockActual === undefined ? "—" : stockActual}</td>
                       <td>{stockMin === null || stockMin === undefined ? "—" : stockMin}</td>
                       <td>
-                        {inv ? (
+                        {!activo ? (
+                          <span className="inv-badge neutral">Inactivo</span>
+                        ) : inv ? (
                           bajo ? <span className="inv-badge warn">⚠ Reorden</span> : <span className="inv-badge ok">✓ OK</span>
                         ) : (
                           <span className="inv-badge neutral">Sin stock</span>
@@ -1116,6 +1149,37 @@ export function InventarioPage() {
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 20 }}>
               <button className="ghost-button" type="button" onClick={() => setNuevaUnidad({ visible: false, nombre: "" })}>Cancelar</button>
               <button className="primary-button" type="button" onClick={guardarNuevaUnidad}>Guardar unidad</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmarMaterialInactivo && materialEditando && (
+        <div className="modal-overlay nested-modal-overlay">
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <h2>Confirmar material inactivo</h2>
+            <p>
+              El material <strong>{materialEditando.material.nombre}</strong> tiene existencias de{" "}
+              <strong>{materialEditando.inventario?.stockActual || 0}</strong>. Al ponerlo inactivo conservara
+              el stock, pero ya no podra usarse en nuevos movimientos o servicios.
+            </p>
+            <div className="modal-actions">
+              <button
+                className="ghost-button"
+                disabled={saving}
+                onClick={() => setConfirmarMaterialInactivo(false)}
+                type="button"
+              >
+                Cancelar
+              </button>
+              <button
+                className="primary-button"
+                disabled={saving}
+                onClick={() => guardarMaterial(null, true)}
+                type="button"
+              >
+                {saving ? "Guardando..." : "Confirmar inactivacion"}
+              </button>
             </div>
           </div>
         </div>

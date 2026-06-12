@@ -5,6 +5,9 @@ import { listarTodosPagos } from "../api/pagoApi.js";
 import { listarPedidos } from "../api/pedidoApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { esAdministrador, esEmpleado } from "../auth/permissions.js";
+import { Pagination } from "../components/Pagination.jsx";
+
+const HISTORIAL_PAGE_SIZE = 15;
 
 function money(value) {
   return new Intl.NumberFormat("es-MX", {
@@ -69,6 +72,7 @@ export function CorteCajaPage() {
   const [saldoReal, setSaldoReal] = useState("");
   const [descripcion, setDescripcion] = useState("");
   const [cajaSeleccionadaId, setCajaSeleccionadaId] = useState("");
+  const [paginaHistorial, setPaginaHistorial] = useState(1);
 
   useEffect(() => {
     let active = true;
@@ -133,6 +137,22 @@ export function CorteCajaPage() {
       (!sucursalActivaId || Number(empleado?.sucursalIdSucursal) === Number(sucursalActivaId));
     });
   }, [cortes, empleados, fechaFiltro, sucursalActivaId, isEmpleado, session]);
+
+  const cortesHistorialPaginados = useMemo(() => {
+    const inicio = (paginaHistorial - 1) * HISTORIAL_PAGE_SIZE;
+    return cortesDelDia.slice(inicio, inicio + HISTORIAL_PAGE_SIZE);
+  }, [cortesDelDia, paginaHistorial]);
+
+  useEffect(() => {
+    setPaginaHistorial(1);
+  }, [fechaFiltro, sucursalActivaId]);
+
+  useEffect(() => {
+    const ultimaPagina = Math.max(1, Math.ceil(cortesDelDia.length / HISTORIAL_PAGE_SIZE));
+    if (paginaHistorial > ultimaPagina) {
+      setPaginaHistorial(ultimaPagina);
+    }
+  }, [cortesDelDia.length, paginaHistorial]);
 
   const cajasAbiertas = useMemo(() => {
     return cortes.filter((corte) => {
@@ -621,7 +641,7 @@ export function CorteCajaPage() {
           {cortesDelDia.length === 0 ? (
             <p>No hay cortes registrados para esta fecha.</p>
           ) : (
-            cortesDelDia.map((corte) => (
+            cortesHistorialPaginados.map((corte) => (
               <article className="cash-history-card" key={corte.idCorteCaja}>
                 <div className="cash-history-main">
                   <strong>#{corte.idCorteCaja}</strong>
@@ -646,6 +666,13 @@ export function CorteCajaPage() {
             ))
           )}
         </div>
+        <Pagination
+          page={paginaHistorial}
+          pageSize={HISTORIAL_PAGE_SIZE}
+          total={cortesDelDia.length}
+          onPageChange={setPaginaHistorial}
+          disabled={loading}
+        />
       </section>
 
     </section>

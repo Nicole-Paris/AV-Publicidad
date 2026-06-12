@@ -277,6 +277,9 @@ public class PedidoService {
         }
 
         BigDecimal limiteCredito = cliente.getLimiteCredito() == null ? BigDecimal.ZERO : cliente.getLimiteCredito();
+        if (limiteCredito.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ValidationException("El cliente no tiene un limite de credito disponible");
+        }
         BigDecimal creditoUsado = calcularCreditoUsadoCliente(clienteId, pedidoActualId);
         BigDecimal nuevoCredito = creditoUsado.add(totalPedido == null ? BigDecimal.ZERO : totalPedido);
 

@@ -8,6 +8,7 @@ import avpublicidad.proyecto.model.Cliente;
 import avpublicidad.proyecto.model.Pago;
 import avpublicidad.proyecto.model.Pedido;
 import avpublicidad.proyecto.repository.ClienteRepository;
+import avpublicidad.proyecto.repository.CorteCajaRepository;
 import avpublicidad.proyecto.repository.EmpleadoRepository;
 import avpublicidad.proyecto.repository.PagoRepository;
 import avpublicidad.proyecto.repository.PedidoRepository;
@@ -30,6 +31,7 @@ public class PagoService {
     private final PedidoRepository pedidoRepository;
     private final EmpleadoRepository empleadoRepository;
     private final ClienteRepository clienteRepository;
+    private final CorteCajaRepository corteCajaRepository;
 
     public List<Pago> listar() {
         return pagoRepository.findByDeletedAtIsNull();
@@ -45,6 +47,7 @@ public class PagoService {
     public Pago crear(PagoRequest request) {
         validarRelaciones(request);
         validarReglasNegocio(request, null);
+        validarCajaAbierta(request.getEmpleadoIdEmpleado());
 
         Pago pago = Pago.builder()
                 .monto(request.getMonto())
@@ -148,6 +151,14 @@ public class PagoService {
         }
 
         validarConceptoPago(request, saldoPendiente, totalPagado);
+    }
+
+    private void validarCajaAbierta(Integer empleadoId) {
+        if (empleadoId == null
+                || !corteCajaRepository.existsByEmpleadoIdAndHoraFinIsNullAndDeletedAtIsNull(empleadoId)) {
+            throw new ValidationException(
+                    "No puedes registrar un pago porque no tienes una caja abierta asignada");
+        }
     }
 
     private void validarConceptoPago(PagoRequest request, BigDecimal saldoPendiente, BigDecimal totalPagado) {

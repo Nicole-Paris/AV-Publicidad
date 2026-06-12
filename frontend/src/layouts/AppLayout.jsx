@@ -26,6 +26,7 @@ export function AppLayout() {
   const [branchMenuOpen, setBranchMenuOpen] = useState(false);
   const [logoutError, setLogoutError] = useState("");
   const [logoutWarning, setLogoutWarning] = useState("");
+  const [confirmandoLogout, setConfirmandoLogout] = useState(false);
   const [logoUrl, setLogoUrl] = useState(localStorage.getItem("av_logo_url") || "");
   const sucursalesSesion = session?.sucursales || [];
   const sucursalActivaId = session?.sucursalIdSucursal || session?.sucursalId || "";
@@ -132,17 +133,19 @@ export function AppLayout() {
     } catch (err) {
       if (err?.tipo === "caja_abierta_advertencia") {
         setLogoutWarning(err.message);
-        try {
-          await logoutRequest();
-        } finally {
-          clearSession();
-          setTimeout(() => {
-            window.location.href = "/login";
-          }, 2000);
-        }
       } else {
         setLogoutError(err.message || "No puedes cerrar sesión en este momento.");
       }
+    }
+  }
+
+  async function confirmarLogoutConCaja() {
+    setConfirmandoLogout(true);
+    try {
+      await logoutRequest();
+    } finally {
+      clearSession();
+      window.location.href = "/login";
     }
   }
 
@@ -297,17 +300,24 @@ export function AppLayout() {
       {logoutWarning && (
         <div className="modal-error-overlay">
           <div className="modal-error-card" onClick={e => e.stopPropagation()}>
+            <button
+              aria-label="Cancelar cierre de sesión"
+              className="modal-close-button"
+              disabled={confirmandoLogout}
+              onClick={() => setLogoutWarning("")}
+              type="button"
+            >
+              x
+            </button>
             <p className="modal-error-icon">⚠</p>
             <p className="modal-error-msg">{logoutWarning}</p>
             <button
               className="primary-button"
+              disabled={confirmandoLogout}
               type="button"
-              onClick={() => {
-                setLogoutWarning("");
-                window.location.href = "/login";
-              }}
+              onClick={confirmarLogoutConCaja}
             >
-              Entendido
+              {confirmandoLogout ? "Cerrando..." : "Entendido"}
             </button>
           </div>
         </div>

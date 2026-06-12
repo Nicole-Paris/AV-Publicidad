@@ -4,6 +4,7 @@ import { listarPagosPorPedido, listarTodosPagos, crearPago } from "../api/pagoAp
 // import listarServicios además de listarClientes
 import { listarClientes, listarServicios } from "../api/catalogApi.js";
 import { listarEmpleados } from "../api/empleadoApi.js";
+import { listarCortesPorEmpleado } from "../api/corteCajaApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { esEmpleado } from "../auth/permissions.js";
 import { Pagination } from "../components/Pagination.jsx";
@@ -63,6 +64,7 @@ export function PedidosPage() {
   const [pedidoCancelar, setPedidoCancelar] = useState(null);
   const [motivoCancelacion, setMotivoCancelacion] = useState("");
   const [descargandoPdf, setDescargandoPdf] = useState(null);
+  const [tieneCajaAbierta, setTieneCajaAbierta] = useState(false);
   const sucursalActivaId = session?.sucursalIdSucursal || session?.sucursalId;
 
   function mostrarError(msg) {
@@ -220,12 +222,13 @@ export function PedidosPage() {
       setLoading(true);
       try {
         // ahora también cargamos servicios
-        const [ps, cs, pagos, svcs, emps] = await Promise.all([
+        const [ps, cs, pagos, svcs, emps, cortesEmpleado] = await Promise.all([
           listarPedidos(),
           listarClientes(),
           listarTodosPagos(),
           listarServicios(),
-          listarEmpleados()
+          listarEmpleados(),
+          listarCortesPorEmpleado(session.empleadoId)
         ]);
         if (!active) return;
         setPedidos((ps || []).slice().sort((a, b) => Number(b.idPedido) - Number(a.idPedido)));
@@ -233,6 +236,7 @@ export function PedidosPage() {
         setTodosLosPagos(pagos || []);
         setServicios(svcs || []);
         setEmpleados(emps || []);
+        setTieneCajaAbierta((cortesEmpleado || []).some(corte => !corte.horaFin));
       } catch (err) {
         if (active) mostrarError(err.message || String(err));
       } finally {
@@ -309,6 +313,10 @@ export function PedidosPage() {
   }
 
   function abrirModalPagoDesdeExpandido(pedidoObj) {
+    if (!tieneCajaAbierta) {
+      mostrarError("No puedes registrar un pago porque no tienes una caja abierta asignada.");
+      return;
+    }
     if (pedidoObj?.estado === "Cancelado" || saldoPendientePedido(pedidoObj) <= 0) {
       return;
     }
@@ -331,6 +339,10 @@ export function PedidosPage() {
   }
 
   function abrirModalPagoDesdeTab() {
+    if (!tieneCajaAbierta) {
+      mostrarError("No puedes registrar un pago porque no tienes una caja abierta asignada.");
+      return;
+    }
     const now = new Date();
     const fecha = now.toISOString().slice(0,10);
     const horaPago = now.toTimeString().slice(0,8);
@@ -343,6 +355,10 @@ export function PedidosPage() {
   }
 
   async function guardarPago() {
+    if (!tieneCajaAbierta) {
+      mostrarError("No puedes registrar un pago porque no tienes una caja abierta asignada.");
+      return;
+    }
     const pedidoId = Number(formPago.pedidoId);
     const monto = montoPagoActual();
     if (!pedidoId) { mostrarError("Selecciona un pedido."); return; }
@@ -564,9 +580,11 @@ export function PedidosPage() {
                       </select>
                        <button
                          className="pedido-payment-button"
-                         disabled={pedido.estado === "Cancelado" || pendiente <= 0}
+                         disabled={!tieneCajaAbierta || pedido.estado === "Cancelado" || pendiente <= 0}
                          title={
-                           pedido.estado === "Cancelado"
+                           !tieneCajaAbierta
+                             ? "Necesitas una caja abierta asignada para registrar pagos"
+                             : pedido.estado === "Cancelado"
                              ? "No se pueden registrar pagos en pedidos cancelados"
                              : pendiente <= 0
                                ? "Este pedido ya esta pagado"
@@ -705,7 +723,13 @@ export function PedidosPage() {
               onChange={e => setBuscarPago(e.target.value)}
               style={{maxWidth:380, flex:1}}
             />
-            <button className="primary-button" onClick={abrirModalPagoDesdeTab} type="button">
+            <button
+              className="primary-button"
+              disabled={!tieneCajaAbierta}
+              title={!tieneCajaAbierta ? "Necesitas una caja abierta asignada para registrar pagos" : undefined}
+              onClick={abrirModalPagoDesdeTab}
+              type="button"
+            >
               + Registrar Pago
             </button>
           </div>

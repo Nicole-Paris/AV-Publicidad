@@ -211,6 +211,15 @@ export function PuntoVentaPage() {
     [servicios, empleados, session]
   );
 
+  const clienteSeleccionado = useMemo(
+    () => clientes.find((cliente) => Number(cliente.idCliente) === Number(pedido.clienteId)) || null,
+    [clientes, pedido.clienteId]
+  );
+
+  const clientePuedeUsarCredito = Boolean(
+    clienteSeleccionado?.tieneCredito && Number(clienteSeleccionado?.limiteCredito || 0) > 0
+  );
+
   function unidadDeServicio(servicioId) {
     const relacion = serviciosMateriales.find((item) => Number(item.servicioId) === Number(servicioId));
     const material = materiales.find((item) => Number(item.idMaterial || item.id) === Number(relacion?.materialId));
@@ -244,13 +253,22 @@ export function PuntoVentaPage() {
   function updateClienteSearch(event) {
     setClienteSearch(event.target.value);
     setClienteSuggestionsOpen(true);
-    setPedido((current) => ({ ...current, clienteId: "" }));
+    setPedido((current) => ({
+      ...current,
+      clienteId: "",
+      formaPago: current.formaPago === "Credito" ? "Contado" : current.formaPago
+    }));
   }
 
   function seleccionarCliente(cliente) {
     setClienteSearch(nombreCliente(cliente));
     setClienteSuggestionsOpen(false);
-    setPedido((current) => ({ ...current, clienteId: String(cliente.idCliente) }));
+    const puedeUsarCredito = Boolean(cliente.tieneCredito && Number(cliente.limiteCredito || 0) > 0);
+    setPedido((current) => ({
+      ...current,
+      clienteId: String(cliente.idCliente),
+      formaPago: current.formaPago === "Credito" && !puedeUsarCredito ? "Contado" : current.formaPago
+    }));
   }
 
   function abrirModalCliente() {
@@ -513,6 +531,10 @@ export function PuntoVentaPage() {
 
     // Validación de crédito si aplica
     if (pedido.formaPago === "Credito") {
+      if (!clientePuedeUsarCredito) {
+        mostrarError("El cliente no tiene un limite de credito disponible.");
+        return;
+      }
       try {
         const clienteData = await obtenerCliente(Number(pedido.clienteId));
         const creditoDisponible =
@@ -786,7 +808,7 @@ export function PuntoVentaPage() {
               <span>Forma de Pago</span>
               <select name="formaPago" onChange={updatePedido} value={pedido.formaPago}>
                 <option>Contado</option>
-                <option>Credito</option>
+                {clientePuedeUsarCredito && <option>Credito</option>}
                 <option>Intercambio</option>
               </select>
             </label>
