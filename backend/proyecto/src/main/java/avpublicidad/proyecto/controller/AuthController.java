@@ -5,6 +5,7 @@ import avpublicidad.proyecto.dto.LoginRequest;
 import avpublicidad.proyecto.dto.LogoutResponse;
 import avpublicidad.proyecto.dto.RecuperacionCodigoRequest;
 import avpublicidad.proyecto.dto.RestablecerContrasenaRequest;
+import avpublicidad.proyecto.dto.ValidarCodigoRecuperacionRequest;
 import avpublicidad.proyecto.service.AuthService;
 import avpublicidad.proyecto.service.RecuperacionContrasenaService;
 import jakarta.validation.Valid;
@@ -38,6 +39,12 @@ public class AuthController {
     public LogoutResponse enviarCodigo(@Valid @RequestBody RecuperacionCodigoRequest request) {
         recuperacionContrasenaService.enviarCodigo(request);
         return new LogoutResponse("Codigo enviado al correo registrado");
+    }
+
+    @PostMapping("/recuperacion/validar-codigo")
+    public LogoutResponse validarCodigo(@Valid @RequestBody ValidarCodigoRecuperacionRequest request) {
+        recuperacionContrasenaService.validarCodigo(request);
+        return new LogoutResponse("Codigo verificado correctamente");
     }
 
     @PostMapping("/recuperacion/restablecer")

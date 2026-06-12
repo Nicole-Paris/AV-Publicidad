@@ -752,7 +752,7 @@ export function InventarioPage() {
           />
 
           {!soloEmpleado && formularioAbierto && (
-            <div className="modal-overlay" onClick={cancelarFormulario}>
+            <div className="modal-overlay">
               <div className="modal-card customer-modal" onClick={(event) => event.stopPropagation()}>
               <h2>{materialEditando ? "Editar Material" : "Nuevo Material"}</h2>
               <form onSubmit={guardarMaterial}>
@@ -1010,7 +1010,7 @@ export function InventarioPage() {
           />
 
           {!soloEmpleado && formularioAbierto && (
-            <div className="modal-overlay" onClick={cancelarFormulario}>
+            <div className="modal-overlay">
               <div className="modal-card customer-modal" onClick={(event) => event.stopPropagation()}>
               <h2>Registrar Movimiento</h2>
               <form onSubmit={guardarMovimiento}>
@@ -1063,9 +1063,7 @@ export function InventarioPage() {
 
       {/* Modal flotante para nueva categoría */}
       {nuevaCat.visible && (
-        <div className="modal-overlay" onClick={() => setNuevaCat({
-          visible: false, editando: null, nombre: "", descripcion: "", estado: "Activo"
-        })}>
+        <div className="modal-overlay">
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
             <h2>{nuevaCat.editando ? "Editar Categoría" : "Nueva Categoría"}</h2>
             <label className="pos-field floating">
@@ -1103,7 +1101,7 @@ export function InventarioPage() {
 
       {/* Modal nueva unidad */}
       {nuevaUnidad.visible && (
-        <div className="modal-overlay" onClick={() => setNuevaUnidad({ visible: false, nombre: "" })}>
+        <div className="modal-overlay">
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
             <h2>Nueva Unidad</h2>
             <label className="pos-field floating">
@@ -1119,7 +1117,7 @@ export function InventarioPage() {
       )}
 
       {auditModal && (
-        <div className="modal-overlay" onClick={() => setAuditModal(null)}>
+        <div className="modal-overlay">
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
             <h2>{auditModal.titulo}</h2>
             <div className="audit-grid modal-audit-grid">
@@ -1141,7 +1139,7 @@ export function InventarioPage() {
 
       {/* Modal de error */}
       {modalError && (
-        <div className="modal-overlay" onClick={() => setModalError("")}>
+        <div className="modal-overlay">
           <div className="modal-error-card" onClick={e => e.stopPropagation()}>
             <h2>Error</h2>
             <p className="modal-error-msg">{modalError}</p>

@@ -11,8 +11,7 @@ import {
   crearEmpleado,
   eliminarEmpleado,
   listarEmpleados,
-  listarRoles,
-  crearRol
+  listarRoles
 } from "../api/empleadoApi.js";
 import { listarCortesPorEmpleado } from "../api/corteCajaApi.js";
 import { listarPedidos } from "../api/pedidoApi.js";
@@ -34,7 +33,6 @@ export function ConfiguracionPage() {
   const [globalValues, setGlobalValues] = useState([]);
   const [modalSucursal, setModalSucursal] = useState(false);
   const [modalEmpleado, setModalEmpleado] = useState(false);
-  const [modalRol, setModalRol] = useState(false);
   const [sucursalEditando, setSucursalEditando] = useState(null);
   const [sucursalAEliminar, setSucursalAEliminar] = useState(null);
   const [empleadoEditando, setEmpleadoEditando] = useState(null);
@@ -64,10 +62,6 @@ export function ConfiguracionPage() {
     horaSalida: "18:00",
     rolId: "",
     sucursalIdSucursal: ""
-  });
-  const [formRol, setFormRol] = useState({
-    nombre: "",
-    descripcion: ""
   });
   const [formEmpresa, setFormEmpresa] = useState({
     nombreEmpresa: "", razonSocial: "", rfc: "",
@@ -788,38 +782,6 @@ export function ConfiguracionPage() {
     }
   }
 
-  async function guardarRol() {
-    if (!formRol.nombre.trim()) {
-      mostrarError("Escribe el nombre del rol."); return;
-    }
-    if (!formRol.descripcion.trim()) {
-      mostrarError("Escribe la descripcion del rol."); return;
-    }
-
-    setSaving(true);
-    try {
-      const nuevoRol = await crearRol({
-        nombre: formRol.nombre.trim(),
-        descripcion: formRol.descripcion.trim(),
-        createdBy: session.empleadoId
-      });
-      const rolesActualizados = await listarRoles();
-      setRoles(safe(rolesActualizados));
-      const rolId = nuevoRol.idRol || nuevoRol.id || safe(rolesActualizados)
-        .find(rol => rol.nombre === formRol.nombre.trim())?.idRol;
-      if (rolId) {
-        setFormEmpleado(f => ({ ...f, rolId: String(rolId) }));
-      }
-      setFormRol({ nombre: "", descripcion: "" });
-      setModalRol(false);
-      mostrarSuccess("Rol creado correctamente.");
-    } catch (err) {
-      mostrarError(err.message || String(err));
-    } finally {
-      setSaving(false);
-    }
-  }
-
   async function guardarSoloLogo() {
     if (!formEmpresa.logoUrl || !formEmpresa.logoUrl.toString().trim()) {
       mostrarError("Escribe una URL de logotipo válida.");
@@ -933,7 +895,7 @@ export function ConfiguracionPage() {
         </section>
 
         {modalError && (
-          <div className="modal-error-overlay" onClick={() => setModalError("")}>
+          <div className="modal-error-overlay">
             <div className="modal-error-card" onClick={(event) => event.stopPropagation()}>
               <p className="modal-error-icon">!</p>
               <p className="modal-error-msg">{modalError}</p>
@@ -1336,7 +1298,7 @@ export function ConfiguracionPage() {
       )}
 
       {sucursalSeleccionada && (
-        <div className="modal-overlay" onClick={() => setSucursalSeleccionada(null)}>
+        <div className="modal-overlay">
           <div className="modal-card customer-modal" onClick={e => e.stopPropagation()}>
             <div className="tab-section-header">
               <div>
@@ -1438,7 +1400,7 @@ export function ConfiguracionPage() {
       )}
 
       {empleadoAEliminar && (
-        <div className="modal-overlay" onClick={() => setEmpleadoAEliminar(null)}>
+        <div className="modal-overlay">
           <div className="modal-card delete-confirm-modal" onClick={e => e.stopPropagation()}>
             {(() => {
               const sucursalActualId = sucursalSeleccionada
@@ -1495,7 +1457,7 @@ export function ConfiguracionPage() {
       )}
 
       {sucursalAEliminar && (
-        <div className="modal-overlay" onClick={() => setSucursalAEliminar(null)}>
+        <div className="modal-overlay">
           <div className="modal-card delete-confirm-modal" onClick={e => e.stopPropagation()}>
             <h2>Eliminar sucursal</h2>
             <p>
@@ -1527,7 +1489,7 @@ export function ConfiguracionPage() {
       )}
 
       {modalSucursal && (
-        <div className="modal-overlay" onClick={() => setModalSucursal(false)}>
+        <div className="modal-overlay">
           <div className="modal-card" onClick={e => e.stopPropagation()}>
             <h2>{sucursalEditando ? "Editar Sucursal" : "Nueva Sucursal"}</h2>
 
@@ -1608,10 +1570,7 @@ export function ConfiguracionPage() {
       )}
 
       {modalEmpleado && (
-        <div className="modal-overlay" onClick={() => {
-          setModalEmpleado(false);
-          setEmpleadoEditando(null);
-        }}>
+        <div className="modal-overlay">
           <div className="modal-card customer-modal" onClick={e => e.stopPropagation()}>
             <h2>{empleadoEditando ? "Editar Empleado" : "Nuevo Empleado"}</h2>
             <div className="modal-grid">
@@ -1651,13 +1610,7 @@ export function ConfiguracionPage() {
                 <span>Rol</span>
                 <select
                   value={formEmpleado.rolId}
-                  onChange={e => {
-                    if (e.target.value === "__nuevo_rol__") {
-                      setModalRol(true);
-                      return;
-                    }
-                    setFormEmpleado(f => ({...f, rolId: e.target.value}));
-                  }}
+                  onChange={e => setFormEmpleado(f => ({...f, rolId: e.target.value}))}
                 >
                   <option value="">Selecciona</option>
                   {roles.map(rol => (
@@ -1665,7 +1618,6 @@ export function ConfiguracionPage() {
                       {rol.nombre}
                     </option>
                   ))}
-                  <option value="__nuevo_rol__">+ Nuevo rol...</option>
                 </select>
               </label>
               <label className="pos-field floating">
@@ -1699,40 +1651,8 @@ export function ConfiguracionPage() {
         </div>
       )}
 
-      {modalRol && (
-        <div className="modal-overlay nested-modal-overlay" onClick={() => setModalRol(false)}>
-          <div className="modal-card" onClick={e => e.stopPropagation()}>
-            <h2>Nuevo Rol</h2>
-            <label className="pos-field floating">
-              <span>Nombre</span>
-              <input
-                type="text"
-                value={formRol.nombre}
-                onChange={e => setFormRol(f => ({ ...f, nombre: e.target.value }))}
-              />
-            </label>
-            <label className="pos-field floating">
-              <span>Descripcion</span>
-              <input
-                type="text"
-                value={formRol.descripcion}
-                onChange={e => setFormRol(f => ({ ...f, descripcion: e.target.value }))}
-              />
-            </label>
-            <div style={{display:"flex", justifyContent:"flex-end", gap:12, marginTop:20}}>
-              <button className="ghost-button" type="button" onClick={() => setModalRol(false)}>
-                Cancelar
-              </button>
-              <button className="primary-button" type="button" disabled={saving} onClick={guardarRol}>
-                {saving ? "Guardando..." : "Guardar Rol"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {modalError && (
-        <div className="modal-error-overlay" onClick={() => setModalError("")}>
+        <div className="modal-error-overlay">
           <div className="modal-error-card" onClick={e => e.stopPropagation()}>
             <h2>Error</h2>
             <p className="modal-error-msg">{modalError}</p>

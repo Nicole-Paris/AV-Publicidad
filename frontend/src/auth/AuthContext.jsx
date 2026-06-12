@@ -45,8 +45,6 @@ export function AuthProvider({ children }) {
       const rol = ((session?.rol || "") + "").toLowerCase();
       if (session?.empleadoId && rol !== "administrador") {
         const cortes = await listarCortesPorEmpleado(session.empleadoId);
-        console.log("Cortes encontrados:", cortes);
-        console.log("Rol actual:", rol);
         const abierta = (cortes || []).find(c => !c.horaFin);
         if (abierta) {
           // evita cerrar sesión para empleados con corte abierto

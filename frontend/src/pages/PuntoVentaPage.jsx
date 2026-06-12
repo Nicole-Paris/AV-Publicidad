@@ -934,7 +934,7 @@ export function PuntoVentaPage() {
 
       {/* Modal de error flotante */}
       {modalError && (
-        <div className="modal-error-overlay" onClick={() => setModalError("")}>
+        <div className="modal-error-overlay">
           <div className="modal-error-card" onClick={e => e.stopPropagation()}>
             <p className="modal-error-icon">⚠</p>
             <p className="modal-error-msg">{modalError}</p>
@@ -944,7 +944,7 @@ export function PuntoVentaPage() {
       )}
 
       {modalCliente && (
-        <div className="modal-overlay" onClick={() => setModalCliente(false)}>
+        <div className="modal-overlay">
           <div className="modal-card customer-modal" onClick={e => e.stopPropagation()}>
             <h2>Nuevo Cliente</h2>
             <div className="modal-grid">
@@ -1021,7 +1021,7 @@ export function PuntoVentaPage() {
       )}
 
       {modalServicio && (
-        <div className="modal-overlay" onClick={() => setModalServicio(false)}>
+        <div className="modal-overlay">
           <div className="modal-card" onClick={e => e.stopPropagation()}>
             <h2>Nuevo Servicio</h2>
             <label className="pos-field floating">

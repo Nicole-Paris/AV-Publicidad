@@ -2,6 +2,7 @@ package avpublicidad.proyecto.service;
 
 import avpublicidad.proyecto.dto.RecuperacionCodigoRequest;
 import avpublicidad.proyecto.dto.RestablecerContrasenaRequest;
+import avpublicidad.proyecto.dto.ValidarCodigoRecuperacionRequest;
 import avpublicidad.proyecto.model.Empleado;
 import avpublicidad.proyecto.repository.EmpleadoRepository;
 import lombok.RequiredArgsConstructor;
@@ -49,8 +50,25 @@ public class RecuperacionContrasenaService {
         enviarCorreo(empleado, codigo);
     }
 
+    public void validarCodigo(ValidarCodigoRecuperacionRequest request) {
+        String correo = normalizarCorreo(request.getCorreo());
+        validarCodigoVigente(correo, request.getCodigo());
+    }
+
     public void restablecerContrasena(RestablecerContrasenaRequest request) {
         String correo = normalizarCorreo(request.getCorreo());
+        validarCodigoVigente(correo, request.getCodigo());
+
+        Empleado empleado = empleadoRepository.findByCorreo(correo)
+                .filter(valor -> valor.getDeletedAt() == null)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No existe un empleado con ese correo."));
+
+        empleado.setContrasena(passwordEncoder.encode(request.getNuevaContrasena()));
+        empleadoRepository.save(empleado);
+        codigos.remove(correo);
+    }
+
+    private void validarCodigoVigente(String correo, String codigo) {
         CodigoRecuperacion recuperacion = codigos.get(correo);
 
         if (recuperacion == null) {
@@ -62,17 +80,9 @@ public class RecuperacionContrasenaService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El codigo expiro. Solicita uno nuevo.");
         }
 
-        if (!recuperacion.codigo().equals(request.getCodigo().trim())) {
+        if (!recuperacion.codigo().equals(codigo.trim())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El codigo no es valido.");
         }
-
-        Empleado empleado = empleadoRepository.findByCorreo(correo)
-                .filter(valor -> valor.getDeletedAt() == null)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No existe un empleado con ese correo."));
-
-        empleado.setContrasena(passwordEncoder.encode(request.getNuevaContrasena()));
-        empleadoRepository.save(empleado);
-        codigos.remove(correo);
     }
 
     private void enviarCorreo(Empleado empleado, String codigo) {

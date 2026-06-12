@@ -1431,8 +1431,32 @@ a {
 }
 .modal-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   justify-content: flex-end;
+}
+
+.secondary-button {
+  background: #eef2f7;
+  border: 0;
+  border-radius: 8px;
+  color: #243244;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 700;
+  min-height: 42px;
+  padding: 10px 18px;
+}
+
+.secondary-button:hover:not(:disabled),
+.secondary-button:focus:not(:disabled) {
+  background: #dfe6ef;
+  outline: none;
+}
+
+.secondary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 .muted-action {
   color: #64748b;
@@ -2817,6 +2841,7 @@ a {
   border-radius: 14px;
   box-shadow: 0 8px 32px rgba(0,0,0,0.18);
   padding: 32px;
+  position: relative;
   width: 100%;
   max-width: 360px;
   text-align: center;
@@ -2824,6 +2849,31 @@ a {
 
 .modal-error-card.recovery-card {
   max-width: 500px;
+}
+
+.modal-close-button {
+  align-items: center;
+  background: #eef2f7;
+  border: 0;
+  border-radius: 50%;
+  color: #243244;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 18px;
+  font-weight: 800;
+  height: 34px;
+  justify-content: center;
+  line-height: 1;
+  position: absolute;
+  right: 16px;
+  top: 16px;
+  width: 34px;
+}
+
+.modal-close-button:hover,
+.modal-close-button:focus {
+  background: #dfe6ef;
+  outline: none;
 }
 .modal-error-icon {
   font-size: 36px;
@@ -2848,14 +2898,14 @@ a {
   text-align: left;
 }
 
-.recovery-email-field {
+.recovery-form .login-field {
   display: block;
   justify-self: center;
   max-width: 420px;
   width: min(100%, 420px);
 }
 
-.recovery-email-field input {
+.recovery-form .login-field input {
   background: #ffffff;
   border: 1px solid #c8c8c8;
   border-radius: 4px;

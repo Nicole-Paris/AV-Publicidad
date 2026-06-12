@@ -20,6 +20,13 @@ export function enviarCodigoRecuperacion(correo) {
   });
 }
 
+export function validarCodigoRecuperacion(payload) {
+  return apiRequest("/auth/recuperacion/validar-codigo", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
 export function restablecerContrasena(payload) {
   return apiRequest("/auth/recuperacion/restablecer", {
     method: "POST",
