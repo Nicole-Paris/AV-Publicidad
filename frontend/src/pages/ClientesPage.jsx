@@ -519,10 +519,7 @@ export function ClientesPage() {
       />
 
       {modalCliente && (
-        <div className="modal-overlay" onClick={() => {
-          setModalCliente(false);
-          resetClienteForm();
-        }}>
+        <div className="modal-overlay">
           <div
             className="modal-card customer-modal"
             onClick={(event) => event.stopPropagation()}
@@ -625,7 +622,7 @@ export function ClientesPage() {
       )}
 
       {clienteAEliminar && (
-        <div className="modal-overlay" onClick={() => setClienteAEliminar(null)}>
+        <div className="modal-overlay">
           <div className="modal-card delete-confirm-modal" onClick={(event) => event.stopPropagation()}>
             <h2>Eliminar cliente</h2>
             <p>
@@ -645,7 +642,7 @@ export function ClientesPage() {
       )}
 
       {modalError && (
-        <div className="modal-error-overlay" onClick={() => setModalError("")}>
+        <div className="modal-error-overlay">
           <div className="modal-error-card" onClick={(event) => event.stopPropagation()}>
             <p className="modal-error-icon">!</p>
             <p className="modal-error-msg">{modalError}</p>

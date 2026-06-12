@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext.jsx";
+import { enviarCodigoRecuperacion, restablecerContrasena, validarCodigoRecuperacion } from "../api/authApi.js";
 import { AppIcon } from "../components/AppIcon.jsx";
 
 export function LoginPage() {
@@ -14,6 +15,15 @@ export function LoginPage() {
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showForgotModal, setShowForgotModal] = useState(false);
+  const [recoveryStep, setRecoveryStep] = useState("correo");
+  const [recoveryForm, setRecoveryForm] = useState({
+    correo: "",
+    codigo: "",
+    nuevaContrasena: ""
+  });
+  const [recoveryMessage, setRecoveryMessage] = useState("");
+  const [recoveryError, setRecoveryError] = useState("");
+  const [recoveryLoading, setRecoveryLoading] = useState(false);
 
   function handleChange(event) {
     const { name, value } = event.target;
@@ -33,6 +43,105 @@ export function LoginPage() {
       navigate(destination, { replace: true });
     } catch (err) {
       setError(err.message);
+    }
+  }
+
+  function openForgotModal() {
+    setRecoveryStep("correo");
+    setRecoveryForm({
+      correo: form.correo,
+      codigo: "",
+      nuevaContrasena: ""
+    });
+    setRecoveryMessage("");
+    setRecoveryError("");
+    setShowForgotModal(true);
+  }
+
+  function closeForgotModal() {
+    setShowForgotModal(false);
+    setRecoveryLoading(false);
+  }
+
+  function handleRecoveryChange(event) {
+    const { name, value } = event.target;
+    setRecoveryForm((current) => ({ ...current, [name]: value }));
+  }
+
+  async function handleSendRecoveryCode(event) {
+    event.preventDefault();
+    setRecoveryError("");
+    setRecoveryMessage("");
+    setRecoveryLoading(true);
+
+    try {
+      await enviarCodigoRecuperacion(recoveryForm.correo);
+      setRecoveryStep("codigo");
+      setRecoveryForm((current) => ({ ...current, codigo: "", nuevaContrasena: "" }));
+      setRecoveryMessage("Te enviamos un codigo al correo registrado.");
+    } catch (err) {
+      setRecoveryError(err.message);
+    } finally {
+      setRecoveryLoading(false);
+    }
+  }
+
+  async function handleResendRecoveryCode() {
+    setRecoveryError("");
+    setRecoveryMessage("");
+    setRecoveryLoading(true);
+
+    try {
+      await enviarCodigoRecuperacion(recoveryForm.correo);
+      setRecoveryForm((current) => ({ ...current, codigo: "", nuevaContrasena: "" }));
+      setRecoveryStep("codigo");
+      setRecoveryMessage("Te enviamos un nuevo codigo al correo registrado.");
+    } catch (err) {
+      setRecoveryError(err.message);
+    } finally {
+      setRecoveryLoading(false);
+    }
+  }
+
+  async function handleValidateRecoveryCode(event) {
+    event.preventDefault();
+    setRecoveryError("");
+    setRecoveryMessage("");
+    setRecoveryLoading(true);
+
+    try {
+      await validarCodigoRecuperacion({
+        correo: recoveryForm.correo,
+        codigo: recoveryForm.codigo
+      });
+      setRecoveryStep("contrasena");
+      setRecoveryMessage("Codigo verificado. Escribe tu nueva contrasena.");
+    } catch (err) {
+      setRecoveryError(err.message);
+    } finally {
+      setRecoveryLoading(false);
+    }
+  }
+
+  async function handleResetPassword(event) {
+    event.preventDefault();
+    setRecoveryError("");
+    setRecoveryMessage("");
+    setRecoveryLoading(true);
+
+    try {
+      await restablecerContrasena({
+        correo: recoveryForm.correo,
+        codigo: recoveryForm.codigo,
+        nuevaContrasena: recoveryForm.nuevaContrasena
+      });
+      setForm((current) => ({ ...current, correo: recoveryForm.correo, contrasena: "" }));
+      setRecoveryMessage("Contrasena actualizada. Ya puedes iniciar sesion.");
+      setTimeout(() => closeForgotModal(), 1200);
+    } catch (err) {
+      setRecoveryError(err.message);
+    } finally {
+      setRecoveryLoading(false);
     }
   }
 
@@ -85,7 +194,7 @@ export function LoginPage() {
 
           <button
             className="forgot-password"
-            onClick={() => setShowForgotModal(true)}
+            onClick={openForgotModal}
             type="button"
           >
             ¿Olvidaste tu contraseña?
@@ -94,15 +203,102 @@ export function LoginPage() {
       </section>
 
       {showForgotModal && (
-        <div className="modal-error-overlay" onClick={() => setShowForgotModal(false)}>
-          <div className="modal-error-card" onClick={event => event.stopPropagation()}>
+        <div className="modal-error-overlay">
+          <div className="modal-error-card recovery-card" onClick={event => event.stopPropagation()}>
+            {recoveryStep !== "correo" && (
+              <button
+                aria-label="Cancelar recuperacion"
+                className="modal-close-button"
+                onClick={closeForgotModal}
+                type="button"
+              >
+                x
+              </button>
+            )}
             <p className="modal-error-icon">!</p>
-            <p className="modal-error-msg">
-              Solicita a un administrador que restablezca tu contrasena desde Configuracion, Empleados y Editar empleado.
-            </p>
-            <button className="primary-button" onClick={() => setShowForgotModal(false)} type="button">
-              Entendido
-            </button>
+            <h2 className="modal-title">Recuperar contrasena</h2>
+            {recoveryStep === "correo" ? (
+              <form className="recovery-form" onSubmit={handleSendRecoveryCode}>
+                <p className="modal-error-msg">
+                  Escribe tu correo para recibir un codigo de recuperacion.
+                </p>
+                {recoveryError && <p className="form-error">{recoveryError}</p>}
+                <label className="login-field recovery-email-field">
+                  <input
+                    autoComplete="email"
+                    name="correo"
+                    onChange={handleRecoveryChange}
+                    placeholder="Correo Electronico"
+                    type="email"
+                    value={recoveryForm.correo}
+                  />
+                </label>
+                <div className="modal-actions">
+                  <button className="secondary-button" onClick={closeForgotModal} type="button">
+                    Cancelar
+                  </button>
+                  <button className="primary-button" disabled={recoveryLoading} type="submit">
+                    {recoveryLoading ? "Enviando..." : "Enviar codigo"}
+                  </button>
+                </div>
+              </form>
+            ) : recoveryStep === "codigo" ? (
+              <form className="recovery-form" onSubmit={handleValidateRecoveryCode}>
+                {recoveryMessage && <p className="form-success">{recoveryMessage}</p>}
+                {recoveryError && <p className="form-error">{recoveryError}</p>}
+                <label className="login-field">
+                  <input
+                    inputMode="numeric"
+                    maxLength="6"
+                    name="codigo"
+                    onChange={handleRecoveryChange}
+                    placeholder="Codigo de 6 digitos"
+                    value={recoveryForm.codigo}
+                  />
+                </label>
+                <div className="modal-actions">
+                  <button
+                    className="secondary-button"
+                    disabled={recoveryLoading}
+                    onClick={handleResendRecoveryCode}
+                    type="button"
+                  >
+                    Enviar nuevo codigo
+                  </button>
+                  <button className="primary-button" disabled={recoveryLoading} type="submit">
+                    {recoveryLoading ? "Validando..." : "Validar codigo"}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form className="recovery-form" onSubmit={handleResetPassword}>
+                {recoveryMessage && <p className="form-success">{recoveryMessage}</p>}
+                {recoveryError && <p className="form-error">{recoveryError}</p>}
+                <label className="login-field">
+                  <input
+                    autoComplete="new-password"
+                    name="nuevaContrasena"
+                    onChange={handleRecoveryChange}
+                    placeholder="Nueva contrasena"
+                    type="password"
+                    value={recoveryForm.nuevaContrasena}
+                  />
+                </label>
+                <div className="modal-actions">
+                  <button
+                    className="secondary-button"
+                    disabled={recoveryLoading}
+                    onClick={handleResendRecoveryCode}
+                    type="button"
+                  >
+                    Enviar nuevo codigo
+                  </button>
+                  <button className="primary-button" disabled={recoveryLoading} type="submit">
+                    {recoveryLoading ? "Guardando..." : "Cambiar contrasena"}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

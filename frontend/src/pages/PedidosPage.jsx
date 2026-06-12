@@ -764,7 +764,7 @@ export function PedidosPage() {
 
       {/* Modal error */}
       {modalError && (
-        <div className="modal-error-overlay" onClick={() => setModalError("")}>
+        <div className="modal-error-overlay">
           <div className="modal-error-card" onClick={e => e.stopPropagation()}>
             <p className="modal-error-icon">⚠</p>
             <p className="modal-error-msg">{modalError}</p>
@@ -774,10 +774,7 @@ export function PedidosPage() {
       )}
 
       {pedidoCancelar && (
-        <div className="modal-overlay" onClick={() => {
-          setPedidoCancelar(null);
-          setMotivoCancelacion("");
-        }}>
+        <div className="modal-overlay">
           <div className="modal-card confirm-delivery-modal" onClick={e => e.stopPropagation()}>
             <h2>Cancelar pedido</h2>
             <p>
@@ -813,7 +810,7 @@ export function PedidosPage() {
       )}
 
       {confirmarEntregaPendiente && (
-        <div className="modal-overlay" onClick={() => setConfirmarEntregaPendiente(null)}>
+        <div className="modal-overlay">
           <div className="modal-card confirm-delivery-modal" onClick={e => e.stopPropagation()}>
             <h2>Entregar con saldo pendiente</h2>
             <p>
@@ -840,7 +837,7 @@ export function PedidosPage() {
 
       {/* Modal pago */}
       {modalPago && (
-        <div className="modal-overlay" onClick={() => setModalPago(null)}>
+        <div className="modal-overlay">
           <div className="modal-card" onClick={e => e.stopPropagation()}>
             <h2>Registrar Pago</h2>
 

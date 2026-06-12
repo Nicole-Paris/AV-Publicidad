@@ -797,10 +797,7 @@ export function ServiciosPage() {
       )}
 
       {modalServicio && (
-        <div className="modal-overlay" onClick={() => {
-          setModalServicio(false);
-          setServicioEditando(null);
-        }}>
+        <div className="modal-overlay">
           <div className="modal-card service-edit-modal" onClick={e => e.stopPropagation()}>
             <h2>{servicioEditando ? "Editar Servicio" : "Nuevo Servicio"}</h2>
             <label className="pos-field floating">
@@ -963,7 +960,7 @@ export function ServiciosPage() {
       )}
 
       {modalMaterial && (
-        <div className="modal-overlay" onClick={() => setModalMaterial(false)}>
+        <div className="modal-overlay">
           <div className="modal-card" onClick={e => e.stopPropagation()}>
             <h2>Asignar Material a Servicio</h2>
             <label className="pos-field floating">
@@ -1035,9 +1032,7 @@ export function ServiciosPage() {
       )}
 
       {nuevaCat.visible && (
-        <div className="modal-overlay" onClick={() => setNuevaCat({
-          visible: false, editando: null, nombre: "", descripcion: "", estado: "Activo"
-        })}>
+        <div className="modal-overlay">
           <div className="modal-card" onClick={e => e.stopPropagation()}>
             <h2>{nuevaCat.editando ? "Editar Categoría" : "Nueva Categoría"}</h2>
             <label className="pos-field floating">
@@ -1101,7 +1096,7 @@ export function ServiciosPage() {
       )}
 
       {auditModal && (
-        <div className="modal-overlay" onClick={() => setAuditModal(null)}>
+        <div className="modal-overlay">
           <div className="modal-card" onClick={e => e.stopPropagation()}>
             <h2>{auditModal.titulo}</h2>
             <div className="audit-grid modal-audit-grid">
@@ -1122,7 +1117,7 @@ export function ServiciosPage() {
       )}
 
       {modalError && (
-        <div className="modal-error-overlay" onClick={() => setModalError("")}>
+        <div className="modal-error-overlay">
           <div className="modal-error-card" onClick={e => e.stopPropagation()}>
             <h2>Error</h2>
             <p className="modal-error-msg">{modalError}</p>

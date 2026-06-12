@@ -283,7 +283,7 @@ export function AppLayout() {
       </div>
       {/* Modal de error de logout */}
       {logoutError && (
-        <div className="modal-error-overlay" onClick={() => setLogoutError("")}>
+        <div className="modal-error-overlay">
           <div className="modal-error-card" onClick={e => e.stopPropagation()}>
             <p className="modal-error-icon">⚠</p>
             <p className="modal-error-msg">{logoutError}</p>

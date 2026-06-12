@@ -457,7 +457,7 @@ export function DashboardPage() {
       {loading && <div className="pos-alert success">Cargando panel principal...</div>}
 
       {modalError && (
-        <div className="modal-error-overlay" onClick={() => setModalError("")}>
+        <div className="modal-error-overlay">
           <div className="modal-error-card" onClick={event => event.stopPropagation()}>
             <p className="modal-error-icon">!</p>
             <p className="modal-error-msg">{modalError}</p>
