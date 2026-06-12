@@ -47,7 +47,7 @@ export function AuthProvider({ children }) {
         const cortes = await listarCortesPorEmpleado(session.empleadoId);
         const abierta = (cortes || []).find(c => !c.horaFin);
         if (abierta) {
-          const err = new Error("Tienes una caja asignada abierta. La caja seguirá abierta hasta que la cierres.");
+          const err = new Error("Tienes una caja asignada abierta. Puedes cerrar sesión pero la caja seguirá abierta hasta que un administrador la cierre");
           err.tipo = "caja_abierta_advertencia";
           throw err;
         }

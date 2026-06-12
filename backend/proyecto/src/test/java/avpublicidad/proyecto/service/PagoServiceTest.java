@@ -86,6 +86,37 @@ class PagoServiceTest {
                 .hasMessageContaining("pedidos cancelados");
     }
 
+    @Test
+    void crear_anticipoQueLiquidaPedido_debeSolicitarLiquidacion() {
+        PagoRequest request = requestValido();
+        request.setMonto(new BigDecimal("1500.00"));
+
+        when(pedidoRepository.existsById(1)).thenReturn(true);
+        when(empleadoRepository.existsById(1)).thenReturn(true);
+        when(pedidoRepository.findById(1)).thenReturn(Optional.of(pedido(PedidoConstants.ESTADO_PENDIENTE)));
+        when(pagoRepository.findByPedidoIdAndDeletedAtIsNull(1)).thenReturn(List.of());
+
+        assertThatThrownBy(() -> pagoService.crear(request))
+                .isInstanceOf(ValidationException.class)
+                .hasMessageContaining("concepto Liquidacion");
+    }
+
+    @Test
+    void crear_enPedidoPagado_debeRechazar() {
+        PagoRequest request = requestValido();
+        request.setMonto(new BigDecimal("10.00"));
+
+        Pago pagoPrevio = Pago.builder().idPago(1).monto(new BigDecimal("1500.00")).build();
+        when(pedidoRepository.existsById(1)).thenReturn(true);
+        when(empleadoRepository.existsById(1)).thenReturn(true);
+        when(pedidoRepository.findById(1)).thenReturn(Optional.of(pedido(PedidoConstants.ESTADO_PENDIENTE)));
+        when(pagoRepository.findByPedidoIdAndDeletedAtIsNull(1)).thenReturn(List.of(pagoPrevio));
+
+        assertThatThrownBy(() -> pagoService.crear(request))
+                .isInstanceOf(ValidationException.class)
+                .hasMessageContaining("ya esta pagado");
+    }
+
     private PagoRequest requestValido() {
         PagoRequest request = new PagoRequest();
         request.setMonto(new BigDecimal("500.00"));

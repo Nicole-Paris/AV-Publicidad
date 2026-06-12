@@ -138,6 +138,10 @@ public class PagoService {
 
         BigDecimal saldoPendiente = pedido.getTotal().subtract(totalPagado);
 
+        if (saldoPendiente.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ValidationException("El pedido ya esta pagado");
+        }
+
         BigDecimal nuevoTotalPagado = totalPagado.add(request.getMonto());
         if (nuevoTotalPagado.compareTo(pedido.getTotal()) > 0) {
             throw new ValidationException("El pago excede el saldo pendiente del pedido");
@@ -153,6 +157,11 @@ public class PagoService {
             throw new ValidationException("El anticipo solo puede registrarse como primer pago");
         }
 
+        if (PagoConstants.CONCEPTO_ANTICIPO.equals(concepto)
+                && request.getMonto().compareTo(saldoPendiente) >= 0) {
+            throw new ValidationException("El anticipo no puede liquidar el pedido; elige el concepto Liquidacion");
+        }
+
         if (PagoConstants.CONCEPTO_LIQUIDACION.equals(concepto)
                 && request.getMonto().compareTo(saldoPendiente) != 0) {
             throw new ValidationException("La liquidacion debe cubrir exactamente el saldo pendiente");
@@ -160,12 +169,12 @@ public class PagoService {
 
         if (PagoConstants.CONCEPTO_ABONO.equals(concepto)
                 && request.getMonto().compareTo(saldoPendiente) >= 0) {
-            throw new ValidationException("El abono debe ser menor al saldo pendiente; usa liquidacion para cubrir el total");
+            throw new ValidationException("El abono no puede liquidar el pedido; elige el concepto Liquidacion");
         }
 
         if (PagoConstants.CONCEPTO_ABONO_CREDITO.equals(concepto)
                 && request.getMonto().compareTo(saldoPendiente) >= 0) {
-            throw new ValidationException("El abono a credito debe ser menor al saldo pendiente");
+            throw new ValidationException("El abono a credito no puede liquidar el pedido; elige el concepto Liquidacion");
         }
     }
 

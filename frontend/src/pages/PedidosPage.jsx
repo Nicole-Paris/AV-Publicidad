@@ -124,11 +124,15 @@ export function PedidosPage() {
   }
 
   function estadoPagoPedido(pedidoObj) {
+    if (saldoPendientePedido(pedidoObj) <= 0) {
+      return "Pagado";
+    }
+
     if (pedidoObj?.estadoPago) {
       return pedidoObj.estadoPago;
     }
 
-    return saldoPendientePedido(pedidoObj) <= 0 ? "Pagado" : "Pendiente pago";
+    return "Pendiente pago";
   }
 
   function montoPagoActual() {
@@ -305,6 +309,10 @@ export function PedidosPage() {
   }
 
   function abrirModalPagoDesdeExpandido(pedidoObj) {
+    if (pedidoObj?.estado === "Cancelado" || saldoPendientePedido(pedidoObj) <= 0) {
+      return;
+    }
+
     const now = new Date();
     const fecha = now.toISOString().slice(0,10);
     const horaPago = now.toTimeString().slice(0,8);
@@ -344,6 +352,14 @@ export function PedidosPage() {
 
     const ped = pedidos.find(p => Number(p.idPedido) === pedidoId);
     const pendiente = ped ? saldoPendientePedido(ped) : 0;
+    if (pendiente <= 0) { mostrarError("El pedido ya esta pagado."); return; }
+
+    const conceptoParcial = ["Anticipo", "Abono", "Abono_credito"].includes(formPago.conceptoPago);
+    if (conceptoParcial && Number(monto) >= pendiente) {
+      mostrarError("Un anticipo o abono no puede pagar por completo el pedido. Elige el concepto Liquidacion.");
+      return;
+    }
+
     if (ped?.formaPago !== "Intercambio" && Number(monto) > pendiente) { mostrarError(`El monto excede el pendiente (${money(pendiente)}).`); return; }
 
     setSaving(true);
@@ -360,12 +376,14 @@ export function PedidosPage() {
         createdBy: session.empleadoId
       });
 
-      const [nuevosPagos, todosActualizados] = await Promise.all([
+      const [nuevosPagos, todosActualizados, pedidosActualizados] = await Promise.all([
         listarPagosPorPedido(pedidoId),
-        listarTodosPagos()
+        listarTodosPagos(),
+        listarPedidos()
       ]);
       setPagosPorPedido(prev => ({ ...prev, [pedidoId]: nuevosPagos || [] }));
       setTodosLosPagos(todosActualizados || []);
+      setPedidos((pedidosActualizados || []).slice().sort((a, b) => Number(b.idPedido) - Number(a.idPedido)));
 
       setModalPago(null);
       mostrarSuccess("Pago registrado correctamente.");
@@ -413,7 +431,7 @@ export function PedidosPage() {
     const pedidoObj = pedidoCancelar;
     const motivo = motivoCancelacion.trim();
     setPedidoCancelar(null);
-    setMotivoCancentelacion("");
+    setMotivoCancelacion("");
     await guardarEstadoPedido({ ...pedidoObj, motivoCancelacion: motivo }, "Cancelado");
   }
 
@@ -546,6 +564,14 @@ export function PedidosPage() {
                       </select>
                        <button
                          className="pedido-payment-button"
+                         disabled={pedido.estado === "Cancelado" || pendiente <= 0}
+                         title={
+                           pedido.estado === "Cancelado"
+                             ? "No se pueden registrar pagos en pedidos cancelados"
+                             : pendiente <= 0
+                               ? "Este pedido ya esta pagado"
+                               : "Registrar pago"
+                         }
                          type="button"
                          onClick={e => {
                            e.stopPropagation();
@@ -961,7 +987,12 @@ export function PedidosPage() {
 
             <div style={{display:"flex", justifyContent:"flex-end", gap:12, marginTop:20}}>
               <button className="ghost-button" type="button" onClick={() => setModalPago(null)}>Cancelar</button>
-              <button className="primary-button" type="button" disabled={saving} onClick={guardarPago}>
+              <button
+                className="primary-button"
+                type="button"
+                disabled={saving || !pedidoSeleccionado || saldoPendientePedido(pedidoSeleccionado) <= 0}
+                onClick={guardarPago}
+              >
                 {saving ? "Guardando..." : "Guardar Pago"}
               </button>
             </div>

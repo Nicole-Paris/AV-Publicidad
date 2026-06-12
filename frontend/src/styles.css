@@ -697,6 +697,14 @@ a {
   background: #fb5a35;
   outline: none;
 }
+.pedido-payment-button:disabled,
+.pedido-payment-button:disabled:hover,
+.pedido-payment-button:disabled:focus {
+  background: #d8dee7;
+  color: #7a8492;
+  cursor: not-allowed;
+  outline: none;
+}
 .pedido-pdf-button {
   background: #eef2f7;
   border: 0;
