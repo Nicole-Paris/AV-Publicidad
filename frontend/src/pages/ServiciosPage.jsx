@@ -965,19 +965,14 @@ export function ServiciosPage() {
             <h2>Asignar Material a Servicio</h2>
             <label className="pos-field floating">
               <span>Servicio</span>
-              <select
-                value={formMaterial.servicioId}
-                onChange={e => setFormMaterial(f => ({
-                  ...f, servicioId: e.target.value
-                }))}
-              >
-                <option value="">Selecciona un servicio</option>
-                {serviciosDisponibles.map(s => (
-                  <option key={s.idServicio || s.id} value={s.idServicio || s.id}>
-                    {s.nombre}
-                  </option>
-                ))}
-              </select>
+              <input
+                className="locked-service-field"
+                type="text"
+                value={nombreServicio(formMaterial.servicioId)}
+                readOnly
+                aria-readonly="true"
+                title="El material se asignará al servicio seleccionado en la tarjeta"
+              />
             </label>
             <label className="pos-field floating">
               <span>Material</span>

@@ -2421,6 +2421,13 @@ a {
   box-shadow: 0 0 0 3px rgba(5, 8, 22, 0.08);
 }
 
+.pos-field input.locked-service-field {
+  background: #f1f3f5;
+  color: #4f5661;
+  cursor: not-allowed;
+  padding-right: 17px;
+}
+
 .cancel-reason-field {
   margin-top: 20px;
 }

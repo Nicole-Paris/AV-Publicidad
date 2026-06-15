@@ -496,7 +496,7 @@ CREATE TABLE IF NOT EXISTS `AV`.`inventario` (
     REFERENCES `AV`.`material` (`id_material`)
     ON DELETE RESTRICT
     ON UPDATE CASCADE,
-  CONSTRAINT `fk_inventario_sucursal`
+  CONSTRAINT `fk_inventario_sucursal` 
     FOREIGN KEY (`sucursal_id`)
     REFERENCES `AV`.`sucursal` (`id_sucursal`)
     ON DELETE RESTRICT
