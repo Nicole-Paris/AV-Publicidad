@@ -173,7 +173,7 @@ export function InventarioPage() {
   const [confirmarMaterialInactivo, setConfirmarMaterialInactivo] = useState(false);
 
   const [buscar, setBuscar] = useState("");
-  const [categoriaFiltro, setCategoriaFiltro] = useState("");
+  const [estadoMaterialFiltro, setEstadoMaterialFiltro] = useState("");
   const [buscarCategoria, setBuscarCategoria] = useState("");
   const [estadoCategoriaFiltro, setEstadoCategoriaFiltro] = useState("");
   const [paginaMateriales, setPaginaMateriales] = useState(1);
@@ -264,9 +264,9 @@ export function InventarioPage() {
         );
         return Boolean(inv);
       })
-      .filter((m) => (!categoriaFiltro || String(m.categoriaMaterialId) === String(categoriaFiltro)))
+      .filter((m) => !estadoMaterialFiltro || estadoMaterialParaVista(m.estado) === estadoMaterialFiltro)
       .filter((m) => (!q || normalizarTexto(m.nombre).includes(q)));
-  }, [materiales, inventarios, buscar, categoriaFiltro, sucursalActivaId]);
+  }, [materiales, inventarios, buscar, estadoMaterialFiltro, sucursalActivaId]);
 
   const movimientosFiltrados = useMemo(() => {
     return movimientos
@@ -309,7 +309,7 @@ export function InventarioPage() {
 
   useEffect(() => {
     setPaginaMateriales(1);
-  }, [buscar, categoriaFiltro, sucursalActivaId]);
+  }, [buscar, estadoMaterialFiltro, sucursalActivaId]);
 
   useEffect(() => {
     setPaginaMovimientos(1);
@@ -686,13 +686,10 @@ export function InventarioPage() {
               onChange={(e) => setBuscar(e.target.value)}
               disabled={loading}
             />
-            <select value={categoriaFiltro} onChange={(e) => setCategoriaFiltro(e.target.value)} disabled={loading}>
-              <option value="">Todos los tipos</option>
-              {categorias.map((c) => (
-                <option key={c.idCategoriaMaterial || c.id} value={c.idCategoriaMaterial || c.id}>
-                  {c.nombre || c.descripcion || c.name}
-                </option>
-              ))}
+            <select value={estadoMaterialFiltro} onChange={(e) => setEstadoMaterialFiltro(e.target.value)} disabled={loading}>
+              <option value="">Todos los estados</option>
+              <option value="Activo">Activos</option>
+              <option value="Inactivo">Inactivos</option>
             </select>
             {!soloEmpleado && (
               <div className="toolbar-actions">

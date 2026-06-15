@@ -27,6 +27,7 @@ export function ServiciosPage() {
   const [modalError, setModalError] = useState("");
   const [success, setSuccess] = useState("");
   const [buscar, setBuscar] = useState("");
+  const [estadoServicioFiltro, setEstadoServicioFiltro] = useState("");
   const [buscarCategoria, setBuscarCategoria] = useState("");
   const [estadoCategoriaFiltro, setEstadoCategoriaFiltro] = useState("");
   const [paginaServicios, setPaginaServicios] = useState(1);
@@ -243,12 +244,13 @@ export function ServiciosPage() {
     const q = buscar.trim().toLowerCase();
     return servicios
       .filter(registroDeSucursal)
+      .filter(s => !estadoServicioFiltro || (s.estado || "Activo") === estadoServicioFiltro)
       .filter(s => !q ||
         (s.nombre || "").toLowerCase().includes(q) ||
         (s.descripcion || "").toLowerCase().includes(q) ||
         nombreCategoria(s.categoriaServicioId).toLowerCase().includes(q)
       );
-  }, [servicios, buscar, categorias, empleados, sucursalActivaId]);
+  }, [servicios, buscar, estadoServicioFiltro, categorias, empleados, sucursalActivaId]);
 
   const serviciosPaginados = useMemo(() => {
     const inicio = (paginaServicios - 1) * PAGE_SIZE;
@@ -268,7 +270,7 @@ export function ServiciosPage() {
 
   useEffect(() => {
     setPaginaServicios(1);
-  }, [buscar, sucursalActivaId]);
+  }, [buscar, estadoServicioFiltro, sucursalActivaId]);
 
   const serviciosDisponibles = useMemo(() => {
     return servicios.filter((servicio) => registroDeSucursal(servicio) && (servicio.estado || "Activo") === "Activo");
@@ -550,7 +552,15 @@ export function ServiciosPage() {
             style={{ flex: 1 }}
             disabled={loading}
           />
-          <div />
+          <select
+            value={estadoServicioFiltro}
+            onChange={e => setEstadoServicioFiltro(e.target.value)}
+            disabled={loading}
+          >
+            <option value="">Todos los estados</option>
+            <option value="Activo">Activos</option>
+            <option value="Inactivo">Inactivos</option>
+          </select>
           <div className="toolbar-actions">
             {!soloEmpleado && (
               <button
