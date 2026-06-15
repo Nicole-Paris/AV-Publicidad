@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { clearSession, getStoredSession, storeSession } from "../api/apiClient.js";
 import { loginRequest, logoutRequest } from "../api/authApi.js";
 import { listarCortesPorEmpleado } from "../api/corteCajaApi.js";
@@ -8,6 +8,16 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(() => getStoredSession());
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    function handleSessionExpired() {
+      clearSession();
+      setSession(null);
+    }
+
+    window.addEventListener("av_session_expired", handleSessionExpired);
+    return () => window.removeEventListener("av_session_expired", handleSessionExpired);
+  }, []);
 
   const login = useCallback(async function login(credentials) {
     setLoading(true);
