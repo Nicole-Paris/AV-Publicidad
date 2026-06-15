@@ -723,15 +723,6 @@ export function PedidosPage() {
               onChange={e => setBuscarPago(e.target.value)}
               style={{maxWidth:380, flex:1}}
             />
-            <button
-              className="primary-button"
-              disabled={!tieneCajaAbierta}
-              title={!tieneCajaAbierta ? "Necesitas una caja abierta asignada para registrar pagos" : undefined}
-              onClick={abrirModalPagoDesdeTab}
-              type="button"
-            >
-              + Registrar Pago
-            </button>
           </div>
 
           {(() => {

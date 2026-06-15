@@ -1,0 +1,190 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 792 612] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+6 0 obj
+<< /Length 9223 >>
+stream
+0 0 0 rg BT /F2 16 Tf 42.0 575.0 Td (CU02 - Diagrama de secuencia: Recuperar contrasena) Tj ET
+0.95 0.97 0.99 rg 0.55 0.62 0.70 RG 0.8 w 13.0 540.0 84.0 22.0 re B
+0 0 0 rg BT /F2 7 Tf 41.8 547.0 Td (Usuario) Tj ET
+0.60 0.65 0.70 RG 0.5 w [3 3] 0 d
+55.0 540.0 m 55.0 42.0 l S [] 0 d
+0.95 0.97 0.99 rg 0.55 0.62 0.70 RG 0.8 w 123.0 540.0 84.0 22.0 re B
+0 0 0 rg BT /F2 7 Tf 148.0 547.0 Td (LoginPage) Tj ET
+0.60 0.65 0.70 RG 0.5 w [3 3] 0 d
+165.0 540.0 m 165.0 42.0 l S [] 0 d
+0.95 0.97 0.99 rg 0.55 0.62 0.70 RG 0.8 w 233.0 540.0 84.0 22.0 re B
+0 0 0 rg BT /F2 7 Tf 259.9 547.0 Td (Auth API) Tj ET
+0.60 0.65 0.70 RG 0.5 w [3 3] 0 d
+275.0 540.0 m 275.0 42.0 l S [] 0 d
+0.95 0.97 0.99 rg 0.55 0.62 0.70 RG 0.8 w 348.0 540.0 84.0 22.0 re B
+0 0 0 rg BT /F2 7 Tf 363.5 547.0 Td (AuthController) Tj ET
+0.60 0.65 0.70 RG 0.5 w [3 3] 0 d
+390.0 540.0 m 390.0 42.0 l S [] 0 d
+0.95 0.97 0.99 rg 0.55 0.62 0.70 RG 0.8 w 483.0 540.0 84.0 22.0 re B
+0 0 0 rg BT /F2 7 Tf 489.1 547.0 Td (RecuperacionService) Tj ET
+0.60 0.65 0.70 RG 0.5 w [3 3] 0 d
+525.0 540.0 m 525.0 42.0 l S [] 0 d
+0.95 0.97 0.99 rg 0.55 0.62 0.70 RG 0.8 w 608.0 540.0 84.0 22.0 re B
+0 0 0 rg BT /F2 7 Tf 616.0 547.0 Td (EmpleadoRepository) Tj ET
+0.60 0.65 0.70 RG 0.5 w [3 3] 0 d
+650.0 540.0 m 650.0 42.0 l S [] 0 d
+0.95 0.97 0.99 rg 0.55 0.62 0.70 RG 0.8 w 703.0 540.0 84.0 22.0 re B
+0 0 0 rg BT /F2 7 Tf 718.5 547.0 Td (JavaMailSender) Tj ET
+0.60 0.65 0.70 RG 0.5 w [3 3] 0 d
+745.0 540.0 m 745.0 42.0 l S [] 0 d
+0.12 0.16 0.22 RG 0.8 w 55.0 515.0 m 165.0 515.0 l S
+0.12 0.16 0.22 RG 0.8 w 165.0 515.0 m 158.0 519.0 l S
+0.12 0.16 0.22 RG 0.8 w 165.0 515.0 m 158.0 511.0 l S
+0 0 0 rg BT /F1 7 Tf 60.0 522.0 Td (1. Selecciona Olvidaste tu contrasena) Tj ET
+0.12 0.16 0.22 RG 0.8 w 165.0 500.0 m 55.0 500.0 l S
+0.12 0.16 0.22 RG 0.8 w 55.0 500.0 m 62.0 504.0 l S
+0.12 0.16 0.22 RG 0.8 w 55.0 500.0 m 62.0 496.0 l S
+0 0 0 rg BT /F1 7 Tf 60.0 507.0 Td (2. Muestra modal para ingresar correo) Tj ET
+0.12 0.16 0.22 RG 0.8 w 55.0 485.0 m 165.0 485.0 l S
+0.12 0.16 0.22 RG 0.8 w 165.0 485.0 m 158.0 489.0 l S
+0.12 0.16 0.22 RG 0.8 w 165.0 485.0 m 158.0 481.0 l S
+0 0 0 rg BT /F1 7 Tf 60.0 492.0 Td (3. Ingresa correo electronico) Tj ET
+0.12 0.16 0.22 RG 0.8 w 165.0 470.0 m 275.0 470.0 l S
+0.12 0.16 0.22 RG 0.8 w 275.0 470.0 m 268.0 474.0 l S
+0.12 0.16 0.22 RG 0.8 w 275.0 470.0 m 268.0 466.0 l S
+0 0 0 rg BT /F1 7 Tf 170.0 477.0 Td (4. POST /recuperacion/codigo) Tj ET
+0.12 0.16 0.22 RG 0.8 w 275.0 455.0 m 390.0 455.0 l S
+0.12 0.16 0.22 RG 0.8 w 390.0 455.0 m 383.0 459.0 l S
+0.12 0.16 0.22 RG 0.8 w 390.0 455.0 m 383.0 451.0 l S
+0 0 0 rg BT /F1 7 Tf 280.0 462.0 Td (5. Solicita codigo de recuperacion) Tj ET
+0.12 0.16 0.22 RG 0.8 w 390.0 440.0 m 525.0 440.0 l S
+0.12 0.16 0.22 RG 0.8 w 525.0 440.0 m 518.0 444.0 l S
+0.12 0.16 0.22 RG 0.8 w 525.0 440.0 m 518.0 436.0 l S
+0 0 0 rg BT /F1 7 Tf 395.0 447.0 Td (6. enviarCodigo\(correo\)) Tj ET
+0.12 0.16 0.22 RG 0.8 w 525.0 425.0 m 650.0 425.0 l S
+0.12 0.16 0.22 RG 0.8 w 650.0 425.0 m 643.0 429.0 l S
+0.12 0.16 0.22 RG 0.8 w 650.0 425.0 m 643.0 421.0 l S
+0 0 0 rg BT /F1 7 Tf 530.0 432.0 Td (7. Valida correo en empleados) Tj ET
+0.12 0.16 0.22 RG 0.8 w 650.0 410.0 m 525.0 410.0 l S
+0.12 0.16 0.22 RG 0.8 w 525.0 410.0 m 532.0 414.0 l S
+0.12 0.16 0.22 RG 0.8 w 525.0 410.0 m 532.0 406.0 l S
+0 0 0 rg BT /F1 7 Tf 530.0 417.0 Td (8. Empleado encontrado) Tj ET
+0.12 0.16 0.22 RG 0.8 w 525.0 395.0 m 745.0 395.0 l S
+0.12 0.16 0.22 RG 0.8 w 745.0 395.0 m 738.0 399.0 l S
+0.12 0.16 0.22 RG 0.8 w 745.0 395.0 m 738.0 391.0 l S
+0 0 0 rg BT /F1 7 Tf 530.0 402.0 Td (9. Envia codigo de 6 digitos) Tj ET
+0.12 0.16 0.22 RG 0.8 w 745.0 380.0 m 525.0 380.0 l S
+0.12 0.16 0.22 RG 0.8 w 525.0 380.0 m 532.0 384.0 l S
+0.12 0.16 0.22 RG 0.8 w 525.0 380.0 m 532.0 376.0 l S
+0 0 0 rg BT /F1 7 Tf 530.0 387.0 Td (10. Correo enviado) Tj ET
+0.12 0.16 0.22 RG 0.8 w 525.0 365.0 m 390.0 365.0 l S
+0.12 0.16 0.22 RG 0.8 w 390.0 365.0 m 397.0 369.0 l S
+0.12 0.16 0.22 RG 0.8 w 390.0 365.0 m 397.0 361.0 l S
+0 0 0 rg BT /F1 7 Tf 395.0 372.0 Td (11. Guarda codigo con vigencia 10 min) Tj ET
+0.12 0.16 0.22 RG 0.8 w 390.0 350.0 m 275.0 350.0 l S
+0.12 0.16 0.22 RG 0.8 w 275.0 350.0 m 282.0 354.0 l S
+0.12 0.16 0.22 RG 0.8 w 275.0 350.0 m 282.0 346.0 l S
+0 0 0 rg BT /F1 7 Tf 280.0 357.0 Td (12. Codigo enviado) Tj ET
+0.12 0.16 0.22 RG 0.8 w 275.0 335.0 m 165.0 335.0 l S
+0.12 0.16 0.22 RG 0.8 w 165.0 335.0 m 172.0 339.0 l S
+0.12 0.16 0.22 RG 0.8 w 165.0 335.0 m 172.0 331.0 l S
+0 0 0 rg BT /F1 7 Tf 170.0 342.0 Td (13. Muestra modal de codigo) Tj ET
+0.12 0.16 0.22 RG 0.8 w 55.0 320.0 m 165.0 320.0 l S
+0.12 0.16 0.22 RG 0.8 w 165.0 320.0 m 158.0 324.0 l S
+0.12 0.16 0.22 RG 0.8 w 165.0 320.0 m 158.0 316.0 l S
+0 0 0 rg BT /F1 7 Tf 60.0 327.0 Td (14. Ingresa codigo y valida) Tj ET
+0.12 0.16 0.22 RG 0.8 w 165.0 305.0 m 275.0 305.0 l S
+0.12 0.16 0.22 RG 0.8 w 275.0 305.0 m 268.0 309.0 l S
+0.12 0.16 0.22 RG 0.8 w 275.0 305.0 m 268.0 301.0 l S
+0 0 0 rg BT /F1 7 Tf 170.0 312.0 Td (15. POST /validar-codigo) Tj ET
+0.12 0.16 0.22 RG 0.8 w 275.0 290.0 m 390.0 290.0 l S
+0.12 0.16 0.22 RG 0.8 w 390.0 290.0 m 383.0 294.0 l S
+0.12 0.16 0.22 RG 0.8 w 390.0 290.0 m 383.0 286.0 l S
+0 0 0 rg BT /F1 7 Tf 280.0 297.0 Td (16. Validar codigo) Tj ET
+0.12 0.16 0.22 RG 0.8 w 390.0 275.0 m 525.0 275.0 l S
+0.12 0.16 0.22 RG 0.8 w 525.0 275.0 m 518.0 279.0 l S
+0.12 0.16 0.22 RG 0.8 w 525.0 275.0 m 518.0 271.0 l S
+0 0 0 rg BT /F1 7 Tf 395.0 282.0 Td (17. Verifica que sea correcto y vigente) Tj ET
+0.12 0.16 0.22 RG 0.8 w 525.0 260.0 m 390.0 260.0 l S
+0.12 0.16 0.22 RG 0.8 w 390.0 260.0 m 397.0 264.0 l S
+0.12 0.16 0.22 RG 0.8 w 390.0 260.0 m 397.0 256.0 l S
+0 0 0 rg BT /F1 7 Tf 395.0 267.0 Td (18. Codigo valido) Tj ET
+0.12 0.16 0.22 RG 0.8 w 390.0 245.0 m 275.0 245.0 l S
+0.12 0.16 0.22 RG 0.8 w 275.0 245.0 m 282.0 249.0 l S
+0.12 0.16 0.22 RG 0.8 w 275.0 245.0 m 282.0 241.0 l S
+0 0 0 rg BT /F1 7 Tf 280.0 252.0 Td (19. Codigo verificado) Tj ET
+0.12 0.16 0.22 RG 0.8 w 275.0 230.0 m 165.0 230.0 l S
+0.12 0.16 0.22 RG 0.8 w 165.0 230.0 m 172.0 234.0 l S
+0.12 0.16 0.22 RG 0.8 w 165.0 230.0 m 172.0 226.0 l S
+0 0 0 rg BT /F1 7 Tf 170.0 237.0 Td (20. Muestra modal Nueva contrasena) Tj ET
+0.12 0.16 0.22 RG 0.8 w 55.0 215.0 m 165.0 215.0 l S
+0.12 0.16 0.22 RG 0.8 w 165.0 215.0 m 158.0 219.0 l S
+0.12 0.16 0.22 RG 0.8 w 165.0 215.0 m 158.0 211.0 l S
+0 0 0 rg BT /F1 7 Tf 60.0 222.0 Td (21. Ingresa nueva contrasena) Tj ET
+0.12 0.16 0.22 RG 0.8 w 165.0 200.0 m 275.0 200.0 l S
+0.12 0.16 0.22 RG 0.8 w 275.0 200.0 m 268.0 204.0 l S
+0.12 0.16 0.22 RG 0.8 w 275.0 200.0 m 268.0 196.0 l S
+0 0 0 rg BT /F1 7 Tf 170.0 207.0 Td (22. POST /restablecer) Tj ET
+0.12 0.16 0.22 RG 0.8 w 275.0 185.0 m 390.0 185.0 l S
+0.12 0.16 0.22 RG 0.8 w 390.0 185.0 m 383.0 189.0 l S
+0.12 0.16 0.22 RG 0.8 w 390.0 185.0 m 383.0 181.0 l S
+0 0 0 rg BT /F1 7 Tf 280.0 192.0 Td (23. Restablecer contrasena) Tj ET
+0.12 0.16 0.22 RG 0.8 w 390.0 170.0 m 525.0 170.0 l S
+0.12 0.16 0.22 RG 0.8 w 525.0 170.0 m 518.0 174.0 l S
+0.12 0.16 0.22 RG 0.8 w 525.0 170.0 m 518.0 166.0 l S
+0 0 0 rg BT /F1 7 Tf 395.0 177.0 Td (24. Valida codigo y codifica contrasena) Tj ET
+0.12 0.16 0.22 RG 0.8 w 525.0 155.0 m 650.0 155.0 l S
+0.12 0.16 0.22 RG 0.8 w 650.0 155.0 m 643.0 159.0 l S
+0.12 0.16 0.22 RG 0.8 w 650.0 155.0 m 643.0 151.0 l S
+0 0 0 rg BT /F1 7 Tf 530.0 162.0 Td (25. Actualiza campo contrasena) Tj ET
+0.12 0.16 0.22 RG 0.8 w 650.0 140.0 m 525.0 140.0 l S
+0.12 0.16 0.22 RG 0.8 w 525.0 140.0 m 532.0 144.0 l S
+0.12 0.16 0.22 RG 0.8 w 525.0 140.0 m 532.0 136.0 l S
+0 0 0 rg BT /F1 7 Tf 530.0 147.0 Td (26. Empleado actualizado) Tj ET
+0.12 0.16 0.22 RG 0.8 w 525.0 125.0 m 390.0 125.0 l S
+0.12 0.16 0.22 RG 0.8 w 390.0 125.0 m 397.0 129.0 l S
+0.12 0.16 0.22 RG 0.8 w 390.0 125.0 m 397.0 121.0 l S
+0 0 0 rg BT /F1 7 Tf 395.0 132.0 Td (27. Elimina codigo usado) Tj ET
+0.12 0.16 0.22 RG 0.8 w 390.0 110.0 m 275.0 110.0 l S
+0.12 0.16 0.22 RG 0.8 w 275.0 110.0 m 282.0 114.0 l S
+0.12 0.16 0.22 RG 0.8 w 275.0 110.0 m 282.0 106.0 l S
+0 0 0 rg BT /F1 7 Tf 280.0 117.0 Td (28. Contrasena restablecida) Tj ET
+0.12 0.16 0.22 RG 0.8 w 275.0 95.0 m 165.0 95.0 l S
+0.12 0.16 0.22 RG 0.8 w 165.0 95.0 m 172.0 99.0 l S
+0.12 0.16 0.22 RG 0.8 w 165.0 95.0 m 172.0 91.0 l S
+0 0 0 rg BT /F1 7 Tf 170.0 102.0 Td (29. Muestra mensaje de exito) Tj ET
+0.98 0.99 1.00 rg 0.55 0.62 0.70 RG 0.8 w 42.0 38.0 350.0 72.0 re B
+0 0 0 rg BT /F2 8 Tf 52.0 96.0 Td (Flujo alterno 2.1 - Administrador restablece contrasena) Tj ET
+0 0 0 rg BT /F1 7 Tf 52.0 80.0 Td (Admin entra a Configuracion / Empleados, selecciona empleado,) Tj ET
+0 0 0 rg BT /F1 7 Tf 52.0 66.0 Td (ingresa una nueva contrasena y guarda los cambios.) Tj ET
+0 0 0 rg BT /F1 7 Tf 52.0 52.0 Td (El sistema actualiza la contrasena del empleado.) Tj ET
+1.00 0.98 0.98 rg 0.90 0.45 0.45 RG 0.8 w 420.0 38.0 330.0 72.0 re B
+0 0 0 rg BT /F2 8 Tf 430.0 96.0 Td (Excepciones consideradas) Tj ET
+0 0 0 rg BT /F1 7 Tf 430.0 80.0 Td (Correo vacio / correo no registrado.) Tj ET
+0 0 0 rg BT /F1 7 Tf 430.0 66.0 Td (Codigo invalido o expirado.) Tj ET
+0 0 0 rg BT /F1 7 Tf 430.0 52.0 Td (Nueva contrasena no cumple la politica configurada.) Tj ET
+0.30 0.35 0.42 rg BT /F1 8 Tf 42.0 20.0 Td (Nota: El sistema usa codigo de recuperacion de 6 digitos; no usa enlace de recuperacion.) Tj ET
+endstream
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000251 00000 n 
+0000000321 00000 n 
+0000000396 00000 n 
+trailer << /Size 7 /Root 1 0 R >>
+startxref
+9671
+%%EOF
