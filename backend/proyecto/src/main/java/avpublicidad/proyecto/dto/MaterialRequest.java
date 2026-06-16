@@ -25,7 +25,7 @@ public class MaterialRequest {
     private String estado;
 
     @NotNull(message = "El costo unitario es obligatorio")
-    @DecimalMin(value = "0.01")
+    @DecimalMin(value = "0.01", message = "costoUnitario debe ser mayor a 0")
     @Digits(integer = 8, fraction = 2)
     private BigDecimal costoUnitario;
 
