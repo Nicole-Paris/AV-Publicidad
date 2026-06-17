@@ -1,0 +1,129 @@
+%%{init: {"theme": "base", "themeVariables": {"fontSize": "18px", "primaryColor": "#f4f2ff", "primaryBorderColor": "#6658c8", "lineColor": "#4a4a4a", "tertiaryColor": "#fffbe6"}}}%%
+classDiagram
+direction LR
+
+class CategoriaServicio {
+  +Integer idCategoriaServicio
+  +String nombre
+  +String descripcion
+  +String estado
+}
+
+class Servicio {
+  +Integer idServicio
+  +String nombre
+  +String descripcion
+  +String estado
+  +Integer categoriaServicioId
+}
+
+class ServicioMaterial {
+  +Integer idServicioMaterial
+  +BigDecimal cantidadUsada
+  +Integer servicioId
+  +Integer materialId
+}
+
+class CategoriaMaterial {
+  +Integer idCategoriaMaterial
+  +String nombre
+  +String estado
+  +String descripcion
+}
+
+class Material {
+  +Integer idMaterial
+  +String nombre
+  +String unidad
+  +String estado
+  +BigDecimal costoUnitario
+  +Integer categoriaMaterialId
+}
+
+class Inventario {
+  +Integer idInventario
+  +BigDecimal stockActual
+  +BigDecimal stockMinimo
+  +Integer materialId
+  +Integer sucursalId
+}
+
+class MovimientoInventario {
+  +Integer idMovimientoInventario
+  +BigDecimal cantidad
+  +LocalDateTime fecha
+  +String tipo
+  +String motivo
+  +Integer inventarioId
+}
+
+class CategoriaServicioService {
+  +List~CategoriaServicio~ listar()
+  +CategoriaServicio obtenerPorId(Integer id)
+  +CategoriaServicio crear(CategoriaServicioRequest request)
+  +CategoriaServicio actualizar(Integer id, CategoriaServicioRequest request)
+  +void eliminar(Integer id)
+}
+
+class ServicioService {
+  +List~Servicio~ listar()
+  +Servicio obtenerPorId(Integer id)
+  +Servicio crear(ServicioRequest request)
+  +Servicio actualizar(Integer id, ServicioRequest request)
+  +void eliminar(Integer id)
+}
+
+class ServicioMaterialService {
+  +List~ServicioMaterial~ listar()
+  +ServicioMaterial obtenerPorId(Integer id)
+  +ServicioMaterial crear(ServicioMaterialRequest request)
+  +ServicioMaterial actualizar(Integer id, ServicioMaterialRequest request)
+  +void eliminar(Integer id)
+}
+
+class CategoriaMaterialService {
+  +List~CategoriaMaterial~ listar()
+  +CategoriaMaterial obtenerPorId(Integer id)
+  +CategoriaMaterial crear(CategoriaMaterialRequest request)
+  +CategoriaMaterial actualizar(Integer id, CategoriaMaterialRequest request)
+  +void eliminar(Integer id)
+}
+
+class MaterialService {
+  +List~Material~ listar()
+  +Material obtenerPorId(Integer id)
+  +Material crear(MaterialRequest request)
+  +Material actualizar(Integer id, MaterialRequest request)
+  +void eliminar(Integer id)
+}
+
+class InventarioService {
+  +List~Inventario~ listar()
+  +Inventario obtenerPorId(Integer id)
+  +Inventario crear(InventarioRequest request)
+  +Inventario actualizar(Integer id, InventarioRequest request)
+  +void eliminar(Integer id)
+}
+
+class MovimientoInventarioService {
+  +List~MovimientoInventario~ listar()
+  +MovimientoInventario obtenerPorId(Integer id)
+  +MovimientoInventario crear(MovimientoInventarioRequest request)
+  +MovimientoInventario actualizar(Integer id, MovimientoInventarioRequest request)
+  +void eliminar(Integer id)
+}
+
+CategoriaServicio "1" <-- "0..*" Servicio : categoriaServicioId
+Servicio "1" <-- "0..*" ServicioMaterial : servicioId
+Material "1" <-- "0..*" ServicioMaterial : materialId
+CategoriaMaterial "1" <-- "0..*" Material : categoriaMaterialId
+Material "1" <-- "0..*" Inventario : materialId
+Inventario "1" <-- "0..*" MovimientoInventario : inventarioId
+
+CategoriaServicioService ..> CategoriaServicio : administra
+ServicioService ..> Servicio : administra
+ServicioMaterialService ..> ServicioMaterial : administra
+CategoriaMaterialService ..> CategoriaMaterial : administra
+MaterialService ..> Material : administra
+InventarioService ..> Inventario : administra
+MovimientoInventarioService ..> MovimientoInventario : administra

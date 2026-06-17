@@ -385,10 +385,7 @@ export function ConfiguracionPage() {
     setSaving(true);
     try {
       const camposConValor = Object.entries(formEmpresa).filter(
-        ([nombre, valor]) =>
-          nombre !== "logoUrl" &&
-          valor &&
-          valor.toString().trim() !== ""
+        ([, valor]) => valor && valor.toString().trim() !== ""
       );
 
       if (camposConValor.length === 0) {
@@ -420,6 +417,9 @@ export function ConfiguracionPage() {
 
       const gvsRefreshed = await listarGlobalValues();
       const gvsArr = safe(gvsRefreshed);
+      const logoGuardado = gvsArr.find(g => g.nombre === "logoUrl")?.valor || formEmpresa.logoUrl || "";
+      localStorage.setItem("av_logo_url", logoGuardado);
+      window.dispatchEvent(new Event("av_logo_changed"));
       setGlobalValues(gvsArr);
       setFormEmpresa(f => ({
         ...f,
@@ -430,7 +430,7 @@ export function ConfiguracionPage() {
         direccionFiscal: gvsArr.find(g => g.nombre === "direccionFiscal")?.valor || f.direccionFiscal,
         telefono: gvsArr.find(g => g.nombre === "telefono")?.valor || f.telefono,
         correo: gvsArr.find(g => g.nombre === "correo")?.valor || f.correo,
-        logoUrl: gvsArr.find(g => g.nombre === "logoUrl")?.valor || localStorage.getItem("av_logo_url") || f.logoUrl
+        logoUrl: logoGuardado || f.logoUrl
       }));
 
       mostrarSuccess("Datos guardados correctamente.");
@@ -782,47 +782,6 @@ export function ConfiguracionPage() {
     }
   }
 
-  async function guardarSoloLogo() {
-    if (!formEmpresa.logoUrl || !formEmpresa.logoUrl.toString().trim()) {
-      mostrarError("Escribe una URL de logotipo válida.");
-      return;
-    }
-    setSaving(true);
-    try {
-      const nombre = "logoUrl";
-      const valor = formEmpresa.logoUrl.toString().trim();
-      const existente = globalValues.find(g => g.nombre === nombre);
-      if (existente) {
-        const id = existente.idGlobalValue || existente.id;
-        await actualizarGlobalValue(id, {
-          tipo: "empresa",
-          nombre,
-          valor,
-          updatedBy: session.empleadoId
-        });
-      } else {
-        await crearGlobalValue({
-          tipo: "empresa",
-          nombre,
-          valor,
-          createdBy: session.empleadoId
-        });
-      }
-      localStorage.setItem("av_logo_url", valor);
-      window.dispatchEvent(new Event("av_logo_changed"));
-      mostrarSuccess("Logo actualizado correctamente.");
-      // refrescar globalValues localmente
-      const gvsRefreshed = await listarGlobalValues();
-      const gvsArr = safe(gvsRefreshed);
-      setGlobalValues(gvsArr);
-      setFormEmpresa(f => ({ ...f, logoUrl: gvsArr.find(g => g.nombre === "logoUrl")?.valor || valor }));
-    } catch (err) {
-      mostrarError(err.message || String(err));
-    } finally {
-      setSaving(false);
-    }
-  }
-
   function cargarLogoDesdeArchivo(event) {
     const archivo = event.target.files?.[0];
     if (!archivo) return;
@@ -844,7 +803,7 @@ export function ConfiguracionPage() {
     reader.onload = () => {
       setFormEmpresa(f => ({ ...f, logoUrl: reader.result || "" }));
       setLogoArchivoNombre(archivo.name);
-      mostrarSuccess("Logo cargado. Presiona Guardar Logo para conservarlo.");
+      mostrarSuccess("Logo cargado. Presiona Guardar Cambios para conservarlo.");
     };
     reader.onerror = () => mostrarError("No se pudo leer el archivo del logo.");
     reader.readAsDataURL(archivo);
@@ -1222,15 +1181,6 @@ export function ConfiguracionPage() {
                   </div>
                 </div>
 
-                <button
-                  className="primary-button"
-                  type="button"
-                  disabled={saving}
-                  style={{width:"100%", marginTop:12}}
-                  onClick={guardarSoloLogo}
-                >
-                  {saving ? "Guardando..." : "Guardar Logo"}
-                </button>
               </>
             )}
 

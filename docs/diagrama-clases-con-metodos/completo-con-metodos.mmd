@@ -1,0 +1,342 @@
+%%{init: {"theme": "base", "themeVariables": {"fontSize": "18px", "primaryColor": "#f4f2ff", "primaryBorderColor": "#6658c8", "lineColor": "#4a4a4a", "tertiaryColor": "#fffbe6"}}}%%
+classDiagram
+direction LR
+
+class Cliente {
+  +Integer idCliente
+  +String nombre
+  +String telefono
+  +String tipo
+  +Boolean tieneCredito
+  +BigDecimal creditoActual
+  +BigDecimal limiteCredito
+}
+
+class Pedido {
+  +Integer idPedido
+  +LocalDateTime fechaPedido
+  +LocalDateTime fechaEntrega
+  +String estado
+  +BigDecimal total
+  +String tipoPedido
+  +String formaPago
+  +Integer clienteId
+  +Integer empleadoId
+  +Integer sucursalId
+}
+
+class DetallePedido {
+  +Integer idDetallePedido
+  +BigDecimal cantidad
+  +BigDecimal precioUnitario
+  +BigDecimal subtotal
+  +Integer pedidoId
+  +Integer servicioId
+}
+
+class Pago {
+  +Integer idPago
+  +BigDecimal monto
+  +LocalDate fecha
+  +LocalTime horaPago
+  +String formaPago
+  +String conceptoPago
+  +Integer pedidoId
+}
+
+class CategoriaServicio {
+  +Integer idCategoriaServicio
+  +String nombre
+  +String descripcion
+  +String estado
+}
+
+class Servicio {
+  +Integer idServicio
+  +String nombre
+  +String descripcion
+  +String estado
+  +Integer categoriaServicioId
+}
+
+class ServicioMaterial {
+  +Integer idServicioMaterial
+  +BigDecimal cantidadUsada
+  +Integer servicioId
+  +Integer materialId
+}
+
+class CategoriaMaterial {
+  +Integer idCategoriaMaterial
+  +String nombre
+  +String estado
+  +String descripcion
+}
+
+class Material {
+  +Integer idMaterial
+  +String nombre
+  +String unidad
+  +String estado
+  +BigDecimal costoUnitario
+  +Integer categoriaMaterialId
+}
+
+class Inventario {
+  +Integer idInventario
+  +BigDecimal stockActual
+  +BigDecimal stockMinimo
+  +Integer materialId
+  +Integer sucursalId
+}
+
+class MovimientoInventario {
+  +Integer idMovimientoInventario
+  +BigDecimal cantidad
+  +LocalDateTime fecha
+  +String tipo
+  +String motivo
+  +Integer inventarioId
+}
+
+class Empleado {
+  +Integer idEmpleado
+  +String nombre
+  +String telefono
+  +String correo
+  +String contrasena
+  +LocalTime horaEntrada
+  +LocalTime horaSalida
+  +Integer rolId
+  +Integer sucursalIdSucursal
+}
+
+class Rol {
+  +Integer idRol
+  +String nombre
+  +String descripcion
+}
+
+class Sucursal {
+  +Integer idSucursal
+  +String nombre
+  +String direccion
+  +String codigoPostal
+  +String telefono
+  +String horario
+}
+
+class GlobalValue {
+  +Integer id
+  +String tipo
+  +String nombre
+  +String valor
+}
+
+class CorteCaja {
+  +Integer idCorteCaja
+  +LocalDate fecha
+  +LocalTime horaInicio
+  +LocalTime horaFin
+  +BigDecimal saldoInicial
+  +BigDecimal saldoEsperado
+  +BigDecimal saldoReal
+  +Integer empleadoId
+}
+
+class ClienteService {
+  +listar()
+  +listarFrecuentes()
+  +obtenerPorId(Integer)
+  +crear(ClienteRequest)
+  +actualizar(Integer, ClienteRequest)
+  +eliminar(Integer)
+}
+
+class PedidoService {
+  +listar()
+  +obtenerPorId(Integer)
+  +crear(PedidoRequest)
+  +actualizar(Integer, PedidoRequest)
+  +eliminar(Integer)
+}
+
+class DetallePedidoService {
+  +listar()
+  +obtenerPorId(Integer)
+  +crear(DetallePedidoRequest)
+  +actualizar(Integer, DetallePedidoRequest)
+  +eliminar(Integer)
+}
+
+class PagoService {
+  +listar()
+  +obtenerPorId(Integer)
+  +crear(PagoRequest)
+  +actualizar(Integer, PagoRequest)
+  +eliminar(Integer)
+}
+
+class CategoriaServicioService {
+  +listar()
+  +obtenerPorId(Integer)
+  +crear(CategoriaServicioRequest)
+  +actualizar(Integer, CategoriaServicioRequest)
+  +eliminar(Integer)
+}
+
+class ServicioService {
+  +listar()
+  +obtenerPorId(Integer)
+  +crear(ServicioRequest)
+  +actualizar(Integer, ServicioRequest)
+  +eliminar(Integer)
+}
+
+class ServicioMaterialService {
+  +listar()
+  +obtenerPorId(Integer)
+  +crear(ServicioMaterialRequest)
+  +actualizar(Integer, ServicioMaterialRequest)
+  +eliminar(Integer)
+}
+
+class CategoriaMaterialService {
+  +listar()
+  +obtenerPorId(Integer)
+  +crear(CategoriaMaterialRequest)
+  +actualizar(Integer, CategoriaMaterialRequest)
+  +eliminar(Integer)
+}
+
+class MaterialService {
+  +listar()
+  +obtenerPorId(Integer)
+  +crear(MaterialRequest)
+  +actualizar(Integer, MaterialRequest)
+  +eliminar(Integer)
+}
+
+class InventarioService {
+  +listar()
+  +obtenerPorId(Integer)
+  +crear(InventarioRequest)
+  +actualizar(Integer, InventarioRequest)
+  +eliminar(Integer)
+}
+
+class MovimientoInventarioService {
+  +listar()
+  +obtenerPorId(Integer)
+  +crear(MovimientoInventarioRequest)
+  +actualizar(Integer, MovimientoInventarioRequest)
+  +eliminar(Integer)
+}
+
+class EmpleadoService {
+  +listar()
+  +obtenerPorId(Integer)
+  +crear(EmpleadoRequest)
+  +actualizar(Integer, EmpleadoRequest)
+  +actualizarCuenta(Integer, EmpleadoCuentaRequest)
+  +eliminar(Integer, Integer)
+  +eliminar(Integer)
+}
+
+class RolService {
+  +listar()
+  +obtenerPorId(Integer)
+  +crear(RolRequest)
+  +actualizar(Integer, RolRequest)
+  +eliminar(Integer)
+}
+
+class SucursalService {
+  +listar()
+  +obtenerPorId(Integer)
+  +crear(SucursalRequest)
+  +actualizar(Integer, SucursalRequest)
+  +eliminar(Integer, Integer)
+  +eliminar(Integer)
+}
+
+class GlobalValueService {
+  +listar()
+  +listarPorTipo(String)
+  +obtenerPorId(Integer)
+  +obtenerPorTipoYNombre(String, String)
+  +crear(GlobalValueRequest)
+  +actualizar(Integer, GlobalValueRequest)
+  +eliminar(Integer)
+}
+
+class CorteCajaService {
+  +listar()
+  +obtenerPorId(Integer)
+  +crear(CorteCajaRequest)
+  +actualizar(Integer, CorteCajaRequest)
+  +eliminar(Integer)
+}
+
+class AuthService {
+  +login(LoginRequest)
+  +logout()
+}
+
+class RecuperacionContrasenaService {
+  +enviarCodigo(RecuperacionCodigoRequest)
+  +validarCodigo(ValidarCodigoRecuperacionRequest)
+  +restablecerContrasena(RestablecerContrasenaRequest)
+}
+
+class JwtService {
+  +generarToken()
+  +obtenerCorreo()
+  +obtenerRol()
+  +esTokenValido()
+}
+
+class NotaPedidoPdfService {
+  +generarNotaPedido(Integer)
+}
+
+Cliente "1" <-- "0..*" Pedido : clienteId
+Empleado "1" <-- "0..*" Pedido : empleadoId
+Sucursal "1" <-- "0..*" Pedido : sucursalId
+Pedido "1" <-- "0..*" DetallePedido : pedidoId
+Servicio "1" <-- "0..*" DetallePedido : servicioId
+Pedido "1" <-- "0..*" Pago : pedidoId
+Empleado "1" <-- "0..*" Pago : empleadoId
+
+CategoriaServicio "1" <-- "0..*" Servicio : categoriaServicioId
+Servicio "1" <-- "0..*" ServicioMaterial : servicioId
+Material "1" <-- "0..*" ServicioMaterial : materialId
+CategoriaMaterial "1" <-- "0..*" Material : categoriaMaterialId
+Material "1" <-- "0..*" Inventario : materialId
+Sucursal "1" <-- "0..*" Inventario : sucursalId
+Inventario "1" <-- "0..*" MovimientoInventario : inventarioId
+
+Rol "1" <-- "0..*" Empleado : rolId
+Sucursal "1" <-- "0..*" Empleado : sucursalIdSucursal
+Empleado "1" <-- "0..*" CorteCaja : empleadoId
+
+ClienteService ..> Cliente : administra
+PedidoService ..> Pedido : administra
+DetallePedidoService ..> DetallePedido : administra
+PagoService ..> Pago : administra
+CategoriaServicioService ..> CategoriaServicio : administra
+ServicioService ..> Servicio : administra
+ServicioMaterialService ..> ServicioMaterial : administra
+CategoriaMaterialService ..> CategoriaMaterial : administra
+MaterialService ..> Material : administra
+InventarioService ..> Inventario : administra
+MovimientoInventarioService ..> MovimientoInventario : administra
+EmpleadoService ..> Empleado : administra
+RolService ..> Rol : administra
+SucursalService ..> Sucursal : administra
+GlobalValueService ..> GlobalValue : administra
+CorteCajaService ..> CorteCaja : administra
+AuthService ..> Empleado : autentica
+RecuperacionContrasenaService ..> Empleado : recupera contrasena
+AuthService ..> JwtService : usa
+NotaPedidoPdfService ..> Pedido : genera nota

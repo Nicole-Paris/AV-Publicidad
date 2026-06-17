@@ -1,0 +1,40 @@
+%%{init: {"theme": "base", "themeVariables": {"fontSize": "18px", "primaryColor": "#f4f2ff", "primaryBorderColor": "#6658c8", "lineColor": "#4a4a4a", "tertiaryColor": "#fffbe6"}}}%%
+classDiagram
+direction TB
+
+class AuthService {
+  +AuthResponse login(LoginRequest request)
+  +LogoutResponse logout()
+}
+
+class RecuperacionContrasenaService {
+  +void enviarCodigo(RecuperacionCodigoRequest request)
+  +void validarCodigo(ValidarCodigoRecuperacionRequest request)
+  +void restablecerContrasena(RestablecerContrasenaRequest request)
+}
+
+class JwtService {
+  +String generarToken(Empleado empleado, String rol)
+  +String obtenerCorreo(String token)
+  +String obtenerRol(String token)
+  +boolean esTokenValido(String token, Empleado empleado)
+}
+
+class NotaPedidoPdfService {
+  +byte[] generarNotaPedido(Integer pedidoId)
+}
+
+class Empleado {
+  +Integer idEmpleado
+  +String correo
+  +String contrasena
+}
+
+class Pedido {
+  +Integer idPedido
+}
+
+Empleado ..> AuthService : login/logout
+Empleado ..> RecuperacionContrasenaService : recuperacion
+AuthService ..> JwtService : token JWT
+NotaPedidoPdfService ..> Pedido : nota PDF

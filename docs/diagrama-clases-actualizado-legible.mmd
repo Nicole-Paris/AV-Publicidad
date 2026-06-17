@@ -1,0 +1,197 @@
+%%{init: {"theme": "base", "themeVariables": {"fontSize": "18px", "primaryColor": "#f4f2ff", "primaryBorderColor": "#6658c8", "lineColor": "#4a4a4a", "tertiaryColor": "#fffbe6"}}}%%
+classDiagram
+direction LR
+
+class Cliente {
+  +Integer idCliente
+  +String nombre
+  +String apellidoPaterno
+  +String apellidoMaterno
+  +String telefono
+  +String tipo
+  +Boolean tieneCredito
+  +BigDecimal creditoActual
+  +BigDecimal limiteCredito
+  +String direccion
+  +String rfc
+  +String codigoPostal
+  +String razonSocial
+}
+
+class Pedido {
+  +Integer idPedido
+  +LocalDateTime fechaPedido
+  +LocalDateTime fechaEntrega
+  +String estado
+  +BigDecimal total
+  +String descripcion
+  +String tipoPedido
+  +String formaPago
+  +String motivoCancelacion
+  +Integer clienteId
+  +Integer empleadoId
+  +Integer sucursalId
+  +String estadoPago
+  +BigDecimal totalPagado
+  +BigDecimal saldoPendiente
+}
+
+class DetallePedido {
+  +Integer idDetallePedido
+  +BigDecimal cantidad
+  +BigDecimal precioUnitario
+  +BigDecimal subtotal
+  +String unidadDetalle
+  +Integer pedidoId
+  +Integer servicioId
+}
+
+class Pago {
+  +Integer idPago
+  +BigDecimal monto
+  +LocalDate fecha
+  +LocalTime horaPago
+  +String referencia
+  +String formaPago
+  +String conceptoPago
+  +Integer pedidoId
+  +Integer empleadoIdEmpleado
+}
+
+class CategoriaServicio {
+  +Integer idCategoriaServicio
+  +String nombre
+  +String descripcion
+  +String estado
+}
+
+class Servicio {
+  +Integer idServicio
+  +String nombre
+  +String descripcion
+  +String estado
+  +Integer categoriaServicioId
+}
+
+class ServicioMaterial {
+  +Integer idServicioMaterial
+  +BigDecimal cantidadUsada
+  +Integer servicioId
+  +Integer materialId
+}
+
+class CategoriaMaterial {
+  +Integer idCategoriaMaterial
+  +String nombre
+  +String estado
+  +String descripcion
+}
+
+class Material {
+  +Integer idMaterial
+  +String nombre
+  +String unidad
+  +String estado
+  +BigDecimal costoUnitario
+  +Integer categoriaMaterialId
+}
+
+class Inventario {
+  +Integer idInventario
+  +BigDecimal stockActual
+  +BigDecimal stockMinimo
+  +Integer materialId
+  +Integer sucursalId
+}
+
+class MovimientoInventario {
+  +Integer idMovimientoInventario
+  +BigDecimal cantidad
+  +LocalDateTime fecha
+  +String tipo
+  +String motivo
+  +Integer inventarioId
+}
+
+class Empleado {
+  +Integer idEmpleado
+  +String nombre
+  +String apellidoPaterno
+  +String apellidoMaterno
+  +String telefono
+  +String correo
+  +String contrasena
+  +LocalTime horaEntrada
+  +LocalTime horaSalida
+  +Integer rolId
+  +Integer sucursalIdSucursal
+}
+
+class Rol {
+  +Integer idRol
+  +String nombre
+  +String descripcion
+}
+
+class Sucursal {
+  +Integer idSucursal
+  +String nombre
+  +String direccion
+  +String codigoPostal
+  +String telefono
+  +String horario
+}
+
+class GlobalValue {
+  +Integer id
+  +String tipo
+  +String nombre
+  +String valor
+}
+
+class CorteCaja {
+  +Integer idCorteCaja
+  +LocalDate fecha
+  +LocalTime horaInicio
+  +LocalTime horaFin
+  +BigDecimal saldoInicial
+  +BigDecimal diferenciaSaldo
+  +String descripcion
+  +BigDecimal saldoEsperado
+  +BigDecimal saldoReal
+  +Integer empleadoId
+}
+
+class AuthService {
+  +AuthResponse login(LoginRequest request)
+  +LogoutResponse logout()
+}
+
+class RecuperacionContrasenaService {
+  +void enviarCodigo(RecuperacionCodigoRequest request)
+  +void validarCodigo(ValidarCodigoRecuperacionRequest request)
+  +void restablecerContrasena(RestablecerContrasenaRequest request)
+}
+
+Cliente "1" <-- "0..*" Pedido : clienteId
+Empleado "1" <-- "0..*" Pedido : empleadoId
+Sucursal "1" <-- "0..*" Pedido : sucursalId
+Pedido "1" <-- "0..*" DetallePedido : pedidoId
+Servicio "1" <-- "0..*" DetallePedido : servicioId
+Pedido "1" <-- "0..*" Pago : pedidoId
+Empleado "1" <-- "0..*" Pago : empleadoIdEmpleado
+
+CategoriaServicio "1" <-- "0..*" Servicio : categoriaServicioId
+Servicio "1" <-- "0..*" ServicioMaterial : servicioId
+Material "1" <-- "0..*" ServicioMaterial : materialId
+CategoriaMaterial "1" <-- "0..*" Material : categoriaMaterialId
+Material "1" <-- "0..*" Inventario : materialId
+Sucursal "1" <-- "0..*" Inventario : sucursalId
+Inventario "1" <-- "0..*" MovimientoInventario : inventarioId
+
+Rol "1" <-- "0..*" Empleado : rolId
+Sucursal "1" <-- "0..*" Empleado : sucursalIdSucursal
+Empleado "1" <-- "0..*" CorteCaja : empleadoId
+
+Empleado ..> AuthService : autentica
+Empleado ..> RecuperacionContrasenaService : recupera contrasena

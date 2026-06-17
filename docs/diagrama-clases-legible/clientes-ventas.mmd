@@ -1,0 +1,79 @@
+%%{init: {"theme": "base", "themeVariables": {"fontSize": "18px", "primaryColor": "#f7f4ff", "primaryBorderColor": "#6b5fd6", "lineColor": "#4a4a4a", "tertiaryColor": "#fffbe6"}}}%%
+classDiagram
+direction LR
+
+class Cliente {
+  +Integer idCliente
+  +String nombre
+  +String apellidoPaterno
+  +String apellidoMaterno
+  +String telefono
+  +String tipo
+  +Boolean tieneCredito
+  +BigDecimal creditoActual
+  +BigDecimal limiteCredito
+  +String direccion
+  +String rfc
+  +String codigoPostal
+  +String razonSocial
+}
+
+class Pedido {
+  +Integer idPedido
+  +LocalDateTime fechaPedido
+  +LocalDateTime fechaEntrega
+  +String estado
+  +BigDecimal total
+  +String descripcion
+  +String tipoPedido
+  +String formaPago
+  +String motivoCancelacion
+  +Integer clienteId
+  +Integer empleadoId
+  +Integer sucursalId
+  +String estadoPago
+  +BigDecimal totalPagado
+  +BigDecimal saldoPendiente
+}
+
+class DetallePedido {
+  +Integer idDetallePedido
+  +BigDecimal cantidad
+  +BigDecimal precioUnitario
+  +BigDecimal subtotal
+  +String unidadDetalle
+  +Integer pedidoId
+  +Integer servicioId
+}
+
+class Pago {
+  +Integer idPago
+  +BigDecimal monto
+  +LocalDate fecha
+  +LocalTime horaPago
+  +String referencia
+  +String formaPago
+  +String conceptoPago
+  +Integer pedidoId
+  +Integer empleadoIdEmpleado
+}
+
+class Empleado {
+  +Integer idEmpleado
+}
+
+class Sucursal {
+  +Integer idSucursal
+}
+
+class Servicio {
+  +Integer idServicio
+}
+
+Cliente "1" <-- "0..*" Pedido : clienteId
+Empleado "1" <-- "0..*" Pedido : empleadoId
+Sucursal "1" <-- "0..*" Pedido : sucursalId
+Pedido "1" <-- "0..*" DetallePedido : pedidoId
+Servicio "1" <-- "0..*" DetallePedido : servicioId
+Pedido "1" <-- "0..*" Pago : pedidoId
+Empleado "1" <-- "0..*" Pago : empleadoIdEmpleado

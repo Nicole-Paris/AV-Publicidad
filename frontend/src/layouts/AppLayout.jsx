@@ -4,7 +4,7 @@ import { useAuth } from "../auth/AuthContext.jsx";
 import { AppIcon } from "../components/AppIcon.jsx";
 import { clearSession } from "../api/apiClient.js";
 import { logoutRequest } from "../api/authApi.js";
-import { listarSucursales } from "../api/configuracionApi.js";
+import { listarGlobalValues, listarSucursales } from "../api/configuracionApi.js";
 import { esEmpleado } from "../auth/permissions.js";
 
 const links = [
@@ -50,6 +50,34 @@ export function AppLayout() {
     }
     window.addEventListener("av_logo_changed", onLogoChange);
     return () => window.removeEventListener("av_logo_changed", onLogoChange);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    async function cargarLogo() {
+      try {
+        const valores = await listarGlobalValues();
+        if (!active || !Array.isArray(valores)) {
+          return;
+        }
+
+        const logo = valores.find((item) => item.nombre === "logoUrl")
+          || valores.find((item) => item.nombre === "valor_url");
+
+        if (logo?.valor) {
+          localStorage.setItem("av_logo_url", logo.valor);
+          setLogoUrl(logo.valor);
+        }
+      } catch {
+        // Si no se puede cargar el logo remoto, se mantiene el valor local.
+      }
+    }
+
+    cargarLogo();
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
