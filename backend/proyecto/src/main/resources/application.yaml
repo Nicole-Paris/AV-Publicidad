@@ -1,14 +1,13 @@
 spring:
   datasource:
-    url: jdbc:mysql://mysql:3306/AV
+    url: jdbc:mysql://av-db:3306/AV
     username: root
     password: parde3
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   jpa:
     hibernate:
-      ddl-auto: update
-
+      ddl-auto: none
     show-sql: true
 
   security:

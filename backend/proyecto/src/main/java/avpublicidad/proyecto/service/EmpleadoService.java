@@ -1,0 +1,189 @@
+package avpublicidad.proyecto.service;
+
+import avpublicidad.proyecto.constants.RolConstants;
+import avpublicidad.proyecto.dto.EmpleadoRequest;
+import avpublicidad.proyecto.exception.ResourceNotFoundException;
+import avpublicidad.proyecto.model.Empleado;
+import avpublicidad.proyecto.model.Rol;
+import avpublicidad.proyecto.repository.EmpleadoRepository;
+import avpublicidad.proyecto.repository.RolRepository;
+import avpublicidad.proyecto.repository.SucursalRepository;
+import jakarta.validation.ValidationException;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+@Service
+@RequiredArgsConstructor
+public class EmpleadoService {
+
+    private final EmpleadoRepository empleadoRepository;
+    private final RolRepository rolRepository;
+    private final SucursalRepository sucursalRepository;
+    private final PasswordEncoder passwordEncoder;
+
+    public List<Empleado> listar() {
+        return empleadoRepository.findByDeletedAtIsNull();
+    }
+
+    public Empleado obtenerPorId(Integer id) {
+        return empleadoRepository.findById(id)
+                .filter(empleado -> empleado.getDeletedAt() == null)
+                .orElseThrow(() -> new ResourceNotFoundException("Empleado no encontrado"));
+    }
+
+    public Empleado crear(EmpleadoRequest request) {
+        validarCorreoDisponible(request.getCorreo(), null);
+        validarRol(request.getRolId());
+        validarSucursal(request.getSucursalIdSucursal());
+        if (request.getContrasena() == null || request.getContrasena().isBlank()) {
+            throw new ValidationException("La contrasena es obligatoria");
+        }
+        validarReglasNegocio(request);
+
+        Empleado empleado = Empleado.builder()
+                .nombre(request.getNombre())
+                .apellidoPaterno(request.getApellidoPaterno())
+                .apellidoMaterno(request.getApellidoMaterno())
+                .telefono(request.getTelefono())
+                .correo(normalizarCorreo(request.getCorreo()))
+                .contrasena(encriptarContrasena(request.getContrasena()))
+                .horaEntrada(request.getHoraEntrada())
+                .horaSalida(request.getHoraSalida())
+                .rolId(request.getRolId())
+                .sucursalIdSucursal(request.getSucursalIdSucursal())
+                .createdBy(request.getCreatedBy())
+                .build();
+
+        return empleadoRepository.save(empleado);
+    }
+
+    public Empleado actualizar(Integer id, EmpleadoRequest request) {
+        Empleado empleado = obtenerPorId(id);
+        validarCorreoDisponible(request.getCorreo(), id);
+        validarRol(request.getRolId());
+        validarSucursal(request.getSucursalIdSucursal());
+        validarReglasNegocio(request);
+        validarNoQuitarUltimoAdministrador(empleado, request.getRolId());
+
+        empleado.setNombre(request.getNombre());
+        empleado.setApellidoPaterno(request.getApellidoPaterno());
+        empleado.setApellidoMaterno(request.getApellidoMaterno());
+        empleado.setTelefono(request.getTelefono());
+        empleado.setCorreo(normalizarCorreo(request.getCorreo()));
+        if (request.getContrasena() != null && !request.getContrasena().isBlank()) {
+            empleado.setContrasena(encriptarContrasena(request.getContrasena()));
+        }
+        empleado.setHoraEntrada(request.getHoraEntrada());
+        empleado.setHoraSalida(request.getHoraSalida());
+        empleado.setRolId(request.getRolId());
+        empleado.setSucursalIdSucursal(request.getSucursalIdSucursal());
+        empleado.setUpdatedBy(request.getUpdatedBy());
+
+        return empleadoRepository.save(empleado);
+    }
+
+    public void eliminar(Integer id, Integer deletedBy) {
+        Empleado empleado = obtenerPorId(id);
+        validarNoEliminarUltimoAdministrador(empleado);
+        empleado.setDeletedAt(LocalDateTime.now());
+        empleado.setDeletedBy(deletedBy);
+        empleadoRepository.save(empleado);
+    }
+
+    public void eliminar(Integer id) {
+        eliminar(id, null);
+    }
+
+    private void validarCorreoDisponible(String correo, Integer idEmpleadoActual) {
+        String correoNormalizado = normalizarCorreo(correo);
+        if (correoNormalizado == null) {
+            return;
+        }
+
+        empleadoRepository.findByCorreo(correoNormalizado)
+                .filter(empleado -> !empleado.getIdEmpleado().equals(idEmpleadoActual))
+                .ifPresent(empleado -> {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Ya existe un empleado con ese correo");
+                });
+    }
+
+    private void validarRol(Integer rolId) {
+        if (rolId != null && !rolRepository.existsById(rolId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Rol no encontrado");
+        }
+    }
+
+    private void validarSucursal(Integer sucursalId) {
+        if (sucursalId != null && !sucursalRepository.existsById(sucursalId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Sucursal no encontrada");
+        }
+    }
+
+    private void validarReglasNegocio(EmpleadoRequest request) {
+        if (request.getHoraEntrada() != null
+                && request.getHoraSalida() != null
+                && !request.getHoraSalida().isAfter(request.getHoraEntrada())) {
+            throw new ValidationException("La hora de salida debe ser posterior a la hora de entrada");
+        }
+
+        if (request.getContrasena() != null
+                && !request.getContrasena().isBlank()
+                && !request.getContrasena().startsWith("$2")
+                && !esContrasenaFuerte(request.getContrasena())) {
+            throw new ValidationException("La contrasena debe tener al menos 8 caracteres, una mayuscula, una minuscula y un numero");
+        }
+    }
+
+    private boolean esContrasenaFuerte(String contrasena) {
+        return contrasena.length() >= 8
+                && contrasena.chars().anyMatch(Character::isUpperCase)
+                && contrasena.chars().anyMatch(Character::isLowerCase)
+                && contrasena.chars().anyMatch(Character::isDigit);
+    }
+
+    private void validarNoQuitarUltimoAdministrador(Empleado empleado, Integer nuevoRolId) {
+        if (empleado.getRolId().equals(nuevoRolId) || !esRolAdministrador(empleado.getRolId())) {
+            return;
+        }
+
+        if (empleadoRepository.countByRolIdAndDeletedAtIsNull(empleado.getRolId()) <= 1) {
+            throw new ValidationException("No se puede cambiar el rol del ultimo administrador");
+        }
+    }
+
+    private void validarNoEliminarUltimoAdministrador(Empleado empleado) {
+        if (esRolAdministrador(empleado.getRolId())
+                && empleadoRepository.countByRolIdAndDeletedAtIsNull(empleado.getRolId()) <= 1) {
+            throw new ValidationException("No se puede eliminar el ultimo administrador");
+        }
+    }
+
+    private boolean esRolAdministrador(Integer rolId) {
+        return rolRepository.findByNombreIgnoreCaseAndDeletedAtIsNull(RolConstants.ADMINISTRADOR)
+                .map(Rol::getIdRol)
+                .filter(rolId::equals)
+                .isPresent();
+    }
+
+    private String normalizarCorreo(String correo) {
+        if (correo == null || correo.isBlank()) {
+            return null;
+        }
+
+        return correo.trim().toLowerCase();
+    }
+
+    private String encriptarContrasena(String contrasena) {
+        if (contrasena == null || contrasena.startsWith("$2")) {
+            return contrasena;
+        }
+
+        return passwordEncoder.encode(contrasena);
+    }
+}
