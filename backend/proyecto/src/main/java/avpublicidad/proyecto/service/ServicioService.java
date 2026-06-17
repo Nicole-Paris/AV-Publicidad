@@ -1,10 +1,12 @@
 package avpublicidad.proyecto.service;
 
 import avpublicidad.proyecto.constants.EstadoConstants;
+import avpublicidad.proyecto.constants.PedidoConstants;
 import avpublicidad.proyecto.dto.ServicioRequest;
 import avpublicidad.proyecto.exception.ResourceNotFoundException;
 import avpublicidad.proyecto.model.Servicio;
 import avpublicidad.proyecto.repository.CategoriaServicioRepository;
+import avpublicidad.proyecto.repository.DetallePedidoRepository;
 import avpublicidad.proyecto.repository.ServicioRepository;
 import jakarta.validation.ValidationException;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +23,7 @@ public class ServicioService {
 
     private final ServicioRepository servicioRepository;
     private final CategoriaServicioRepository categoriaServicioRepository;
+    private final DetallePedidoRepository detallePedidoRepository;
 
     public List<Servicio> listar() {
         return servicioRepository.findByDeletedAtIsNull();
@@ -34,6 +37,7 @@ public class ServicioService {
 
     public Servicio crear(ServicioRequest request) {
         validarCategoria(request.getCategoriaServicioId());
+        validarNombreUnico(request.getNombre(), null);
 
         Servicio servicio = Servicio.builder()
                 .nombre(request.getNombre())
@@ -51,10 +55,13 @@ public class ServicioService {
     public Servicio actualizar(Integer id, ServicioRequest request) {
         Servicio servicio = obtenerPorId(id);
         validarCategoria(request.getCategoriaServicioId());
+        validarNombreUnico(request.getNombre(), id);
+        String estadoNormalizado = normalizarEstado(request.getEstado());
+        validarCambioAInactivo(servicio, estadoNormalizado);
 
         servicio.setNombre(request.getNombre());
         servicio.setDescripcion(request.getDescripcion());
-        servicio.setEstado(normalizarEstado(request.getEstado()));
+        servicio.setEstado(estadoNormalizado);
         servicio.setCategoriaServicioId(request.getCategoriaServicioId());
         servicio.setCreatedBy(request.getCreatedBy());
         servicio.setUpdatedBy(request.getUpdatedBy());
@@ -90,5 +97,37 @@ public class ServicioService {
         }
 
         throw new ValidationException("El estado debe ser Activo o Inactivo");
+    }
+
+    private void validarNombreUnico(String nombre, Integer servicioActualId) {
+        if (nombre == null || nombre.isBlank()) {
+            return;
+        }
+
+        servicioRepository.findByNombreIgnoreCaseAndDeletedAtIsNull(nombre.trim())
+                .filter(servicio -> !servicio.getIdServicio().equals(servicioActualId))
+                .ifPresent(servicio -> {
+                    throw new ValidationException("Ya existe un servicio activo con ese nombre");
+                });
+    }
+
+    private void validarCambioAInactivo(Servicio servicio, String estadoNuevo) {
+        if (!EstadoConstants.ACTIVO.equals(servicio.getEstado())
+                || !EstadoConstants.INACTIVO.equals(estadoNuevo)) {
+            return;
+        }
+
+        long pedidosActivos = detallePedidoRepository.countPedidosActivosPorServicio(
+                servicio.getIdServicio(),
+                List.of(
+                        PedidoConstants.ESTADO_CANCELADO,
+                        PedidoConstants.ESTADO_TERMINADO,
+                        PedidoConstants.ESTADO_ENTREGADO
+                )
+        );
+
+        if (pedidosActivos > 0) {
+            throw new ValidationException("No se puede cambiar a estado inactivo un servicio que este asignado a pedidos activos; primero deben cancelarse o estar en estado terminado");
+        }
     }
 }

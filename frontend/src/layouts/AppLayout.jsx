@@ -2,7 +2,10 @@ import { useState, useEffect } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { AppIcon } from "../components/AppIcon.jsx";
-import { listarSucursales } from "../api/configuracionApi.js";
+import { clearSession } from "../api/apiClient.js";
+import { logoutRequest } from "../api/authApi.js";
+import { listarGlobalValues, listarSucursales } from "../api/configuracionApi.js";
+import { esEmpleado } from "../auth/permissions.js";
 
 const links = [
   { to: "/punto-venta", label: "Punto de Venta", icon: "cart" },
@@ -10,7 +13,7 @@ const links = [
   { to: "/clientes", label: "Clientes", icon: "users" },
   { to: "/inventario", label: "Inventario", icon: "box" },
   { to: "/servicios", label: "Servicios", icon: "print" },
-  { to: "/cortes-caja", label: "Caja y Reportes", icon: "money" },
+  { to: "/cortes-caja", label: "Caja", icon: "money" },
   { to: "/reportes", label: "Reportes", icon: "chart" },
   { to: "/configuracion", label: "Configuración", icon: "gear" }
 ];
@@ -21,15 +24,25 @@ export function AppLayout() {
   const location = useLocation();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [branchMenuOpen, setBranchMenuOpen] = useState(false);
+  const [logoutError, setLogoutError] = useState("");
+  const [logoutWarning, setLogoutWarning] = useState("");
+  const [confirmandoLogout, setConfirmandoLogout] = useState(false);
   const [logoUrl, setLogoUrl] = useState(localStorage.getItem("av_logo_url") || "");
   const sucursalesSesion = session?.sucursales || [];
   const sucursalActivaId = session?.sucursalIdSucursal || session?.sucursalId || "";
   const rolSesion = (session?.rol || "").toLowerCase();
-  const esEmpleado = rolSesion === "empleado";
-  const sucursalesSesionCount = sucursalesSesion.length;
-  const linksVisibles = esEmpleado
-    ? links.filter((link) => ["/pedidos", "/inventario"].includes(link.to))
+  const linksVisibles = esEmpleado(session)
+    ? links.filter((link) =>
+        [
+          "/pedidos",
+          "/clientes",
+          "/inventario",
+          "/configuracion"
+        ].includes(link.to)
+      )
     : links;
+  const rutaInicio = esEmpleado(session) ? "/pedidos" : "/dashboard";
+  const sucursalesSesionCount = sucursalesSesion.length;
 
   useEffect(() => {
     function onLogoChange() {
@@ -37,6 +50,34 @@ export function AppLayout() {
     }
     window.addEventListener("av_logo_changed", onLogoChange);
     return () => window.removeEventListener("av_logo_changed", onLogoChange);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    async function cargarLogo() {
+      try {
+        const valores = await listarGlobalValues();
+        if (!active || !Array.isArray(valores)) {
+          return;
+        }
+
+        const logo = valores.find((item) => item.nombre === "logoUrl")
+          || valores.find((item) => item.nombre === "valor_url");
+
+        if (logo?.valor) {
+          localStorage.setItem("av_logo_url", logo.valor);
+          setLogoUrl(logo.valor);
+        }
+      } catch {
+        // Si no se puede cargar el logo remoto, se mantiene el valor local.
+      }
+    }
+
+    cargarLogo();
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -74,14 +115,34 @@ export function AppLayout() {
     };
   }, [Boolean(session), rolSesion, sucursalesSesionCount, actualizarSucursales]);
 
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    function handleClickOutside(e) {
+      const wrap = document.querySelector(".user-menu-wrap");
+      if (wrap && !wrap.contains(e.target)) {
+        setUserMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [userMenuOpen]);
+
+  useEffect(() => {
+    if (!branchMenuOpen) return;
+    function handleClickOutsideBranch(e) {
+      const wrap = document.querySelector(".branch-menu-wrap");
+      if (wrap && !wrap.contains(e.target)) {
+        setBranchMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutsideBranch);
+    return () => document.removeEventListener("mousedown", handleClickOutsideBranch);
+  }, [branchMenuOpen]);
+
   const isDashboard = location.pathname === "/dashboard" || location.pathname === "/";
   const pageTitle = isDashboard
     ? "Panel Principal"
     : linksVisibles.find((link) => location.pathname.startsWith(link.to))?.label || "AV Publicidad";
-
-  function goBack() {
-    navigate(esEmpleado ? "/pedidos" : "/dashboard");
-  }
 
   function handleBranchChange(sucursal) {
     cambiarSucursal(Number(sucursal.idSucursal));
@@ -93,15 +154,38 @@ export function AppLayout() {
     navigate("/configuracion");
   }
 
-  function handleLogout() {
+  async function handleLogout() {
     setUserMenuOpen(false);
-    logout();
+    try {
+      await logout();
+    } catch (err) {
+      if (err?.tipo === "caja_abierta_advertencia") {
+        setLogoutWarning(err.message);
+      } else {
+        setLogoutError(err.message || "No puedes cerrar sesión en este momento.");
+      }
+    }
+  }
+
+  async function confirmarLogoutConCaja() {
+    setConfirmandoLogout(true);
+    try {
+      await logoutRequest();
+    } finally {
+      clearSession();
+      window.location.href = "/login";
+    }
   }
 
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="brand">
+        <button
+          type="button"
+          className="brand brand-button"
+          onClick={() => navigate(rutaInicio)}
+          aria-label={esEmpleado(session) ? "Ir a pedidos" : "Ir al panel principal"}
+        >
           {logoUrl ? (
             <img
               src={logoUrl}
@@ -116,7 +200,7 @@ export function AppLayout() {
             <span className="brand-mark">av</span>
           )}
           <strong>AV Publicidad</strong>
-        </div>
+        </button>
 
         <nav className="nav-list">
           {linksVisibles.map((link) => (
@@ -133,12 +217,10 @@ export function AppLayout() {
       <div className="workspace">
         <header className="topbar">
           <div className="topbar-title">
-            {!isDashboard && !(esEmpleado && location.pathname.startsWith("/pedidos")) && (
-              <button className="back-button" type="button" onClick={goBack} aria-label="Volver">
-                <AppIcon name="arrowLeft" size={20} />
-              </button>
-            )}
-            <strong>{pageTitle}</strong>
+            <div className="page-badge">
+              <span className="eyebrow">Sección</span>
+              <strong>{pageTitle}</strong>
+            </div>
           </div>
 
           <div className="topbar-actions">
@@ -230,6 +312,44 @@ export function AppLayout() {
           <Outlet />
         </main>
       </div>
+      {/* Modal de error de logout */}
+      {logoutError && (
+        <div className="modal-error-overlay">
+          <div className="modal-error-card" onClick={e => e.stopPropagation()}>
+            <p className="modal-error-icon">⚠</p>
+            <p className="modal-error-msg">{logoutError}</p>
+            <button className="primary-button" onClick={() => setLogoutError("")}>
+              Entendido
+            </button>
+          </div>
+        </div>
+      )}
+
+      {logoutWarning && (
+        <div className="modal-error-overlay">
+          <div className="modal-error-card" onClick={e => e.stopPropagation()}>
+            <button
+              aria-label="Cancelar cierre de sesión"
+              className="modal-close-button"
+              disabled={confirmandoLogout}
+              onClick={() => setLogoutWarning("")}
+              type="button"
+            >
+              x
+            </button>
+            <p className="modal-error-icon">⚠</p>
+            <p className="modal-error-msg">{logoutWarning}</p>
+            <button
+              className="primary-button"
+              disabled={confirmandoLogout}
+              type="button"
+              onClick={confirmarLogoutConCaja}
+            >
+              {confirmandoLogout ? "Cerrando..." : "Entendido"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

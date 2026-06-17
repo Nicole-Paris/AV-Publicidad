@@ -5,9 +5,14 @@ import avpublicidad.proyecto.constants.PedidoConstants;
 import avpublicidad.proyecto.dto.DetallePedidoRequest;
 import avpublicidad.proyecto.exception.ResourceNotFoundException;
 import avpublicidad.proyecto.model.DetallePedido;
+import avpublicidad.proyecto.model.MovimientoInventario;
 import avpublicidad.proyecto.model.Pedido;
+import avpublicidad.proyecto.model.ServicioMaterial;
 import avpublicidad.proyecto.repository.DetallePedidoRepository;
+import avpublicidad.proyecto.repository.InventarioRepository;
+import avpublicidad.proyecto.repository.MovimientoInventarioRepository;
 import avpublicidad.proyecto.repository.PedidoRepository;
+import avpublicidad.proyecto.repository.ServicioMaterialRepository;
 import avpublicidad.proyecto.repository.ServicioRepository;
 import jakarta.validation.ValidationException;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +32,9 @@ public class DetallePedidoService {
     private final DetallePedidoRepository detallePedidoRepository;
     private final PedidoRepository pedidoRepository;
     private final ServicioRepository servicioRepository;
+    private final ServicioMaterialRepository servicioMaterialRepository;
+    private final InventarioRepository inventarioRepository;
+    private final MovimientoInventarioRepository movimientoInventarioRepository;
 
     public List<DetallePedido> listar() {
         return detallePedidoRepository.findByDeletedAtIsNull();
@@ -55,7 +63,10 @@ public class DetallePedidoService {
                 .deletedBy(request.getDeletedBy())
                 .build();
 
-        return detallePedidoRepository.save(detallePedido);
+        DetallePedido detalleGuardado = detallePedidoRepository.save(detallePedido);
+        disminuirMaterialesPedido(detalleGuardado);
+
+        return detalleGuardado;
     }
 
     public DetallePedido actualizar(Integer id, DetallePedidoRequest request) {
@@ -83,6 +94,57 @@ public class DetallePedidoService {
         validarPedidoEditable(detallePedido.getPedidoId());
         detallePedido.setDeletedAt(LocalDateTime.now());
         detallePedidoRepository.save(detallePedido);
+    }
+
+    private void disminuirMaterialesPedido(DetallePedido detallePedido) {
+        if (detallePedido == null || detallePedido.getPedidoId() == null || detallePedido.getServicioId() == null
+                || detallePedido.getCantidad() == null || detallePedido.getCantidad().compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+
+        Pedido pedido = pedidoRepository.findById(detallePedido.getPedidoId())
+                .filter(pedidoEncontrado -> pedidoEncontrado.getDeletedAt() == null)
+                .orElse(null);
+
+        if (pedido == null || pedido.getSucursalId() == null) {
+            return;
+        }
+
+        List<ServicioMaterial> materialesDelServicio = servicioMaterialRepository.findByDeletedAtIsNull();
+
+        for (ServicioMaterial asignacion : materialesDelServicio) {
+            if (!detallePedido.getServicioId().equals(asignacion.getServicioId())) {
+                continue;
+            }
+
+            BigDecimal cantidadConsumida = asignacion.getCantidadUsada() == null
+                    ? BigDecimal.ZERO
+                    : asignacion.getCantidadUsada().multiply(detallePedido.getCantidad());
+
+            if (cantidadConsumida.compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+
+            inventarioRepository.findByMaterialIdAndSucursalIdAndDeletedAtIsNull(asignacion.getMaterialId(), pedido.getSucursalId())
+                    .ifPresent(inventario -> {
+                        BigDecimal stockActual = inventario.getStockActual() == null ? BigDecimal.ZERO : inventario.getStockActual();
+                        if (stockActual.compareTo(cantidadConsumida) < 0) {
+                            throw new ValidationException("No hay suficiente stock para consumir el material requerido");
+                        }
+
+                        inventario.setStockActual(stockActual.subtract(cantidadConsumida));
+                        inventarioRepository.save(inventario);
+
+                        movimientoInventarioRepository.save(MovimientoInventario.builder()
+                                .cantidad(cantidadConsumida)
+                                .fecha(LocalDateTime.now())
+                                .tipo("Salida")
+                                .motivo("Pedido #" + detallePedido.getPedidoId())
+                                .inventarioId(inventario.getIdInventario())
+                                .createdBy(detallePedido.getCreatedBy() != null ? detallePedido.getCreatedBy() : pedido.getCreatedBy())
+                                .build());
+                    });
+        }
     }
 
     private void validarRelaciones(DetallePedidoRequest request) {

@@ -4,10 +4,14 @@ import { listarPagosPorPedido, listarTodosPagos, crearPago } from "../api/pagoAp
 // import listarServicios además de listarClientes
 import { listarClientes, listarServicios } from "../api/catalogApi.js";
 import { listarEmpleados } from "../api/empleadoApi.js";
+import { listarCortesPorEmpleado } from "../api/corteCajaApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
+import { esEmpleado } from "../auth/permissions.js";
+import { Pagination } from "../components/Pagination.jsx";
 
 const ESTADOS_PEDIDO = ["Borrador", "Pendiente", "En proceso", "Terminado", "Entregado", "Cancelado"];
 const ESTADOS_PAGO = ["Pendiente pago", "Pagado"];
+const PAGE_SIZE = 30;
 
 const SIGUIENTES_ESTADOS = {
   Borrador: ["Pendiente", "Cancelado"],
@@ -20,6 +24,7 @@ const SIGUIENTES_ESTADOS = {
 
 export function PedidosPage() {
   const { session } = useAuth();
+  const soloEmpleado = esEmpleado(session);
 
   const [tab, setTab] = useState("pedidos");
   const [pedidos, setPedidos] = useState([]);
@@ -46,6 +51,8 @@ export function PedidosPage() {
   const [filtroEstado, setFiltroEstado] = useState("");
   const [filtroEstadoPago, setFiltroEstadoPago] = useState("");
   const [buscarPago, setBuscarPago] = useState("");
+  const [paginaPedidos, setPaginaPedidos] = useState(1);
+  const [paginaPagos, setPaginaPagos] = useState(1);
   const [cambiandoEstado, setCambiandoEstado] = useState(null);
   const [pedidoExpandidoPagos, setPedidoExpandidoPagos] = useState(null);
   
@@ -57,6 +64,7 @@ export function PedidosPage() {
   const [pedidoCancelar, setPedidoCancelar] = useState(null);
   const [motivoCancelacion, setMotivoCancelacion] = useState("");
   const [descargandoPdf, setDescargandoPdf] = useState(null);
+  const [tieneCajaAbierta, setTieneCajaAbierta] = useState(false);
   const sucursalActivaId = session?.sucursalIdSucursal || session?.sucursalId;
 
   function mostrarError(msg) {
@@ -118,11 +126,15 @@ export function PedidosPage() {
   }
 
   function estadoPagoPedido(pedidoObj) {
+    if (saldoPendientePedido(pedidoObj) <= 0) {
+      return "Pagado";
+    }
+
     if (pedidoObj?.estadoPago) {
       return pedidoObj.estadoPago;
     }
 
-    return saldoPendientePedido(pedidoObj) <= 0 ? "Pagado" : "Pendiente pago";
+    return "Pendiente pago";
   }
 
   function montoPagoActual() {
@@ -210,12 +222,13 @@ export function PedidosPage() {
       setLoading(true);
       try {
         // ahora también cargamos servicios
-        const [ps, cs, pagos, svcs, emps] = await Promise.all([
+        const [ps, cs, pagos, svcs, emps, cortesEmpleado] = await Promise.all([
           listarPedidos(),
           listarClientes(),
           listarTodosPagos(),
           listarServicios(),
-          listarEmpleados()
+          listarEmpleados(),
+          listarCortesPorEmpleado(session.empleadoId)
         ]);
         if (!active) return;
         setPedidos((ps || []).slice().sort((a, b) => Number(b.idPedido) - Number(a.idPedido)));
@@ -223,6 +236,7 @@ export function PedidosPage() {
         setTodosLosPagos(pagos || []);
         setServicios(svcs || []);
         setEmpleados(emps || []);
+        setTieneCajaAbierta((cortesEmpleado || []).some(corte => !corte.horaFin));
       } catch (err) {
         if (active) mostrarError(err.message || String(err));
       } finally {
@@ -268,6 +282,15 @@ export function PedidosPage() {
     });
   }, [pedidos, buscarPedido, filtroEstado, filtroEstadoPago, clientes, todosLosPagos, sucursalActivaId]);
 
+  const pedidosPaginados = useMemo(() => {
+    const inicio = (paginaPedidos - 1) * PAGE_SIZE;
+    return pedidosFiltrados.slice(inicio, inicio + PAGE_SIZE);
+  }, [pedidosFiltrados, paginaPedidos]);
+
+  useEffect(() => {
+    setPaginaPedidos(1);
+  }, [buscarPedido, filtroEstado, filtroEstadoPago, sucursalActivaId]);
+
   async function expandirPedido(idPedido) {
     if (pedidoExpandido === idPedido) {
       setPedidoExpandido(null);
@@ -290,6 +313,14 @@ export function PedidosPage() {
   }
 
   function abrirModalPagoDesdeExpandido(pedidoObj) {
+    if (!tieneCajaAbierta) {
+      mostrarError("No puedes registrar un pago porque no tienes una caja abierta asignada.");
+      return;
+    }
+    if (pedidoObj?.estado === "Cancelado" || saldoPendientePedido(pedidoObj) <= 0) {
+      return;
+    }
+
     const now = new Date();
     const fecha = now.toISOString().slice(0,10);
     const horaPago = now.toTimeString().slice(0,8);
@@ -308,6 +339,10 @@ export function PedidosPage() {
   }
 
   function abrirModalPagoDesdeTab() {
+    if (!tieneCajaAbierta) {
+      mostrarError("No puedes registrar un pago porque no tienes una caja abierta asignada.");
+      return;
+    }
     const now = new Date();
     const fecha = now.toISOString().slice(0,10);
     const horaPago = now.toTimeString().slice(0,8);
@@ -320,6 +355,10 @@ export function PedidosPage() {
   }
 
   async function guardarPago() {
+    if (!tieneCajaAbierta) {
+      mostrarError("No puedes registrar un pago porque no tienes una caja abierta asignada.");
+      return;
+    }
     const pedidoId = Number(formPago.pedidoId);
     const monto = montoPagoActual();
     if (!pedidoId) { mostrarError("Selecciona un pedido."); return; }
@@ -329,6 +368,14 @@ export function PedidosPage() {
 
     const ped = pedidos.find(p => Number(p.idPedido) === pedidoId);
     const pendiente = ped ? saldoPendientePedido(ped) : 0;
+    if (pendiente <= 0) { mostrarError("El pedido ya esta pagado."); return; }
+
+    const conceptoParcial = ["Anticipo", "Abono", "Abono_credito"].includes(formPago.conceptoPago);
+    if (conceptoParcial && Number(monto) >= pendiente) {
+      mostrarError("Un anticipo o abono no puede pagar por completo el pedido. Elige el concepto Liquidacion.");
+      return;
+    }
+
     if (ped?.formaPago !== "Intercambio" && Number(monto) > pendiente) { mostrarError(`El monto excede el pendiente (${money(pendiente)}).`); return; }
 
     setSaving(true);
@@ -345,12 +392,14 @@ export function PedidosPage() {
         createdBy: session.empleadoId
       });
 
-      const [nuevosPagos, todosActualizados] = await Promise.all([
+      const [nuevosPagos, todosActualizados, pedidosActualizados] = await Promise.all([
         listarPagosPorPedido(pedidoId),
-        listarTodosPagos()
+        listarTodosPagos(),
+        listarPedidos()
       ]);
       setPagosPorPedido(prev => ({ ...prev, [pedidoId]: nuevosPagos || [] }));
       setTodosLosPagos(todosActualizados || []);
+      setPedidos((pedidosActualizados || []).slice().sort((a, b) => Number(b.idPedido) - Number(a.idPedido)));
 
       setModalPago(null);
       mostrarSuccess("Pago registrado correctamente.");
@@ -442,6 +491,26 @@ export function PedidosPage() {
     });
   }, [todosLosPagos, buscarPago, pedidos, sucursalActivaId]);
 
+  const gruposPagos = useMemo(() => {
+    const grupos = {};
+    (pagosFiltrados || []).forEach(pago => {
+      const id = String(pago.pedidoId);
+      if (!grupos[id]) grupos[id] = [];
+      grupos[id].push(pago);
+    });
+
+    return Object.entries(grupos);
+  }, [pagosFiltrados]);
+
+  const pagosPaginados = useMemo(() => {
+    const inicio = (paginaPagos - 1) * PAGE_SIZE;
+    return gruposPagos.slice(inicio, inicio + PAGE_SIZE);
+  }, [gruposPagos, paginaPagos]);
+
+  useEffect(() => {
+    setPaginaPagos(1);
+  }, [buscarPago, sucursalActivaId]);
+
   return (
     <section className="page-stack">
       {success && <div className="pos-alert success">{success}</div>}
@@ -472,7 +541,7 @@ export function PedidosPage() {
           </div>
 
           <div className="pedidos-lista">
-            {pedidosFiltrados.map(pedido => {
+            {pedidosPaginados.map(pedido => {
               const cliente = clienteDePedido(pedido);
               const expandido = pedidoExpandido === pedido.idPedido;
               const totalPagado = totalPagadoPedido(pedido.idPedido);
@@ -497,20 +566,30 @@ export function PedidosPage() {
                       </span>
                       <strong className="pedido-total">Resta: {money(pendiente)}</strong>
                       <select
-                         value={pedido.estado}
-                         disabled={cambiandoEstado === pedido.idPedido}
-                         onClick={e => e.stopPropagation()}
-                         onChange={e => cambiarEstado(pedido, e.target.value)}
-                         className={`pedido-status-select ${claseEstado(pedido.estado)}`}
-                       >
-                         {opcionesEstado(pedido.estado).map(({ estado, disabled }) => (
-                           <option key={estado} disabled={disabled}>
-                             {estado}
-                           </option>
-                         ))}
-                       </select>
+                        value={pedido.estado}
+                        disabled={cambiandoEstado === pedido.idPedido}
+                        onClick={e => e.stopPropagation()}
+                        onChange={e => cambiarEstado(pedido, e.target.value)}
+                        className={`pedido-status-select ${claseEstado(pedido.estado)}`}
+                      >
+                        {opcionesEstado(pedido.estado).map(({ estado, disabled }) => (
+                          <option key={estado} disabled={disabled}>
+                            {estado}
+                          </option>
+                        ))}
+                      </select>
                        <button
                          className="pedido-payment-button"
+                         disabled={!tieneCajaAbierta || pedido.estado === "Cancelado" || pendiente <= 0}
+                         title={
+                           !tieneCajaAbierta
+                             ? "Necesitas una caja abierta asignada para registrar pagos"
+                             : pedido.estado === "Cancelado"
+                             ? "No se pueden registrar pagos en pedidos cancelados"
+                             : pendiente <= 0
+                               ? "Este pedido ya esta pagado"
+                               : "Registrar pago"
+                         }
                          type="button"
                          onClick={e => {
                            e.stopPropagation();
@@ -519,17 +598,19 @@ export function PedidosPage() {
                        >
                          Pago
                        </button>
-                       <button
-                         className="pedido-pdf-button"
-                         disabled={descargandoPdf === pedido.idPedido}
-                         type="button"
-                         onClick={e => {
-                           e.stopPropagation();
-                           exportarPedidoPdf(pedido);
-                         }}
-                       >
-                         {descargandoPdf === pedido.idPedido ? "..." : "PDF"}
-                       </button>
+                       {!soloEmpleado && (
+                         <button
+                           className="pedido-pdf-button"
+                           disabled={descargandoPdf === pedido.idPedido}
+                           type="button"
+                           onClick={e => {
+                             e.stopPropagation();
+                             exportarPedidoPdf(pedido);
+                           }}
+                         >
+                           {descargandoPdf === pedido.idPedido ? "..." : "PDF"}
+                         </button>
+                       )}
                        <span className="pedido-chevron">{expandido ? "▲" : "▼"}</span>
                      </div>
                   </div>
@@ -622,6 +703,14 @@ export function PedidosPage() {
               );
             })}
           </div>
+
+          <Pagination
+            page={paginaPedidos}
+            pageSize={PAGE_SIZE}
+            total={pedidosFiltrados.length}
+            onPageChange={setPaginaPedidos}
+            disabled={loading}
+          />
         </>
       )}
 
@@ -634,26 +723,15 @@ export function PedidosPage() {
               onChange={e => setBuscarPago(e.target.value)}
               style={{maxWidth:380, flex:1}}
             />
-            <button className="primary-button" onClick={abrirModalPagoDesdeTab} type="button">
-              + Registrar Pago
-            </button>
           </div>
 
           {(() => {
             // Agrupar pagosFiltrados por pedidoId
-            const grupos = {};
-            (pagosFiltrados || []).forEach(pago => {
-              const id = String(pago.pedidoId);
-              if (!grupos[id]) grupos[id] = [];
-              grupos[id].push(pago);
-            });
-
-            const entradas = Object.entries(grupos);
-            if (entradas.length === 0) {
+            if (gruposPagos.length === 0) {
               return <p style={{color:"#64748b"}}>No hay pagos registrados.</p>;
             }
 
-            return entradas.map(([pedidoId, pagosGrupo]) => {
+            return pagosPaginados.map(([pedidoId, pagosGrupo]) => {
               const ped = pedidos.find(p => Number(p.idPedido) === Number(pedidoId));
               const cliente = ped ? clienteDePedido(ped) : null;
               const totalPagado = pagosGrupo.reduce((s,p) => s + Number(p.monto), 0);
@@ -714,12 +792,20 @@ export function PedidosPage() {
               );
             });
           })()}
+
+          <Pagination
+            page={paginaPagos}
+            pageSize={PAGE_SIZE}
+            total={gruposPagos.length}
+            onPageChange={setPaginaPagos}
+            disabled={loading}
+          />
         </>
       )}
 
       {/* Modal error */}
       {modalError && (
-        <div className="modal-error-overlay" onClick={() => setModalError("")}>
+        <div className="modal-error-overlay">
           <div className="modal-error-card" onClick={e => e.stopPropagation()}>
             <p className="modal-error-icon">⚠</p>
             <p className="modal-error-msg">{modalError}</p>
@@ -729,10 +815,7 @@ export function PedidosPage() {
       )}
 
       {pedidoCancelar && (
-        <div className="modal-overlay" onClick={() => {
-          setPedidoCancelar(null);
-          setMotivoCancelacion("");
-        }}>
+        <div className="modal-overlay">
           <div className="modal-card confirm-delivery-modal" onClick={e => e.stopPropagation()}>
             <h2>Cancelar pedido</h2>
             <p>
@@ -768,7 +851,7 @@ export function PedidosPage() {
       )}
 
       {confirmarEntregaPendiente && (
-        <div className="modal-overlay" onClick={() => setConfirmarEntregaPendiente(null)}>
+        <div className="modal-overlay">
           <div className="modal-card confirm-delivery-modal" onClick={e => e.stopPropagation()}>
             <h2>Entregar con saldo pendiente</h2>
             <p>
@@ -795,7 +878,7 @@ export function PedidosPage() {
 
       {/* Modal pago */}
       {modalPago && (
-        <div className="modal-overlay" onClick={() => setModalPago(null)}>
+        <div className="modal-overlay">
           <div className="modal-card" onClick={e => e.stopPropagation()}>
             <h2>Registrar Pago</h2>
 
@@ -919,7 +1002,12 @@ export function PedidosPage() {
 
             <div style={{display:"flex", justifyContent:"flex-end", gap:12, marginTop:20}}>
               <button className="ghost-button" type="button" onClick={() => setModalPago(null)}>Cancelar</button>
-              <button className="primary-button" type="button" disabled={saving} onClick={guardarPago}>
+              <button
+                className="primary-button"
+                type="button"
+                disabled={saving || !pedidoSeleccionado || saldoPendientePedido(pedidoSeleccionado) <= 0}
+                onClick={guardarPago}
+              >
                 {saving ? "Guardando..." : "Guardar Pago"}
               </button>
             </div>

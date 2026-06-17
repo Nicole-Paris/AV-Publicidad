@@ -1,0 +1,104 @@
+%%{init: {"theme": "base", "themeVariables": {"fontSize": "18px", "primaryColor": "#f4f2ff", "primaryBorderColor": "#6658c8", "lineColor": "#4a4a4a", "tertiaryColor": "#fffbe6"}}}%%
+classDiagram
+direction LR
+
+class Empleado {
+  +Integer idEmpleado
+  +String nombre
+  +String telefono
+  +String correo
+  +String contrasena
+  +LocalTime horaEntrada
+  +LocalTime horaSalida
+  +Integer rolId
+  +Integer sucursalIdSucursal
+}
+
+class Rol {
+  +Integer idRol
+  +String nombre
+  +String descripcion
+}
+
+class Sucursal {
+  +Integer idSucursal
+  +String nombre
+  +String direccion
+  +String codigoPostal
+  +String telefono
+  +String horario
+}
+
+class GlobalValue {
+  +Integer id
+  +String tipo
+  +String nombre
+  +String valor
+}
+
+class CorteCaja {
+  +Integer idCorteCaja
+  +LocalDate fecha
+  +LocalTime horaInicio
+  +LocalTime horaFin
+  +BigDecimal saldoInicial
+  +BigDecimal diferenciaSaldo
+  +BigDecimal saldoEsperado
+  +BigDecimal saldoReal
+  +Integer empleadoId
+}
+
+class EmpleadoService {
+  +List~Empleado~ listar()
+  +Empleado obtenerPorId(Integer id)
+  +Empleado crear(EmpleadoRequest request)
+  +Empleado actualizar(Integer id, EmpleadoRequest request)
+  +Empleado actualizarCuenta(Integer id, EmpleadoCuentaRequest request)
+  +void eliminar(Integer id, Integer deletedBy)
+  +void eliminar(Integer id)
+}
+
+class RolService {
+  +List~Rol~ listar()
+  +Rol obtenerPorId(Integer id)
+  +Rol crear(RolRequest request)
+  +Rol actualizar(Integer id, RolRequest request)
+  +void eliminar(Integer id)
+}
+
+class SucursalService {
+  +List~Sucursal~ listar()
+  +Sucursal obtenerPorId(Integer id)
+  +Sucursal crear(SucursalRequest request)
+  +Sucursal actualizar(Integer id, SucursalRequest request)
+  +void eliminar(Integer id, Integer deletedBy)
+  +void eliminar(Integer id)
+}
+
+class GlobalValueService {
+  +List~GlobalValue~ listar()
+  +List~GlobalValue~ listarPorTipo(String tipo)
+  +GlobalValue obtenerPorId(Integer id)
+  +GlobalValue obtenerPorTipoYNombre(String tipo, String nombre)
+  +GlobalValue crear(GlobalValueRequest request)
+  +GlobalValue actualizar(Integer id, GlobalValueRequest request)
+  +void eliminar(Integer id)
+}
+
+class CorteCajaService {
+  +List~CorteCaja~ listar()
+  +CorteCaja obtenerPorId(Integer id)
+  +CorteCaja crear(CorteCajaRequest request)
+  +CorteCaja actualizar(Integer id, CorteCajaRequest request)
+  +void eliminar(Integer id)
+}
+
+Rol "1" <-- "0..*" Empleado : rolId
+Sucursal "1" <-- "0..*" Empleado : sucursalIdSucursal
+Empleado "1" <-- "0..*" CorteCaja : empleadoId
+
+EmpleadoService ..> Empleado : administra
+RolService ..> Rol : administra
+SucursalService ..> Sucursal : administra
+GlobalValueService ..> GlobalValue : administra
+CorteCajaService ..> CorteCaja : administra

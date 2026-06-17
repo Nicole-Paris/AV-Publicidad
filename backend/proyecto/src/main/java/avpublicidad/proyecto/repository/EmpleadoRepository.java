@@ -13,4 +13,6 @@ public interface EmpleadoRepository extends JpaRepository<Empleado, Integer> {
     Optional<Empleado> findByCorreo(String correo);
 
     long countByRolIdAndDeletedAtIsNull(Integer rolId);
+
+    long countBySucursalIdSucursalAndDeletedAtIsNull(Integer sucursalIdSucursal);
 }

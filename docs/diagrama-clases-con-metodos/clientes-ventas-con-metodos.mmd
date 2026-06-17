@@ -1,0 +1,93 @@
+%%{init: {"theme": "base", "themeVariables": {"fontSize": "18px", "primaryColor": "#f4f2ff", "primaryBorderColor": "#6658c8", "lineColor": "#4a4a4a", "tertiaryColor": "#fffbe6"}}}%%
+classDiagram
+direction LR
+
+class Cliente {
+  +Integer idCliente
+  +String nombre
+  +String telefono
+  +String tipo
+  +Boolean tieneCredito
+  +BigDecimal creditoActual
+  +BigDecimal limiteCredito
+}
+
+class Pedido {
+  +Integer idPedido
+  +LocalDateTime fechaPedido
+  +LocalDateTime fechaEntrega
+  +String estado
+  +BigDecimal total
+  +String tipoPedido
+  +String formaPago
+  +Integer clienteId
+  +Integer empleadoId
+  +Integer sucursalId
+}
+
+class DetallePedido {
+  +Integer idDetallePedido
+  +BigDecimal cantidad
+  +BigDecimal precioUnitario
+  +BigDecimal subtotal
+  +Integer pedidoId
+  +Integer servicioId
+}
+
+class Pago {
+  +Integer idPago
+  +BigDecimal monto
+  +LocalDate fecha
+  +LocalTime horaPago
+  +String formaPago
+  +String conceptoPago
+  +Integer pedidoId
+  +Integer empleadoIdEmpleado
+}
+
+class ClienteService {
+  +List~Cliente~ listar()
+  +List~Cliente~ listarFrecuentes()
+  +Cliente obtenerPorId(Integer id)
+  +Cliente crear(ClienteRequest request)
+  +Cliente actualizar(Integer id, ClienteRequest request)
+  +void eliminar(Integer id)
+}
+
+class PedidoService {
+  +List~Pedido~ listar()
+  +Pedido obtenerPorId(Integer id)
+  +Pedido crear(PedidoRequest request)
+  +Pedido actualizar(Integer id, PedidoRequest request)
+  +void eliminar(Integer id)
+}
+
+class DetallePedidoService {
+  +List~DetallePedido~ listar()
+  +DetallePedido obtenerPorId(Integer id)
+  +DetallePedido crear(DetallePedidoRequest request)
+  +DetallePedido actualizar(Integer id, DetallePedidoRequest request)
+  +void eliminar(Integer id)
+}
+
+class PagoService {
+  +List~Pago~ listar()
+  +Pago obtenerPorId(Integer id)
+  +Pago crear(PagoRequest request)
+  +Pago actualizar(Integer id, PagoRequest request)
+  +void eliminar(Integer id)
+}
+
+class NotaPedidoPdfService {
+  +byte[] generarNotaPedido(Integer pedidoId)
+}
+
+Cliente "1" <-- "0..*" Pedido : clienteId
+Pedido "1" <-- "0..*" DetallePedido : pedidoId
+Pedido "1" <-- "0..*" Pago : pedidoId
+
+ClienteService ..> Cliente : administra
+PedidoService ..> Pedido : administra
+DetallePedidoService ..> DetallePedido : administra
+PagoService ..> Pago : administra
+NotaPedidoPdfService ..> Pedido : genera nota

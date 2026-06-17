@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -45,7 +46,7 @@ public class MovimientoInventarioService {
 
         MovimientoInventario movimiento = MovimientoInventario.builder()
                 .cantidad(request.getCantidad())
-                .fecha(request.getFecha())
+                .fecha(LocalDateTime.now())
                 .tipo(tipo)
                 .motivo(request.getMotivo())
                 .inventarioId(request.getInventarioId())
@@ -68,7 +69,6 @@ public class MovimientoInventarioService {
         aplicarMovimiento(inventarioNuevo, tipoNuevo, request.getCantidad());
 
         movimiento.setCantidad(request.getCantidad());
-        movimiento.setFecha(request.getFecha());
         movimiento.setTipo(tipoNuevo);
         movimiento.setMotivo(request.getMotivo());
         movimiento.setInventarioId(request.getInventarioId());

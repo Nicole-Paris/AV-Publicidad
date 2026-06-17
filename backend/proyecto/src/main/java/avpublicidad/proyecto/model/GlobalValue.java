@@ -35,7 +35,7 @@ public class GlobalValue {
     @Column(nullable = false, length = 45)
     private String nombre;
 
-    @Column(nullable = false, columnDefinition = "TEXT")
+    @Column(nullable = false, columnDefinition = "LONGTEXT")
     private String valor;
 
     @CreationTimestamp

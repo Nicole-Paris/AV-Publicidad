@@ -15,6 +15,12 @@ export function actualizarSucursal(id, payload) {
     body: JSON.stringify(payload)
   });
 }
+export function eliminarSucursal(id, deletedBy) {
+  const query = deletedBy ? `?deletedBy=${deletedBy}` : "";
+  return apiRequest(`/sucursales/${id}${query}`, {
+    method: "DELETE"
+  });
+}
 export function listarGlobalValues() {
   return apiRequest("/global-values");
 }

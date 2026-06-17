@@ -5,6 +5,7 @@ import avpublicidad.proyecto.dto.CategoriaServicioRequest;
 import avpublicidad.proyecto.exception.ResourceNotFoundException;
 import avpublicidad.proyecto.model.CategoriaServicio;
 import avpublicidad.proyecto.repository.CategoriaServicioRepository;
+import avpublicidad.proyecto.repository.ServicioRepository;
 import jakarta.validation.ValidationException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -17,6 +18,7 @@ import java.util.List;
 public class CategoriaServicioService {
 
     private final CategoriaServicioRepository categoriaServicioRepository;
+    private final ServicioRepository servicioRepository;
 
     public List<CategoriaServicio> listar() {
         return categoriaServicioRepository.findByDeletedAtIsNull();
@@ -29,6 +31,8 @@ public class CategoriaServicioService {
     }
 
     public CategoriaServicio crear(CategoriaServicioRequest request) {
+        validarNombreUnico(request.getNombre(), null);
+
         CategoriaServicio categoria = CategoriaServicio.builder()
                 .nombre(request.getNombre())
                 .descripcion(request.getDescripcion())
@@ -43,10 +47,18 @@ public class CategoriaServicioService {
 
     public CategoriaServicio actualizar(Integer id, CategoriaServicioRequest request) {
         CategoriaServicio categoria = obtenerPorId(id);
+        validarNombreUnico(request.getNombre(), id);
+        String estadoNormalizado = normalizarEstado(request.getEstado());
+
+        if (EstadoConstants.INACTIVO.equals(estadoNormalizado)
+                && !EstadoConstants.INACTIVO.equals(categoria.getEstado())
+                && servicioRepository.existsByCategoriaServicioIdAndDeletedAtIsNull(id)) {
+            throw new ValidationException("No se puede inactivar la categoria porque tiene servicios ligados");
+        }
 
         categoria.setNombre(request.getNombre());
         categoria.setDescripcion(request.getDescripcion());
-        categoria.setEstado(normalizarEstado(request.getEstado()));
+        categoria.setEstado(estadoNormalizado);
         categoria.setCreatedBy(request.getCreatedBy());
         categoria.setUpdatedBy(request.getUpdatedBy());
         categoria.setDeletedBy(request.getDeletedBy());
@@ -75,5 +87,17 @@ public class CategoriaServicioService {
         }
 
         throw new ValidationException("El estado debe ser Activo o Inactivo");
+    }
+
+    private void validarNombreUnico(String nombre, Integer categoriaActualId) {
+        if (nombre == null || nombre.isBlank()) {
+            return;
+        }
+
+        categoriaServicioRepository.findByNombreIgnoreCaseAndDeletedAtIsNull(nombre.trim())
+                .filter(categoria -> !categoria.getIdCategoriaServicio().equals(categoriaActualId))
+                .ifPresent(categoria -> {
+                    throw new ValidationException("Ya existe una categoria de servicio activa con ese nombre");
+                });
     }
 }

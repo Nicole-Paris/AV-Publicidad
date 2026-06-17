@@ -7,6 +7,7 @@ import { listarTodosPagos } from "../api/pagoApi.js";
 import { listarDetallesPedido, listarPedidos } from "../api/pedidoApi.js";
 import { listarEmpleados } from "../api/empleadoApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
+import { esEmpleado } from "../auth/permissions.js";
 
 const CURRENCY = new Intl.NumberFormat("es-MX", {
   currency: "MXN",
@@ -66,6 +67,7 @@ function buildPieGradient(items) {
 
 export function DashboardPage() {
   const { session } = useAuth();
+  const soloEmpleado = esEmpleado(session);
   const [loading, setLoading] = useState(true);
   const [modalError, setModalError] = useState("");
   const [pedidos, setPedidos] = useState([]);
@@ -360,7 +362,7 @@ export function DashboardPage() {
         <section className="dashboard-panel">
           <div className="tab-section-header">
             <h2>Ventas mensuales</h2>
-            <Link className="dashboard-link" to="/reportes">Ver reportes</Link>
+            {!soloEmpleado && <Link className="dashboard-link" to="/reportes">Ver reportes</Link>}
           </div>
           <div className="dashboard-chart">
             {ventasMensuales.map((item) => (
@@ -378,7 +380,7 @@ export function DashboardPage() {
         <section className="dashboard-panel">
           <div className="tab-section-header">
             <h2>Servicios mas pedidos</h2>
-            <Link className="dashboard-link" to="/servicios">Ver servicios</Link>
+            {!soloEmpleado && <Link className="dashboard-link" to="/servicios">Ver servicios</Link>}
           </div>
           <div className="dashboard-pie-wrap">
             <div className="dashboard-pie" style={{ background: buildPieGradient(serviciosPie) }}>
@@ -442,11 +444,12 @@ export function DashboardPage() {
       <section className="dashboard-panel">
         <h2>Accesos rapidos</h2>
         <div className="dashboard-actions">
-          <Link to="/punto-venta">Nuevo pedido</Link>
           <Link to="/clientes">Clientes</Link>
           <Link to="/pedidos">Registrar pago</Link>
-          <Link to="/cortes-caja">Corte de caja</Link>
-          <Link to="/reportes">Reportes</Link>
+          <Link to="/inventario">Inventario</Link>
+          {!soloEmpleado && <Link to="/punto-venta">Nuevo pedido</Link>}
+          {!soloEmpleado && <Link to="/cortes-caja">Corte de caja</Link>}
+          {!soloEmpleado && <Link to="/reportes">Reportes</Link>}
           <Link to="/configuracion">Configuracion</Link>
         </div>
       </section>
@@ -454,7 +457,7 @@ export function DashboardPage() {
       {loading && <div className="pos-alert success">Cargando panel principal...</div>}
 
       {modalError && (
-        <div className="modal-error-overlay" onClick={() => setModalError("")}>
+        <div className="modal-error-overlay">
           <div className="modal-error-card" onClick={event => event.stopPropagation()}>
             <p className="modal-error-icon">!</p>
             <p className="modal-error-msg">{modalError}</p>

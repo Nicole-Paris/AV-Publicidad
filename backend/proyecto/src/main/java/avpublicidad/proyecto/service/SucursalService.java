@@ -3,7 +3,9 @@ package avpublicidad.proyecto.service;
 import avpublicidad.proyecto.dto.SucursalRequest;
 import avpublicidad.proyecto.exception.ResourceNotFoundException;
 import avpublicidad.proyecto.model.Sucursal;
+import avpublicidad.proyecto.repository.EmpleadoRepository;
 import avpublicidad.proyecto.repository.SucursalRepository;
+import jakarta.validation.ValidationException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -15,6 +17,7 @@ import java.util.List;
 public class SucursalService {
 
     private final SucursalRepository sucursalRepository;
+    private final EmpleadoRepository empleadoRepository;
 
     public List<Sucursal> listar() {
         return sucursalRepository.findByDeletedAtIsNull();
@@ -27,6 +30,8 @@ public class SucursalService {
     }
 
     public Sucursal crear(SucursalRequest request) {
+        validarNombreUnico(request.getNombre(), null);
+
         Sucursal sucursal = Sucursal.builder()
                 .nombre(request.getNombre())
                 .direccion(request.getDireccion())
@@ -43,6 +48,7 @@ public class SucursalService {
 
     public Sucursal actualizar(Integer id, SucursalRequest request) {
         Sucursal sucursal = obtenerPorId(id);
+        validarNombreUnico(request.getNombre(), id);
 
         sucursal.setNombre(request.getNombre());
         sucursal.setDireccion(request.getDireccion());
@@ -56,9 +62,31 @@ public class SucursalService {
         return sucursalRepository.save(sucursal);
     }
 
-    public void eliminar(Integer id) {
+    public void eliminar(Integer id, Integer deletedBy) {
         Sucursal sucursal = obtenerPorId(id);
+        long empleadosActivos = empleadoRepository.countBySucursalIdSucursalAndDeletedAtIsNull(id);
+        if (empleadosActivos > 0) {
+            throw new ValidationException("No se puede eliminar la sucursal porque tiene empleados activos");
+        }
+
         sucursal.setDeletedAt(LocalDateTime.now());
+        sucursal.setDeletedBy(deletedBy);
         sucursalRepository.save(sucursal);
+    }
+
+    public void eliminar(Integer id) {
+        eliminar(id, null);
+    }
+
+    private void validarNombreUnico(String nombre, Integer sucursalActualId) {
+        if (nombre == null || nombre.isBlank()) {
+            return;
+        }
+
+        sucursalRepository.findByNombreIgnoreCaseAndDeletedAtIsNull(nombre.trim())
+                .filter(sucursal -> !sucursal.getIdSucursal().equals(sucursalActualId))
+                .ifPresent(sucursal -> {
+                    throw new ValidationException("Ya existe una sucursal activa con ese nombre");
+                });
     }
 }

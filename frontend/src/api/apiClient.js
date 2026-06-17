@@ -22,7 +22,22 @@ export async function apiRequest(path, options = {}) {
   const data = isJson ? await response.json() : await response.text();
 
   if (!response.ok) {
-    const message = data?.message || data?.error || "No se pudo completar la solicitud";
+    if (response.status === 401 || response.status === 403) {
+      clearSession();
+      window.dispatchEvent(new Event("av_session_expired"));
+    }
+
+    const fieldErrors = data?.errors
+      ? Object.entries(data.errors)
+          .map(([field, message]) => `${field}: ${message}`)
+          .join(". ")
+      : "";
+    const message = fieldErrors
+      || data?.message
+      || data?.error
+      || (response.status === 401 || response.status === 403
+        ? "Tu sesión expiró o no tiene permisos. Inicia sesión nuevamente."
+        : "No se pudo completar la solicitud");
     throw new Error(message);
   }
 
@@ -43,11 +58,20 @@ export async function apiBlobRequest(path, options = {}) {
   });
 
   if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      clearSession();
+      window.dispatchEvent(new Event("av_session_expired"));
+    }
+
     const contentType = response.headers.get("content-type") || "";
     const data = contentType.includes("application/json")
       ? await response.json()
       : await response.text();
-    const message = data?.message || data?.error || "No se pudo completar la solicitud";
+    const message = data?.message
+      || data?.error
+      || (response.status === 401 || response.status === 403
+        ? "Tu sesión expiró o no tiene permisos. Inicia sesión nuevamente."
+        : "No se pudo completar la solicitud");
     throw new Error(message);
   }
 

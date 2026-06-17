@@ -8,6 +8,7 @@ import avpublicidad.proyecto.model.Cliente;
 import avpublicidad.proyecto.model.Pago;
 import avpublicidad.proyecto.model.Pedido;
 import avpublicidad.proyecto.repository.ClienteRepository;
+import avpublicidad.proyecto.repository.CorteCajaRepository;
 import avpublicidad.proyecto.repository.EmpleadoRepository;
 import avpublicidad.proyecto.repository.PagoRepository;
 import avpublicidad.proyecto.repository.PedidoRepository;
@@ -30,6 +31,7 @@ public class PagoService {
     private final PedidoRepository pedidoRepository;
     private final EmpleadoRepository empleadoRepository;
     private final ClienteRepository clienteRepository;
+    private final CorteCajaRepository corteCajaRepository;
 
     public List<Pago> listar() {
         return pagoRepository.findByDeletedAtIsNull();
@@ -45,6 +47,7 @@ public class PagoService {
     public Pago crear(PagoRequest request) {
         validarRelaciones(request);
         validarReglasNegocio(request, null);
+        validarCajaAbierta(request.getEmpleadoIdEmpleado());
 
         Pago pago = Pago.builder()
                 .monto(request.getMonto())
@@ -138,12 +141,24 @@ public class PagoService {
 
         BigDecimal saldoPendiente = pedido.getTotal().subtract(totalPagado);
 
+        if (saldoPendiente.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ValidationException("El pedido ya esta pagado");
+        }
+
         BigDecimal nuevoTotalPagado = totalPagado.add(request.getMonto());
         if (nuevoTotalPagado.compareTo(pedido.getTotal()) > 0) {
             throw new ValidationException("El pago excede el saldo pendiente del pedido");
         }
 
         validarConceptoPago(request, saldoPendiente, totalPagado);
+    }
+
+    private void validarCajaAbierta(Integer empleadoId) {
+        if (empleadoId == null
+                || !corteCajaRepository.existsByEmpleadoIdAndHoraFinIsNullAndDeletedAtIsNull(empleadoId)) {
+            throw new ValidationException(
+                    "No puedes registrar un pago porque no tienes una caja abierta asignada");
+        }
     }
 
     private void validarConceptoPago(PagoRequest request, BigDecimal saldoPendiente, BigDecimal totalPagado) {
@@ -153,6 +168,11 @@ public class PagoService {
             throw new ValidationException("El anticipo solo puede registrarse como primer pago");
         }
 
+        if (PagoConstants.CONCEPTO_ANTICIPO.equals(concepto)
+                && request.getMonto().compareTo(saldoPendiente) >= 0) {
+            throw new ValidationException("El anticipo no puede liquidar el pedido; elige el concepto Liquidacion");
+        }
+
         if (PagoConstants.CONCEPTO_LIQUIDACION.equals(concepto)
                 && request.getMonto().compareTo(saldoPendiente) != 0) {
             throw new ValidationException("La liquidacion debe cubrir exactamente el saldo pendiente");
@@ -160,12 +180,12 @@ public class PagoService {
 
         if (PagoConstants.CONCEPTO_ABONO.equals(concepto)
                 && request.getMonto().compareTo(saldoPendiente) >= 0) {
-            throw new ValidationException("El abono debe ser menor al saldo pendiente; usa liquidacion para cubrir el total");
+            throw new ValidationException("El abono no puede liquidar el pedido; elige el concepto Liquidacion");
         }
 
         if (PagoConstants.CONCEPTO_ABONO_CREDITO.equals(concepto)
                 && request.getMonto().compareTo(saldoPendiente) >= 0) {
-            throw new ValidationException("El abono a credito debe ser menor al saldo pendiente");
+            throw new ValidationException("El abono a credito no puede liquidar el pedido; elige el concepto Liquidacion");
         }
     }
 

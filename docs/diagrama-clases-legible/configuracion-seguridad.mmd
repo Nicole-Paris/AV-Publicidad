@@ -1,0 +1,56 @@
+%%{init: {"theme": "base", "themeVariables": {"fontSize": "18px", "primaryColor": "#f4f2ff", "primaryBorderColor": "#6658c8", "lineColor": "#4a4a4a", "tertiaryColor": "#fffbe6"}}}%%
+classDiagram
+direction LR
+
+class Empleado {
+  +Integer idEmpleado
+  +String nombre
+  +String apellidoPaterno
+  +String apellidoMaterno
+  +String telefono
+  +String correo
+  +String contrasena
+  +LocalTime horaEntrada
+  +LocalTime horaSalida
+  +Integer rolId
+  +Integer sucursalIdSucursal
+}
+
+class Rol {
+  +Integer idRol
+  +String nombre
+  +String descripcion
+}
+
+class Sucursal {
+  +Integer idSucursal
+  +String nombre
+  +String direccion
+  +String codigoPostal
+  +String telefono
+  +String horario
+}
+
+class GlobalValue {
+  +Integer id
+  +String tipo
+  +String nombre
+  +String valor
+}
+
+class CorteCaja {
+  +Integer idCorteCaja
+  +LocalDate fecha
+  +LocalTime horaInicio
+  +LocalTime horaFin
+  +BigDecimal saldoInicial
+  +BigDecimal diferenciaSaldo
+  +String descripcion
+  +BigDecimal saldoEsperado
+  +BigDecimal saldoReal
+  +Integer empleadoId
+}
+
+Rol "1" <-- "0..*" Empleado : rolId
+Sucursal "1" <-- "0..*" Empleado : sucursalIdSucursal
+Empleado "1" <-- "0..*" CorteCaja : empleadoId

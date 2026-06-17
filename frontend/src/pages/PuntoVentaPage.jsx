@@ -11,7 +11,7 @@ import {
   obtenerCliente
 } from "../api/catalogApi.js";
 import { crearDetallePedido, crearPedido } from "../api/pedidoApi.js";
-import { listarInventarios, listarMateriales, crearMovimiento } from "../api/inventarioApi.js";
+import { listarInventarios, listarMateriales } from "../api/inventarioApi.js";
 import { listarEmpleados } from "../api/empleadoApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { AppIcon } from "../components/AppIcon.jsx";
@@ -211,6 +211,15 @@ export function PuntoVentaPage() {
     [servicios, empleados, session]
   );
 
+  const clienteSeleccionado = useMemo(
+    () => clientes.find((cliente) => Number(cliente.idCliente) === Number(pedido.clienteId)) || null,
+    [clientes, pedido.clienteId]
+  );
+
+  const clientePuedeUsarCredito = Boolean(
+    clienteSeleccionado?.tieneCredito && Number(clienteSeleccionado?.limiteCredito || 0) > 0
+  );
+
   function unidadDeServicio(servicioId) {
     const relacion = serviciosMateriales.find((item) => Number(item.servicioId) === Number(servicioId));
     const material = materiales.find((item) => Number(item.idMaterial || item.id) === Number(relacion?.materialId));
@@ -244,13 +253,22 @@ export function PuntoVentaPage() {
   function updateClienteSearch(event) {
     setClienteSearch(event.target.value);
     setClienteSuggestionsOpen(true);
-    setPedido((current) => ({ ...current, clienteId: "" }));
+    setPedido((current) => ({
+      ...current,
+      clienteId: "",
+      formaPago: current.formaPago === "Credito" ? "Contado" : current.formaPago
+    }));
   }
 
   function seleccionarCliente(cliente) {
     setClienteSearch(nombreCliente(cliente));
     setClienteSuggestionsOpen(false);
-    setPedido((current) => ({ ...current, clienteId: String(cliente.idCliente) }));
+    const puedeUsarCredito = Boolean(cliente.tieneCredito && Number(cliente.limiteCredito || 0) > 0);
+    setPedido((current) => ({
+      ...current,
+      clienteId: String(cliente.idCliente),
+      formaPago: current.formaPago === "Credito" && !puedeUsarCredito ? "Contado" : current.formaPago
+    }));
   }
 
   function abrirModalCliente() {
@@ -291,6 +309,27 @@ export function PuntoVentaPage() {
     }
     if (!formCliente.telefono.trim()) {
       mostrarError("Escribe el telefono del cliente.");
+      return;
+    }
+    if (!/^\d{10}$/.test(formCliente.telefono.trim())) {
+      mostrarError("El teléfono debe tener exactamente 10 dígitos numéricos.");
+      return;
+    }
+
+    const rfc = formCliente.rfc.trim();
+    if (rfc && !/^[A-Z0-9]{12,13}$/.test(rfc.toUpperCase())) {
+      mostrarError("El RFC debe tener 12 caracteres (empresa) o 13 (persona física), solo letras y números.");
+      return;
+    }
+
+    const cp = formCliente.codigoPostal.trim();
+    if (cp && !/^\d{5}$/.test(cp)) {
+      mostrarError("El código postal debe tener exactamente 5 dígitos numéricos.");
+      return;
+    }
+
+    if (formCliente.tieneCredito && (!formCliente.limiteCredito || Number(formCliente.limiteCredito) <= 0)) {
+      mostrarError("El límite de crédito debe ser mayor a 0 cuando el cliente tiene crédito.");
       return;
     }
     if (Number(formCliente.limiteCredito || 0) < 0) {
@@ -492,6 +531,10 @@ export function PuntoVentaPage() {
 
     // Validación de crédito si aplica
     if (pedido.formaPago === "Credito") {
+      if (!clientePuedeUsarCredito) {
+        mostrarError("El cliente no tiene un limite de credito disponible.");
+        return;
+      }
       try {
         const clienteData = await obtenerCliente(Number(pedido.clienteId));
         const creditoDisponible =
@@ -506,7 +549,6 @@ export function PuntoVentaPage() {
       }
     }
 
-    let inventarioValidado = { serviciosMateriales: [], inventarios: [] };
     try {
       const [serviciosMaterialesData, inventariosData, materialesData] = await Promise.all([
         listarServiciosMateriales(),
@@ -553,10 +595,6 @@ export function PuntoVentaPage() {
         }
       });
 
-      inventarioValidado = {
-        serviciosMateriales: serviciosMaterialesData || [],
-        inventarios: inventariosData || []
-      };
     } catch (err) {
       mostrarError(err.message || String(err));
       return;
@@ -603,40 +641,6 @@ export function PuntoVentaPage() {
           })
         )
       );
-
-      // Reducir stock en inventario según materiales asociados a los servicios
-      try {
-        const svMats = inventarioValidado.serviciosMateriales;
-        const invs = inventarioValidado.inventarios;
-
-        await Promise.all(items.map(async (item) => {
-          const mats = (svMats || []).filter(sm => Number(sm.servicioId) === Number(item.servicioId));
-          if (!mats.length) return;
-          await Promise.all(mats.map(async (sm) => {
-            const cantidadPorUnidad = Number(sm.cantidadUsada ?? sm.cantidad ?? 0);
-            const cantidadTotal = Number(item.cantidad) * cantidadPorUnidad;
-            if (!cantidadTotal || cantidadTotal <= 0) return;
-            const inv = (invs || []).find(i =>
-              Number(i.materialId) === Number(sm.materialId) &&
-              Number(i.sucursalId) === Number(sucursalActiva.idSucursal)
-            );
-            if (!inv) {
-              console.warn(`No se encontró inventario para material ${sm.materialId} en sucursal ${sucursalActiva.idSucursal}`);
-              return;
-            }
-            await crearMovimiento({
-              cantidad: Number(cantidadTotal),
-              fecha: localDateTime(0),
-              tipo: "Salida",
-              motivo: `Consumo por pedido ${pedidoId}`,
-              inventarioId: Number(inv.idInventario || inv.id),
-              createdBy: session.empleadoId
-            });
-          }));
-        }));
-      } catch (errInv) {
-        console.warn("No se pudo actualizar inventario automáticamente:", errInv);
-      }
 
       setItems([]);
       setDetalle({ servicioId: "", cantidad: "1", precioUnitario: "", unidadDetalle: "Piezas" });
@@ -804,7 +808,7 @@ export function PuntoVentaPage() {
               <span>Forma de Pago</span>
               <select name="formaPago" onChange={updatePedido} value={pedido.formaPago}>
                 <option>Contado</option>
-                <option>Credito</option>
+                {clientePuedeUsarCredito && <option>Credito</option>}
                 <option>Intercambio</option>
               </select>
             </label>
@@ -973,7 +977,7 @@ export function PuntoVentaPage() {
 
       {/* Modal de error flotante */}
       {modalError && (
-        <div className="modal-error-overlay" onClick={() => setModalError("")}>
+        <div className="modal-error-overlay">
           <div className="modal-error-card" onClick={e => e.stopPropagation()}>
             <p className="modal-error-icon">⚠</p>
             <p className="modal-error-msg">{modalError}</p>
@@ -983,7 +987,7 @@ export function PuntoVentaPage() {
       )}
 
       {modalCliente && (
-        <div className="modal-overlay" onClick={() => setModalCliente(false)}>
+        <div className="modal-overlay">
           <div className="modal-card customer-modal" onClick={e => e.stopPropagation()}>
             <h2>Nuevo Cliente</h2>
             <div className="modal-grid">
@@ -1001,7 +1005,16 @@ export function PuntoVentaPage() {
               </label>
               <label className="pos-field floating">
                 <span>Telefono</span>
-                <input name="telefono" onChange={updateClienteForm} type="text" value={formCliente.telefono} />
+                <input
+                  name="telefono"
+                  onChange={(event) => setFormCliente((current) => ({
+                    ...current,
+                    telefono: event.target.value.replace(/\D/g, "").slice(0, 10)
+                  }))}
+                  type="text"
+                  maxLength={10}
+                  value={formCliente.telefono}
+                />
               </label>
               <label className="pos-field floating">
                 <span>Tipo</span>
@@ -1012,11 +1025,29 @@ export function PuntoVentaPage() {
               </label>
               <label className="pos-field floating">
                 <span>RFC</span>
-                <input name="rfc" onChange={updateClienteForm} type="text" value={formCliente.rfc} />
+                <input
+                  name="rfc"
+                  onChange={(event) => setFormCliente((current) => ({
+                    ...current,
+                    rfc: event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 13)
+                  }))}
+                  type="text"
+                  maxLength={13}
+                  value={formCliente.rfc}
+                />
               </label>
               <label className="pos-field floating">
                 <span>Codigo postal</span>
-                <input name="codigoPostal" onChange={updateClienteForm} type="text" value={formCliente.codigoPostal} />
+                <input
+                  name="codigoPostal"
+                  onChange={(event) => setFormCliente((current) => ({
+                    ...current,
+                    codigoPostal: event.target.value.replace(/\D/g, "").slice(0, 5)
+                  }))}
+                  type="text"
+                  maxLength={5}
+                  value={formCliente.codigoPostal}
+                />
               </label>
               <label className="pos-field floating">
                 <span>Direccion</span>
@@ -1060,7 +1091,7 @@ export function PuntoVentaPage() {
       )}
 
       {modalServicio && (
-        <div className="modal-overlay" onClick={() => setModalServicio(false)}>
+        <div className="modal-overlay">
           <div className="modal-card" onClick={e => e.stopPropagation()}>
             <h2>Nuevo Servicio</h2>
             <label className="pos-field floating">

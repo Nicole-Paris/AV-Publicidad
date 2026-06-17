@@ -1,16 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   listarServicios, crearServicio,
-  listarCategoriaServicio, crearCategoriaServicio,
+  listarCategoriaServicio, crearCategoriaServicio, actualizarCategoriaServicio,
   listarServiciosMateriales, crearServicioMaterial,
   actualizarServicio, actualizarServicioMaterial, eliminarServicioMaterial
 } from "../api/catalogApi.js";
 import { listarMateriales } from "../api/inventarioApi.js";
 import { listarEmpleados } from "../api/empleadoApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
+import { esEmpleado } from "../auth/permissions.js";
+import { Pagination } from "../components/Pagination.jsx";
+
+const PAGE_SIZE = 30;
 
 export function ServiciosPage() {
   const { session } = useAuth();
+  const soloEmpleado = esEmpleado(session);
   const [tab, setTab] = useState("servicios");
   const [servicios, setServicios] = useState([]);
   const [categorias, setCategorias] = useState([]);
@@ -22,6 +27,10 @@ export function ServiciosPage() {
   const [modalError, setModalError] = useState("");
   const [success, setSuccess] = useState("");
   const [buscar, setBuscar] = useState("");
+  const [estadoServicioFiltro, setEstadoServicioFiltro] = useState("");
+  const [buscarCategoria, setBuscarCategoria] = useState("");
+  const [estadoCategoriaFiltro, setEstadoCategoriaFiltro] = useState("");
+  const [paginaServicios, setPaginaServicios] = useState(1);
 
   const [modalServicio, setModalServicio] = useState(false);
   const [servicioEditando, setServicioEditando] = useState(null);
@@ -36,7 +45,7 @@ export function ServiciosPage() {
   });
 
   const [nuevaCat, setNuevaCat] = useState({
-    visible: false, nombre: "", descripcion: ""
+    visible: false, editando: null, nombre: "", descripcion: "", estado: "Activo"
   });
 
   const [updatingEstadoId, setUpdatingEstadoId] = useState(null);
@@ -115,6 +124,14 @@ export function ServiciosPage() {
     return partes.length > 1 ? `${partes[0]}.${partes.slice(1).join("")}` : limpio;
   }
 
+  function normalizarTexto(value) {
+    return (value || "")
+      .toString()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+  }
+
   const sucursalActivaId = session?.sucursalIdSucursal || session?.sucursalId;
 
   function registroDeSucursal(registro) {
@@ -155,6 +172,10 @@ export function ServiciosPage() {
       categoriaServicioId: servicio.categoriaServicioId ? String(servicio.categoriaServicioId) : ""
     });
     setModalServicio(true);
+  }
+
+  function abrirNuevaCategoria() {
+    setNuevaCat({ visible: true, editando: null, nombre: "", descripcion: "", estado: "Activo" });
   }
 
   function agregarMaterialEditandoServicio() {
@@ -223,12 +244,33 @@ export function ServiciosPage() {
     const q = buscar.trim().toLowerCase();
     return servicios
       .filter(registroDeSucursal)
+      .filter(s => !estadoServicioFiltro || (s.estado || "Activo") === estadoServicioFiltro)
       .filter(s => !q ||
         (s.nombre || "").toLowerCase().includes(q) ||
         (s.descripcion || "").toLowerCase().includes(q) ||
         nombreCategoria(s.categoriaServicioId).toLowerCase().includes(q)
       );
-  }, [servicios, buscar, categorias, empleados, sucursalActivaId]);
+  }, [servicios, buscar, estadoServicioFiltro, categorias, empleados, sucursalActivaId]);
+
+  const serviciosPaginados = useMemo(() => {
+    const inicio = (paginaServicios - 1) * PAGE_SIZE;
+    return serviciosFiltrados.slice(inicio, inicio + PAGE_SIZE);
+  }, [serviciosFiltrados, paginaServicios]);
+
+  const categoriasFiltradas = useMemo(() => {
+    const q = normalizarTexto(buscarCategoria.trim());
+    return categorias
+      .filter(categoria => !estadoCategoriaFiltro || categoria.estado === estadoCategoriaFiltro)
+      .filter(categoria => {
+        if (!q) return true;
+        return normalizarTexto(categoria.nombre).includes(q)
+          || normalizarTexto(categoria.descripcion).includes(q);
+      });
+  }, [categorias, buscarCategoria, estadoCategoriaFiltro]);
+
+  useEffect(() => {
+    setPaginaServicios(1);
+  }, [buscar, estadoServicioFiltro, sucursalActivaId]);
 
   const serviciosDisponibles = useMemo(() => {
     return servicios.filter((servicio) => registroDeSucursal(servicio) && (servicio.estado || "Activo") === "Activo");
@@ -245,6 +287,24 @@ export function ServiciosPage() {
     if (!formServicio.categoriaServicioId) {
       mostrarError("Selecciona una categoría."); return;
     }
+
+    // Validación: bloquear nombres duplicados en la misma sucursal
+    const nombreNuevo = formServicio.nombre.trim().toLowerCase();
+    const duplicado = servicios
+      .filter(s => {
+        if (servicioEditando) {
+          return Number(s.idServicio || s.id) !== Number(servicioEditando.idServicio || servicioEditando.id);
+        }
+        return true;
+      })
+      .filter(registroDeSucursal)
+      .find(s => (s.nombre || "").trim().toLowerCase() === nombreNuevo);
+
+    if (duplicado) {
+      mostrarError(`Ya existe un servicio con el nombre "${formServicio.nombre.trim()}" en esta sucursal.`);
+      return;
+    }
+
     setSaving(true);
     try {
       const esEdicion = Boolean(servicioEditando);
@@ -260,7 +320,24 @@ export function ServiciosPage() {
         await actualizarServicio(servicioEditando.idServicio || servicioEditando.id, payload);
         await guardarMaterialesEditandoServicio(servicioEditando.idServicio || servicioEditando.id);
       } else {
-        await crearServicio(payload);
+        const nuevoServicio = await crearServicio(payload);
+        let nuevoServicioId = nuevoServicio?.idServicio || nuevoServicio?.id;
+
+        if (!nuevoServicioId && materialesEditandoServicio.filter(item => !item.deleted).length > 0) {
+          const serviciosRefrescados = safe(await listarServicios());
+          const servicioCreado = [...serviciosRefrescados]
+            .filter(registroDeSucursal)
+            .reverse()
+            .find(servicio =>
+              (servicio.nombre || "").trim().toLowerCase() === formServicio.nombre.trim().toLowerCase() &&
+              Number(servicio.categoriaServicioId) === Number(formServicio.categoriaServicioId)
+            );
+          nuevoServicioId = servicioCreado?.idServicio || servicioCreado?.id;
+        }
+
+        if (nuevoServicioId) {
+          await guardarMaterialesEditandoServicio(nuevoServicioId);
+        }
       }
       const svs = await listarServicios();
       const svMats = await listarServiciosMateriales();
@@ -361,14 +438,46 @@ export function ServiciosPage() {
     if (!nuevaCat.nombre.trim()) {
       mostrarError("Escribe un nombre para la categoría."); return;
     }
+    const nombreNormalizado = nuevaCat.nombre.trim().toLowerCase();
+    const categoriaDuplicada = categorias.some(categoria => {
+      const idCategoria = Number(categoria.idCategoriaServicio || categoria.id);
+      const idEditando = nuevaCat.editando
+        ? Number(nuevaCat.editando.idCategoriaServicio || nuevaCat.editando.id)
+        : null;
+      return (categoria.nombre || "").trim().toLowerCase() === nombreNormalizado
+        && idCategoria !== idEditando;
+    });
+    if (categoriaDuplicada) {
+      mostrarError("Ya existe una categoría de servicio con ese nombre.");
+      return;
+    }
+    if (nuevaCat.editando && nuevaCat.estado === "Inactivo") {
+      const idCategoriaEditando = Number(nuevaCat.editando.idCategoriaServicio || nuevaCat.editando.id);
+      const tieneServiciosLigados = servicios.some(servicio =>
+        Number(servicio.categoriaServicioId) === idCategoriaEditando && !servicio.deletedAt
+      );
+      const estabaActiva = (nuevaCat.editando.estado || "Activo") !== "Inactivo";
+      if (estabaActiva && tieneServiciosLigados) {
+        mostrarError("No se puede inactivar la categoría porque tiene servicios ligados.");
+        return;
+      }
+    }
     setSaving(true);
     try {
-      await crearCategoriaServicio({
+      const payload = {
         nombre: nuevaCat.nombre.trim(),
         descripcion: nuevaCat.descripcion.trim(),
-        estado: "Activo",
-        createdBy: session.empleadoId
-      });
+        estado: nuevaCat.estado || "Activo",
+        createdBy: nuevaCat.editando?.createdBy || session.empleadoId,
+        updatedBy: nuevaCat.editando ? session.empleadoId : null
+      };
+
+      if (nuevaCat.editando) {
+        await actualizarCategoriaServicio(nuevaCat.editando.idCategoriaServicio || nuevaCat.editando.id, payload);
+      } else {
+        await crearCategoriaServicio(payload);
+      }
+
       const cats = await listarCategoriaServicio();
       setCategorias(safe(cats));
       const nueva = safe(cats).find(c => c.nombre === nuevaCat.nombre.trim());
@@ -378,8 +487,8 @@ export function ServiciosPage() {
           categoriaServicioId: String(nueva.idCategoriaServicio || nueva.id)
         }));
       }
-      setNuevaCat({ visible: false, nombre: "", descripcion: "" });
-      mostrarSuccess("Categoría creada.");
+      setNuevaCat({ visible: false, editando: null, nombre: "", descripcion: "", estado: "Activo" });
+      mostrarSuccess(nuevaCat.editando ? "Categoría actualizada." : "Categoría creada.");
     } catch (err) {
       mostrarError(err.message || String(err));
     } finally {
@@ -425,31 +534,50 @@ export function ServiciosPage() {
         <div className="pos-alert success">{success}</div>
       )}
 
-      {/* barra superior: búsqueda */}
-      <div className="inv-toolbar">
-        <input
-          placeholder="Buscar servicio..."
-          value={buscar}
-          onChange={e => setBuscar(e.target.value)}
-          style={{ flex: 1 }}
-          disabled={loading}
-        />
-        <div />
-        <div className="toolbar-actions">
-          <button
-            className="primary-button"
-            onClick={() => tab === "servicios"
-              ? abrirNuevoServicio()
-              : setModalMaterial(true)
-            }
-            type="button"
-            disabled={loading}
-          >
-            {tab === "servicios" ? "+ Nuevo Servicio" : "+ Asignar Material"}
-          </button>
-        </div>
+      <div className="inv-tabs">
+        <button className={tab === "servicios" ? "inv-tab active" : "inv-tab"} onClick={() => setTab("servicios")} type="button">
+          Servicios
+        </button>
+        <button className={tab === "categorias" ? "inv-tab active" : "inv-tab"} onClick={() => setTab("categorias")} type="button">
+          Categorías
+        </button>
       </div>
 
+      {tab === "servicios" && (
+        <div className="inv-toolbar">
+          <input
+            placeholder="Buscar servicio..."
+            value={buscar}
+            onChange={e => setBuscar(e.target.value)}
+            style={{ flex: 1 }}
+            disabled={loading}
+          />
+          <select
+            value={estadoServicioFiltro}
+            onChange={e => setEstadoServicioFiltro(e.target.value)}
+            disabled={loading}
+          >
+            <option value="">Todos los estados</option>
+            <option value="Activo">Activos</option>
+            <option value="Inactivo">Inactivos</option>
+          </select>
+          <div className="toolbar-actions">
+            {!soloEmpleado && (
+              <button
+                className="primary-button"
+                onClick={abrirNuevoServicio}
+                type="button"
+                disabled={loading}
+              >
+                + Nuevo Servicio
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {tab === "servicios" && (
+      <>
       <div className="inv-table-wrap">
         <table className="inv-table">
           <thead>
@@ -460,13 +588,13 @@ export function ServiciosPage() {
               <th>Materiales</th>
               <th>Categoría</th>
               <th>Estado</th>
-              <th>Acciones</th>
-              <th></th>
-              <th></th> {/* acción: agregar material */}
+              {!soloEmpleado && <th>Acciones</th>}
+              {!soloEmpleado && <th></th>}
+              {!soloEmpleado && <th></th>} {/* acción: agregar material */}
             </tr>
           </thead>
           <tbody>
-            {serviciosFiltrados.map((s, i) => {
+            {serviciosPaginados.map((s, i) => {
               const mats = (serviciosMateriales || [])
                 .filter(sm => Number(sm.servicioId) === Number(s.idServicio || s.id));
               return (
@@ -487,55 +615,71 @@ export function ServiciosPage() {
                   </td>
                   <td>{nombreCategoria(s.categoriaServicioId)}</td>
                   <td>
-                    <select
-                      value={s.estado || "Activo"}
-                      onChange={e => cambiarEstadoServicio(s, e.target.value)}
-                      disabled={loading || updatingEstadoId === Number(s.idServicio || s.id)}
-                      style={{
-                        padding: "6px 10px",
-                        borderRadius: 8,
-                        border: "1px solid #e6e6e6",
+                    {soloEmpleado ? (
+                      <span style={{
+                        padding: "6px 10px", borderRadius: 8, fontWeight: 700,
                         background: s.estado === "Activo" ? "#f1fdf6" : "#fff6f5",
-                        color: s.estado === "Activo" ? "#059669" : "#be123c",
-                        fontWeight: 700
-                      }}
-                    >
-                      <option value="Activo">Activo</option>
-                      <option value="Inactivo">Inactivo</option>
-                    </select>
+                        color: s.estado === "Activo" ? "#059669" : "#be123c"
+                      }}>
+                        {s.estado || "Activo"}
+                      </span>
+                    ) : (
+                      <select
+                        value={s.estado || "Activo"}
+                        onChange={e => cambiarEstadoServicio(s, e.target.value)}
+                        disabled={loading || updatingEstadoId === Number(s.idServicio || s.id)}
+                        style={{
+                          padding: "6px 10px",
+                          borderRadius: 8,
+                          border: "1px solid #e6e6e6",
+                          background: s.estado === "Activo" ? "#f1fdf6" : "#fff6f5",
+                          color: s.estado === "Activo" ? "#059669" : "#be123c",
+                          fontWeight: 700
+                        }}
+                      >
+                        <option value="Activo">Activo</option>
+                        <option value="Inactivo">Inactivo</option>
+                      </select>
+                    )}
                   </td>
-                  <td>
-                    <div className="table-actions">
-                      <button className="ghost-button" onClick={() => abrirEditarServicio(s)} type="button">
-                        Editar
+                  { !soloEmpleado && (
+                    <td>
+                      <div className="table-actions">
+                        <button className="ghost-button" onClick={() => abrirEditarServicio(s)} type="button">
+                          Editar
+                        </button>
+                      </div>
+                    </td>
+                  )}
+                  { !soloEmpleado && (
+                    <td>
+                      <button
+                        aria-label="Ver auditoria del servicio"
+                        className="audit-toggle"
+                        onClick={() => abrirAuditoria(`Servicio ${s.idServicio || s.id}`, s, [["Cambio de estado", s.estado || "-"]])}
+                        type="button"
+                      >
+                        ▼
                       </button>
-                    </div>
-                  </td>
-                  <td>
-                    <button
-                      aria-label="Ver auditoria del servicio"
-                      className="audit-toggle"
-                      onClick={() => abrirAuditoria(`Servicio ${s.idServicio || s.id}`, s, [["Cambio de estado", s.estado || "-"]])}
-                      type="button"
-                    >
-                      ▼
-                    </button>
-                  </td>
-                  <td>
-                    <button
-                      className="primary-button"
-                      type="button"
-                      onClick={() => {
-                        setFormMaterial({ servicioId: String(s.idServicio || s.id), materialId: "", cantidadUsada: "" });
-                        setModalMaterial(true);
-                      }}
-                      disabled={loading}
-                      style={{ padding: "8px 12px", fontSize: 14 }}
-                    >
-                      + Agregar material
-                    </button>
-                  </td>
-                </tr>
+                    </td>
+                  )}
+                  { !soloEmpleado && (
+                    <td>
+                      <button
+                        className="primary-button"
+                        type="button"
+                        onClick={() => {
+                          setFormMaterial({ servicioId: String(s.idServicio || s.id), materialId: "", cantidadUsada: "" });
+                          setModalMaterial(true);
+                        }}
+                        disabled={loading}
+                        style={{ padding: "8px 12px", fontSize: 14 }}
+                      >
+                        + Agregar material
+                      </button>
+                    </td>
+                  )}
+                 </tr>
               );
             })}
             {serviciosFiltrados.length === 0 && !loading && (
@@ -553,12 +697,118 @@ export function ServiciosPage() {
         </table>
       </div>
 
+      <Pagination
+        page={paginaServicios}
+        pageSize={PAGE_SIZE}
+        total={serviciosFiltrados.length}
+        onPageChange={setPaginaServicios}
+        disabled={loading}
+      />
+      </>
+      )}
+
+      {tab === "categorias" && (
+        <>
+          <div className="inv-toolbar">
+            <input
+              placeholder="Buscar categoría por nombre o descripción"
+              value={buscarCategoria}
+              onChange={e => setBuscarCategoria(e.target.value)}
+              disabled={loading}
+            />
+            <select
+              value={estadoCategoriaFiltro}
+              onChange={e => setEstadoCategoriaFiltro(e.target.value)}
+              disabled={loading}
+            >
+              <option value="">Todos los estados</option>
+              <option value="Activo">Activo</option>
+              <option value="Inactivo">Inactivo</option>
+            </select>
+            {!soloEmpleado && (
+              <div className="toolbar-actions">
+                <button
+                  className="primary-button compact-action-button"
+                  onClick={abrirNuevaCategoria}
+                  type="button"
+                  disabled={loading}
+                >
+                  + Nueva Categoría
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="inv-table-wrap">
+            <table className="inv-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Nombre</th>
+                  <th>Descripción</th>
+                  <th>Estado</th>
+                  {!soloEmpleado && <th>Acciones</th>}
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {categoriasFiltradas.map(categoria => (
+                  <tr key={categoria.idCategoriaServicio || categoria.id}>
+                    <td>{categoria.idCategoriaServicio || categoria.id}</td>
+                    <td style={{ fontWeight: 700 }}>{categoria.nombre}</td>
+                    <td>{categoria.descripcion || "-"}</td>
+                    <td>
+                      <span className={categoria.estado === "Activo" ? "inv-badge ok" : "inv-badge neutral"}>
+                        {categoria.estado || "Activo"}
+                      </span>
+                    </td>
+                    {!soloEmpleado && (
+                      <td>
+                        <div className="table-actions">
+                          <button
+                            className="ghost-button"
+                            onClick={() => setNuevaCat({
+                              visible: true,
+                              editando: categoria,
+                              nombre: categoria.nombre || "",
+                              descripcion: categoria.descripcion || "",
+                              estado: categoria.estado || "Activo"
+                            })}
+                            type="button"
+                          >
+                            Editar
+                          </button>
+                        </div>
+                      </td>
+                    )}
+                    <td>
+                      <button
+                        aria-label="Ver auditoria de la categoría"
+                        className="audit-toggle"
+                        onClick={() => abrirAuditoria(`Categoría ${categoria.idCategoriaServicio || categoria.id}`, categoria)}
+                        type="button"
+                      >
+                        ▼
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {categoriasFiltradas.length === 0 && !loading && (
+                  <tr>
+                    <td colSpan={soloEmpleado ? 5 : 6} style={{ textAlign: "center", color: "#64748b", padding: 24 }}>
+                      Sin categorías que coincidan con la búsqueda.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
       {modalServicio && (
-        <div className="modal-overlay" onClick={() => {
-          setModalServicio(false);
-          setServicioEditando(null);
-        }}>
-          <div className="modal-card" onClick={e => e.stopPropagation()}>
+        <div className="modal-overlay">
+          <div className="modal-card service-edit-modal" onClick={e => e.stopPropagation()}>
             <h2>{servicioEditando ? "Editar Servicio" : "Nuevo Servicio"}</h2>
             <label className="pos-field floating">
               <span>Nombre</span>
@@ -586,7 +836,7 @@ export function ServiciosPage() {
                 value={formServicio.categoriaServicioId}
                 onChange={e => {
                   if (e.target.value === "__nueva__") {
-                    setNuevaCat({ visible: true, nombre: "", descripcion: "" });
+                    abrirNuevaCategoria();
                     return;
                   }
                   setFormServicio(f => ({
@@ -606,7 +856,7 @@ export function ServiciosPage() {
                 <option value="__nueva__">+ Nueva categoría...</option>
               </select>
             </label>
-            {servicioEditando && (
+            {(
               <div className="service-material-editor">
                 <div className="tab-section-header">
                   <h3>Materiales usados</h3>
@@ -720,24 +970,19 @@ export function ServiciosPage() {
       )}
 
       {modalMaterial && (
-        <div className="modal-overlay" onClick={() => setModalMaterial(false)}>
+        <div className="modal-overlay">
           <div className="modal-card" onClick={e => e.stopPropagation()}>
             <h2>Asignar Material a Servicio</h2>
             <label className="pos-field floating">
               <span>Servicio</span>
-              <select
-                value={formMaterial.servicioId}
-                onChange={e => setFormMaterial(f => ({
-                  ...f, servicioId: e.target.value
-                }))}
-              >
-                <option value="">Selecciona un servicio</option>
-                {serviciosDisponibles.map(s => (
-                  <option key={s.idServicio || s.id} value={s.idServicio || s.id}>
-                    {s.nombre}
-                  </option>
-                ))}
-              </select>
+              <input
+                className="locked-service-field"
+                type="text"
+                value={nombreServicio(formMaterial.servicioId)}
+                readOnly
+                aria-readonly="true"
+                title="El material se asignará al servicio seleccionado en la tarjeta"
+              />
             </label>
             <label className="pos-field floating">
               <span>Material</span>
@@ -792,11 +1037,9 @@ export function ServiciosPage() {
       )}
 
       {nuevaCat.visible && (
-        <div className="modal-overlay" onClick={() => setNuevaCat({
-          visible: false, nombre: "", descripcion: ""
-        })}>
+        <div className="modal-overlay">
           <div className="modal-card" onClick={e => e.stopPropagation()}>
-            <h2>Nueva Categoría</h2>
+            <h2>{nuevaCat.editando ? "Editar Categoría" : "Nueva Categoría"}</h2>
             <label className="pos-field floating">
               <span>Nombre</span>
               <input
@@ -817,6 +1060,18 @@ export function ServiciosPage() {
                 }))}
               />
             </label>
+            <label className="pos-field floating">
+              <span>Estado</span>
+              <select
+                value={nuevaCat.estado}
+                onChange={e => setNuevaCat(c => ({
+                  ...c, estado: e.target.value
+                }))}
+              >
+                <option>Activo</option>
+                <option>Inactivo</option>
+              </select>
+            </label>
             <div style={{
               display: "flex", justifyContent: "flex-end",
               gap: 12,
@@ -827,7 +1082,7 @@ export function ServiciosPage() {
                 className="ghost-button"
                 type="button"
                 onClick={() => setNuevaCat({
-                  visible: false, nombre: "", descripcion: ""
+                  visible: false, editando: null, nombre: "", descripcion: "", estado: "Activo"
                 })}
               >
                 Cancelar
@@ -838,7 +1093,7 @@ export function ServiciosPage() {
                 disabled={saving}
                 onClick={guardarNuevaCategoria}
               >
-                {saving ? "Guardando..." : "Guardar categoría"}
+                {saving ? "Guardando..." : nuevaCat.editando ? "Guardar cambios" : "Guardar categoría"}
               </button>
             </div>
           </div>
@@ -846,7 +1101,7 @@ export function ServiciosPage() {
       )}
 
       {auditModal && (
-        <div className="modal-overlay" onClick={() => setAuditModal(null)}>
+        <div className="modal-overlay">
           <div className="modal-card" onClick={e => e.stopPropagation()}>
             <h2>{auditModal.titulo}</h2>
             <div className="audit-grid modal-audit-grid">
@@ -867,10 +1122,10 @@ export function ServiciosPage() {
       )}
 
       {modalError && (
-        <div className="modal-error-overlay" onClick={() => setModalError("")}>
+        <div className="modal-error-overlay">
           <div className="modal-error-card" onClick={e => e.stopPropagation()}>
             <h2>Error</h2>
-            <p style={{ color: "#dc2626" }}>{modalError}</p>
+            <p className="modal-error-msg">{modalError}</p>
             <button
               className="primary-button"
               type="button"

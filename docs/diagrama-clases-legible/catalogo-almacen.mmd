@@ -1,0 +1,70 @@
+%%{init: {"theme": "base", "themeVariables": {"fontSize": "18px", "primaryColor": "#f4f2ff", "primaryBorderColor": "#6658c8", "lineColor": "#4a4a4a", "tertiaryColor": "#fffbe6"}}}%%
+classDiagram
+direction LR
+
+class CategoriaServicio {
+  +Integer idCategoriaServicio
+  +String nombre
+  +String descripcion
+  +String estado
+}
+
+class Servicio {
+  +Integer idServicio
+  +String nombre
+  +String descripcion
+  +String estado
+  +Integer categoriaServicioId
+}
+
+class ServicioMaterial {
+  +Integer idServicioMaterial
+  +BigDecimal cantidadUsada
+  +Integer servicioId
+  +Integer materialId
+}
+
+class CategoriaMaterial {
+  +Integer idCategoriaMaterial
+  +String nombre
+  +String estado
+  +String descripcion
+}
+
+class Material {
+  +Integer idMaterial
+  +String nombre
+  +String unidad
+  +String estado
+  +BigDecimal costoUnitario
+  +Integer categoriaMaterialId
+}
+
+class Inventario {
+  +Integer idInventario
+  +BigDecimal stockActual
+  +BigDecimal stockMinimo
+  +Integer materialId
+  +Integer sucursalId
+}
+
+class MovimientoInventario {
+  +Integer idMovimientoInventario
+  +BigDecimal cantidad
+  +LocalDateTime fecha
+  +String tipo
+  +String motivo
+  +Integer inventarioId
+}
+
+class Sucursal {
+  +Integer idSucursal
+}
+
+CategoriaServicio "1" <-- "0..*" Servicio : categoriaServicioId
+Servicio "1" <-- "0..*" ServicioMaterial : servicioId
+Material "1" <-- "0..*" ServicioMaterial : materialId
+CategoriaMaterial "1" <-- "0..*" Material : categoriaMaterialId
+Material "1" <-- "0..*" Inventario : materialId
+Sucursal "1" <-- "0..*" Inventario : sucursalId
+Inventario "1" <-- "0..*" MovimientoInventario : inventarioId

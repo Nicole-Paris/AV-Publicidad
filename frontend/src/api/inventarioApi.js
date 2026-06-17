@@ -6,6 +6,9 @@ export function listarCategoriasMaterial() {
 export function crearCategoriaMaterial(payload) {
   return apiRequest("/categorias-material", { method: "POST", body: JSON.stringify(payload) });
 }
+export function actualizarCategoriaMaterial(id, payload) {
+  return apiRequest(`/categorias-material/${id}`, { method: "PUT", body: JSON.stringify(payload) });
+}
 export function listarMateriales() {
   return apiRequest("/materiales");
 }

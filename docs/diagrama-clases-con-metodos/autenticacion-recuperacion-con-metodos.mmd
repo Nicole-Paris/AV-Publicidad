@@ -1,0 +1,50 @@
+%%{init: {"theme": "base", "themeVariables": {"fontSize": "18px", "primaryColor": "#f4f2ff", "primaryBorderColor": "#6658c8", "lineColor": "#4a4a4a", "tertiaryColor": "#fffbe6"}}}%%
+classDiagram
+direction LR
+
+class Empleado {
+  +Integer idEmpleado
+  +String correo
+  +String contrasena
+  +Integer rolId
+}
+
+class AuthService {
+  +login(LoginRequest)
+  +logout()
+}
+
+class RecuperacionContrasenaService {
+  +enviarCodigo(RecuperacionCodigoRequest)
+  +validarCodigo(ValidarCodigoRecuperacionRequest)
+  +restablecerContrasena(RestablecerContrasenaRequest)
+}
+
+class JwtService {
+  +generarToken()
+  +obtenerCorreo()
+  +obtenerRol()
+  +esTokenValido()
+}
+
+class RecuperacionCodigoRequest {
+  +String correo
+}
+
+class ValidarCodigoRecuperacionRequest {
+  +String correo
+  +String codigo
+}
+
+class RestablecerContrasenaRequest {
+  +String correo
+  +String codigo
+  +String nuevaContrasena
+}
+
+Empleado ..> AuthService : inicia sesion
+Empleado ..> RecuperacionContrasenaService : recupera contrasena
+AuthService ..> JwtService : genera/valida token
+RecuperacionContrasenaService ..> RecuperacionCodigoRequest : usa
+RecuperacionContrasenaService ..> ValidarCodigoRecuperacionRequest : usa
+RecuperacionContrasenaService ..> RestablecerContrasenaRequest : usa

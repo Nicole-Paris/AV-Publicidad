@@ -52,6 +52,26 @@ export function ReportesPage() {
   const [pagos, setPagos] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [detalles, setDetalles] = useState([]);
+
+  function mostrarRangoFechasInvalido() {
+    setModalError("Rango de fechas inválido. La fecha Desde no puede ser posterior a la fecha Hasta.");
+  }
+
+  function cambiarFechaInicio(value) {
+    if (value && fechaFin && value > fechaFin) {
+      mostrarRangoFechasInvalido();
+      return;
+    }
+    setFechaInicio(value);
+  }
+
+  function cambiarFechaFin(value) {
+    if (fechaInicio && value && fechaInicio > value) {
+      mostrarRangoFechasInvalido();
+      return;
+    }
+    setFechaFin(value);
+  }
   const [servicios, setServicios] = useState([]);
   const [materiales, setMateriales] = useState([]);
   const [inventarios, setInventarios] = useState([]);
@@ -266,11 +286,11 @@ export function ReportesPage() {
       <div className="report-filters">
         <label>
           <span>Desde</span>
-          <input type="date" value={fechaInicio} onChange={event => setFechaInicio(event.target.value)} />
+          <input type="date" value={fechaInicio} onChange={event => cambiarFechaInicio(event.target.value)} />
         </label>
         <label>
           <span>Hasta</span>
-          <input type="date" value={fechaFin} onChange={event => setFechaFin(event.target.value)} />
+          <input type="date" value={fechaFin} onChange={event => cambiarFechaFin(event.target.value)} />
         </label>
       </div>
 
@@ -381,7 +401,7 @@ export function ReportesPage() {
       {loading && <div className="pos-alert success">Cargando reportes...</div>}
 
       {modalError && (
-        <div className="modal-error-overlay" onClick={() => setModalError("")}>
+        <div className="modal-error-overlay">
           <div className="modal-error-card" onClick={event => event.stopPropagation()}>
             <p className="modal-error-icon">!</p>
             <p className="modal-error-msg">{modalError}</p>

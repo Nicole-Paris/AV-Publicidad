@@ -54,6 +54,13 @@ export function crearCategoriaServicio(payload) {
   });
 }
 
+export function actualizarCategoriaServicio(id, payload) {
+  return apiRequest(`/categorias-servicio/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
 // Servicios - materiales
 export function listarServiciosMateriales() {
   return apiRequest("/servicios-materiales");

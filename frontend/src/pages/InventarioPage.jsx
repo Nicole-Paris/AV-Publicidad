@@ -5,17 +5,21 @@ import {
   crearMaterial,
   actualizarMaterial,
   crearCategoriaMaterial,
+  actualizarCategoriaMaterial,
   listarInventarios,
   crearInventario,
   actualizarInventario,
   listarMovimientos,
   crearMovimiento
 } from "../api/inventarioApi.js";
-import { listarSucursales } from "../api/catalogApi.js";
 import { listarEmpleados } from "../api/empleadoApi.js";
 import { useAuth } from "../auth/AuthContext.jsx";
+import { esEmpleado } from "../auth/permissions.js";
+import { Pagination } from "../components/Pagination.jsx";
 
 const CURRENCY = new Intl.NumberFormat("es-MX", { currency: "MXN", style: "currency" });
+const PAGE_SIZE = 30;
+const MOVEMENTS_PAGE_SIZE = 30;
 
 function money(value) {
   return CURRENCY.format(value || 0);
@@ -53,10 +57,14 @@ function limpiarCantidadMovimiento(value) {
   return partes.length > 1 ? `${partes[0]}.${partes.slice(1).join("")}` : limpio;
 }
 
+function idMovimiento(movimiento) {
+  return movimiento?.idMovimientoInventario || movimiento?.idMovimiento || movimiento?.id;
+}
+
 /* Componente interno: BuscadorMaterial */
 function BuscadorMaterial({ materiales, value, onChange, placeholder = "Escribe el nombre..." }) {
   const [query, setQuery] = useState(value || "");
-  const [open, setOpen] = useState(false);
+  const [sugerenciasVisibles, setSugerenciasVisibles] = useState(false);
   const ref = useRef(null);
 
   useEffect(() => {
@@ -67,7 +75,7 @@ function BuscadorMaterial({ materiales, value, onChange, placeholder = "Escribe 
     function onDoc(e) {
       if (!ref.current) return;
       if (!ref.current.contains(e.target)) {
-        setOpen(false);
+        setSugerenciasVisibles(false);
       }
     }
     document.addEventListener("click", onDoc);
@@ -84,13 +92,13 @@ function BuscadorMaterial({ materiales, value, onChange, placeholder = "Escribe 
     const v = e.target.value;
     setQuery(v);
     onChange(v);
-    setOpen(Boolean(v.trim() && matches.length > 0));
+    setSugerenciasVisibles(Boolean(v.trim()));
   }
 
   function handleSelect(name) {
     setQuery(name);
     onChange(name);
-    setOpen(false);
+    setSugerenciasVisibles(false);
   }
 
   return (
@@ -100,9 +108,14 @@ function BuscadorMaterial({ materiales, value, onChange, placeholder = "Escribe 
         placeholder={placeholder}
         value={query}
         onChange={handleChange}
-        onFocus={() => setOpen(Boolean(query.trim() && matches.length > 0))}
+        onBlur={() => setTimeout(() => setSugerenciasVisibles(false), 150)}
+        onFocus={() => {
+          if (query.trim()) {
+            setSugerenciasVisibles(true);
+          }
+        }}
       />
-      {open && matches.length > 0 && (
+      {sugerenciasVisibles && matches.length > 0 && (
         <div
           style={{
             position: "absolute",
@@ -129,13 +142,18 @@ function BuscadorMaterial({ materiales, value, onChange, placeholder = "Escribe 
           ))}
         </div>
       )}
+      {sugerenciasVisibles && query.trim() && matches.length === 0 && (
+        <div className="client-suggestions-empty" style={{ marginTop: 8 }}>
+          Material no encontrado.
+        </div>
+      )}
     </div>
   );
 }
 
 export function InventarioPage() {
   const { session } = useAuth();
-  const esEmpleado = (session?.rol || "").toLowerCase() === "empleado";
+  const soloEmpleado = esEmpleado(session);
   const [tabActivo, setTabActivo] = useState("materiales");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -147,18 +165,24 @@ export function InventarioPage() {
   const [categorias, setCategorias] = useState([]);
   const [inventarios, setInventarios] = useState([]);
   const [movimientos, setMovimientos] = useState([]);
-  const [sucursales, setSucursales] = useState([]);
   const [empleados, setEmpleados] = useState([]);
   const [materialExpandido, setMaterialExpandido] = useState(null);
   const [movimientoExpandido, setMovimientoExpandido] = useState(null);
   const [auditModal, setAuditModal] = useState(null);
   const [materialEditando, setMaterialEditando] = useState(null);
+  const [confirmarMaterialInactivo, setConfirmarMaterialInactivo] = useState(false);
 
   const [buscar, setBuscar] = useState("");
-  const [categoriaFiltro, setCategoriaFiltro] = useState("");
+  const [estadoMaterialFiltro, setEstadoMaterialFiltro] = useState("");
+  const [buscarCategoria, setBuscarCategoria] = useState("");
+  const [estadoCategoriaFiltro, setEstadoCategoriaFiltro] = useState("");
+  const [paginaMateriales, setPaginaMateriales] = useState(1);
+  const [paginaMovimientos, setPaginaMovimientos] = useState(1);
   const sucursalActivaId = session?.sucursalIdSucursal || session?.sucursalId;
 
-  const [nuevaCat, setNuevaCat] = useState({ visible: false, nombre: "", descripcion: "" });
+  const [nuevaCat, setNuevaCat] = useState({
+    visible: false, editando: null, nombre: "", descripcion: "", estado: "Activo"
+  });
 
   // modal error
   const [modalError, setModalError] = useState("");
@@ -169,7 +193,6 @@ export function InventarioPage() {
 
   const [formulario, setFormulario] = useState({
     // materiales
-    sucursalId: "",
     nombre: "",
     unidad: "Metros",
     costoUnitario: "",
@@ -205,12 +228,11 @@ export function InventarioPage() {
       setLoading(true);
       setError("");
       try {
-        const [cats, mats, invs, movs, sucs, emps] = await Promise.all([
+        const [cats, mats, invs, movs, emps] = await Promise.all([
           listarCategoriasMaterial(),
           listarMateriales(),
           listarInventarios(),
           listarMovimientos(),
-          listarSucursales(),
           listarEmpleados()
         ]);
         if (!active) return;
@@ -218,7 +240,6 @@ export function InventarioPage() {
         setMateriales(mats);
         setInventarios(invs);
         setMovimientos(movs);
-        setSucursales(sucs);
         setEmpleados(Array.isArray(emps) ? emps : []);
       } catch (err) {
         if (active) mostrarError(err.message || String(err));
@@ -243,18 +264,56 @@ export function InventarioPage() {
         );
         return Boolean(inv);
       })
-      .filter((m) => (!categoriaFiltro || String(m.categoriaMaterialId) === String(categoriaFiltro)))
+      .filter((m) => !estadoMaterialFiltro || estadoMaterialParaVista(m.estado) === estadoMaterialFiltro)
       .filter((m) => (!q || normalizarTexto(m.nombre).includes(q)));
-  }, [materiales, inventarios, buscar, categoriaFiltro, sucursalActivaId]);
+  }, [materiales, inventarios, buscar, estadoMaterialFiltro, sucursalActivaId]);
 
   const movimientosFiltrados = useMemo(() => {
-    return movimientos.filter((movimiento) => {
-      const inventario = inventarios.find((inv) =>
-        Number(inv.idInventario || inv.id) === Number(movimiento.inventarioId)
-      );
-      return !sucursalActivaId || Number(inventario?.sucursalId) === Number(sucursalActivaId);
-    });
+    return movimientos
+      .filter((movimiento) => {
+        const inventario = inventarios.find((inv) =>
+          Number(inv.idInventario || inv.id) === Number(movimiento.inventarioId)
+        );
+        return !sucursalActivaId || Number(inventario?.sucursalId) === Number(sucursalActivaId);
+      })
+      .sort((a, b) => {
+        const fechaA = new Date(a.fecha || a.createdAt || 0).getTime();
+        const fechaB = new Date(b.fecha || b.createdAt || 0).getTime();
+        if (fechaB !== fechaA) {
+          return fechaB - fechaA;
+        }
+        return Number(idMovimiento(b) || 0) - Number(idMovimiento(a) || 0);
+      });
   }, [movimientos, inventarios, sucursalActivaId]);
+
+  const categoriasFiltradas = useMemo(() => {
+    const q = normalizarTexto(buscarCategoria.trim());
+    return categorias
+      .filter((categoria) => !estadoCategoriaFiltro || categoria.estado === estadoCategoriaFiltro)
+      .filter((categoria) => {
+        if (!q) return true;
+        return normalizarTexto(categoria.nombre).includes(q)
+          || normalizarTexto(categoria.descripcion).includes(q);
+      });
+  }, [categorias, buscarCategoria, estadoCategoriaFiltro]);
+
+  const materialesPaginados = useMemo(() => {
+    const inicio = (paginaMateriales - 1) * PAGE_SIZE;
+    return materialesFiltrados.slice(inicio, inicio + PAGE_SIZE);
+  }, [materialesFiltrados, paginaMateriales]);
+
+  const movimientosPaginados = useMemo(() => {
+    const inicio = (paginaMovimientos - 1) * MOVEMENTS_PAGE_SIZE;
+    return movimientosFiltrados.slice(inicio, inicio + MOVEMENTS_PAGE_SIZE);
+  }, [movimientosFiltrados, paginaMovimientos]);
+
+  useEffect(() => {
+    setPaginaMateriales(1);
+  }, [buscar, estadoMaterialFiltro, sucursalActivaId]);
+
+  useEffect(() => {
+    setPaginaMovimientos(1);
+  }, [sucursalActivaId]);
 
   // helpers para buscar inventario por material (primera coincidencia)
   function inventarioParaMaterial(materialId) {
@@ -299,28 +358,65 @@ export function InventarioPage() {
     [materiales]
   );
 
+  function abrirNuevaCategoriaMaterial() {
+    setNuevaCat({ visible: true, editando: null, nombre: "", descripcion: "", estado: "Activo" });
+  }
+
   // acciones de guardado
   async function guardarNuevaCategoria() {
     if (!nuevaCat.nombre.trim()) {
       mostrarError("Escribe un nombre para la categoría.");
       return;
     }
+    const nombreNormalizado = nuevaCat.nombre.trim().toLowerCase();
+    const categoriaDuplicada = categorias.some((categoria) => {
+      const idCategoria = Number(categoria.idCategoriaMaterial || categoria.id);
+      const idEditando = nuevaCat.editando
+        ? Number(nuevaCat.editando.idCategoriaMaterial || nuevaCat.editando.id)
+        : null;
+      return (categoria.nombre || "").trim().toLowerCase() === nombreNormalizado
+        && idCategoria !== idEditando;
+    });
+    if (categoriaDuplicada) {
+      mostrarError("Ya existe una categoría de material con ese nombre.");
+      return;
+    }
+    if (nuevaCat.editando && nuevaCat.estado === "Inactivo") {
+      const idCategoriaEditando = Number(nuevaCat.editando.idCategoriaMaterial || nuevaCat.editando.id);
+      const tieneMaterialesLigados = materiales.some((material) =>
+        Number(material.categoriaMaterialId) === idCategoriaEditando && !material.deletedAt
+      );
+      const estabaActiva = (nuevaCat.editando.estado || "Activo") !== "Inactivo";
+      if (estabaActiva && tieneMaterialesLigados) {
+        mostrarError("No se puede inactivar la categoría porque tiene materiales ligados.");
+        return;
+      }
+    }
+
     setSaving(true);
     setError("");
     try {
-      const creada = await crearCategoriaMaterial({
+      const payload = {
         nombre: nuevaCat.nombre.trim(),
         descripcion: nuevaCat.descripcion.trim(),
-        estado: "Activo",
-        createdBy: session.empleadoId
-      });
+        estado: nuevaCat.estado || "Activo",
+        createdBy: nuevaCat.editando?.createdBy || session.empleadoId,
+        updatedBy: nuevaCat.editando ? session.empleadoId : null
+      };
+
+      if (nuevaCat.editando) {
+        await actualizarCategoriaMaterial(nuevaCat.editando.idCategoriaMaterial || nuevaCat.editando.id, payload);
+      } else {
+        await crearCategoriaMaterial(payload);
+      }
+
       const cats = await listarCategoriasMaterial();
       setCategorias(cats);
       // seleccionar automáticamente la categoría recién creada
       const nueva = cats.find(c => (c.nombre || "").trim() === nuevaCat.nombre.trim());
       if (nueva) setFormulario(f => ({ ...f, categoriaMaterialId: nueva.idCategoriaMaterial || nueva.id }));
-      setNuevaCat({ visible: false, nombre: "", descripcion: "" });
-      mostrarSuccess("Categoría creada y seleccionada.");
+      setNuevaCat({ visible: false, editando: null, nombre: "", descripcion: "", estado: "Activo" });
+      mostrarSuccess(nuevaCat.editando ? "Categoría actualizada." : "Categoría creada y seleccionada.");
     } catch (err) {
       mostrarError(err.message || String(err));
     } finally {
@@ -329,31 +425,51 @@ export function InventarioPage() {
   }
 
   function guardarNuevaUnidad() {
-    if (!nuevaUnidad.nombre.trim()) {
-      mostrarError("Escribe un nombre para la unidad.");
+    const nombre = nuevaUnidad.nombre.trim();
+    if (!nombre) {
+      mostrarError("El nombre de la unidad es obligatorio.");
       return;
     }
-    const nombre = nuevaUnidad.nombre.trim();
+
+    const unidadesDisponibles = ["Metros", "Piezas", "Litros", "Kg", "Rollos", ...unidadesExtra];
+    const unidadDuplicada = unidadesDisponibles.some(
+      unidad => normalizarTexto(unidad) === normalizarTexto(nombre)
+    );
+    if (unidadDuplicada) {
+      mostrarError("Ya existe una unidad con ese nombre.");
+      return;
+    }
+
     setUnidadesExtra(u => [...u, nombre]);
     setFormulario(f => ({ ...f, unidad: nombre }));
     setNuevaUnidad({ visible: false, nombre: "" });
   }
 
-  async function guardarMaterial(e) {
+  async function guardarMaterial(e, stockConfirmado = false) {
     e?.preventDefault();
     setError("");
     setSuccess("");
-    if (!formulario.sucursalId) {
-      mostrarError("Selecciona una sucursal.");
+    if (!sucursalActivaId) {
+      mostrarError("No hay una sucursal activa para registrar el material.");
       return;
     }
     if (!formulario.nombre || !formulario.costoUnitario || !formulario.categoriaMaterialId) {
       mostrarError("Completa nombre, costo y categoría.");
       return;
     }
+    const esEdicion = Boolean(materialEditando);
+    const seEstaInactivando = esEdicion
+      && materialActivo(materialEditando.material)
+      && formulario.estado === "Inactivo";
+    const stockActual = Number(materialEditando?.inventario?.stockActual ?? formulario.stockActual ?? 0);
+
+    if (seEstaInactivando && stockActual > 0 && !stockConfirmado) {
+      setConfirmarMaterialInactivo(true);
+      return;
+    }
+
     setSaving(true);
     try {
-      const esEdicion = Boolean(materialEditando);
       const payloadMaterial = {
         nombre: formulario.nombre,
         unidad: formulario.unidad,
@@ -368,7 +484,7 @@ export function InventarioPage() {
         ? await actualizarMaterial(materialEditando.material.idMaterial || materialEditando.material.id, payloadMaterial)
         : await crearMaterial({
             ...payloadMaterial,
-            sucursalId: Number(formulario.sucursalId)
+            sucursalId: Number(sucursalActivaId)
           });
 
       // crear inventario inicial para el material recién creado
@@ -378,39 +494,36 @@ export function InventarioPage() {
           stockActual: Number(formulario.stockActual || 0),
           stockMinimo: Number(formulario.stockMinimo || 0),
           materialId: Number(idMaterialNuevo),
-          sucursalId: Number(formulario.sucursalId),
+          sucursalId: Number(sucursalActivaId),
           createdBy: session.empleadoId
         });
       }
-      if (esEdicion && materialEditando.inventario) {
+      if (esEdicion && materialEditando.inventario && formulario.estado !== "Inactivo") {
         await actualizarInventario(materialEditando.inventario.idInventario || materialEditando.inventario.id, {
           stockActual: Number(formulario.stockActual || 0),
           stockMinimo: Number(formulario.stockMinimo || 0),
           materialId: Number(materialEditando.material.idMaterial || materialEditando.material.id),
-          sucursalId: Number(formulario.sucursalId || materialEditando.inventario.sucursalId),
+          sucursalId: Number(sucursalActivaId || materialEditando.inventario.sucursalId),
           createdBy: materialEditando.inventario.createdBy || session.empleadoId,
           updatedBy: session.empleadoId
         });
       }
 
       // recargar todo en paralelo
-      const [cats, mats, invs, movs, sucs] = await Promise.all([
+      const [cats, mats, invs, movs] = await Promise.all([
         listarCategoriasMaterial(),
         listarMateriales(),
         listarInventarios(),
-        listarMovimientos(),
-        listarSucursales()
+        listarMovimientos()
       ]);
       setCategorias(cats);
       setMateriales(mats);
       setInventarios(invs);
       setMovimientos(movs);
-      setSucursales(sucs);
 
       // limpiar y cerrar
       setFormulario((f) => ({
         ...f,
-        sucursalId: "",
         nombre: "",
         unidad: "Metros",
         costoUnitario: "",
@@ -422,6 +535,7 @@ export function InventarioPage() {
       }));
       setMaterialEditando(null);
       setFormularioAbierto(false);
+      setConfirmarMaterialInactivo(false);
       mostrarSuccess(esEdicion ? "Material actualizado correctamente." : "Material creado correctamente.");
     } catch (err) {
       mostrarError(err.message || String(err));
@@ -434,8 +548,12 @@ export function InventarioPage() {
     e?.preventDefault();
     setError("");
     setSuccess("");
-    if (!formulario.nombreMaterial || !formulario.cantidad || !formulario.sucursalId) {
-      mostrarError("Selecciona material, sucursal y cantidad.");
+    if (!sucursalActivaId) {
+      mostrarError("No hay una sucursal activa para registrar el movimiento.");
+      return;
+    }
+    if (!formulario.nombreMaterial || !formulario.cantidad) {
+      mostrarError("Selecciona material y cantidad.");
       return;
     }
     if (!formulario.motivo || !formulario.motivo.trim()) {
@@ -470,7 +588,7 @@ export function InventarioPage() {
       const inv = inventarios.find(
         (i) =>
           Number(i.materialId) === Number(mat.idMaterial) &&
-          Number(i.sucursalId) === Number(formulario.sucursalId)
+          Number(i.sucursalId) === Number(sucursalActivaId)
       );
       if (!inv) {
         mostrarError("No hay inventario registrado para ese material en esa sucursal.");
@@ -484,7 +602,6 @@ export function InventarioPage() {
       }
       await crearMovimiento({
         cantidad: Number(formulario.cantidad),
-        fecha: formulario.fecha,
         tipo: formulario.tipo,
         motivo: formulario.motivo,
         inventarioId: Number(inv.idInventario),
@@ -492,20 +609,18 @@ export function InventarioPage() {
       });
 
       // recargar todo en paralelo
-      const [cats, mats, invs, movs, sucs] = await Promise.all([
+      const [cats, mats, invs, movs] = await Promise.all([
         listarCategoriasMaterial(),
         listarMateriales(),
         listarInventarios(),
-        listarMovimientos(),
-        listarSucursales()
+        listarMovimientos()
       ]);
       setCategorias(cats);
       setMateriales(mats);
       setInventarios(invs);
       setMovimientos(movs);
-      setSucursales(sucs);
 
-      setFormulario((f) => ({ ...f, nombreMaterial: "", inventarioId: "", tipo: "Entrada", cantidad: "", motivo: "", fecha: nowLocalDateTime(), sucursalId: "" }));
+      setFormulario((f) => ({ ...f, nombreMaterial: "", inventarioId: "", tipo: "Entrada", cantidad: "", motivo: "" }));
       setFormularioAbierto(false);
       mostrarSuccess("Movimiento registrado correctamente.");
     } catch (err) {
@@ -529,7 +644,6 @@ export function InventarioPage() {
     setMaterialEditando({ material, inventario: inv || null });
     setFormulario((f) => ({
       ...f,
-      sucursalId: inv?.sucursalId ? String(inv.sucursalId) : "",
       nombre: material.nombre || "",
       unidad: material.unidad || "Metros",
       costoUnitario: String(material.costoUnitario ?? ""),
@@ -556,7 +670,8 @@ export function InventarioPage() {
 
       <div className="inv-tabs">
         <button className={tabActivo === "materiales" ? "inv-tab active" : "inv-tab"} onClick={() => setTabActivo("materiales")} type="button">Materiales</button>
-        {!esEmpleado && (
+        <button className={tabActivo === "categorias" ? "inv-tab active" : "inv-tab"} onClick={() => setTabActivo("categorias")} type="button">Categorías</button>
+        {!soloEmpleado && (
           <button className={tabActivo === "movimientos" ? "inv-tab active" : "inv-tab"} onClick={() => setTabActivo("movimientos")} type="button">Movimientos</button>
         )}
       </div>
@@ -571,18 +686,15 @@ export function InventarioPage() {
               onChange={(e) => setBuscar(e.target.value)}
               disabled={loading}
             />
-            <select value={categoriaFiltro} onChange={(e) => setCategoriaFiltro(e.target.value)} disabled={loading}>
-              <option value="">Todos los tipos</option>
-              {categorias.map((c) => (
-                <option key={c.idCategoriaMaterial || c.id} value={c.idCategoriaMaterial || c.id}>
-                  {c.nombre || c.descripcion || c.name}
-                </option>
-              ))}
+            <select value={estadoMaterialFiltro} onChange={(e) => setEstadoMaterialFiltro(e.target.value)} disabled={loading}>
+              <option value="">Todos los estados</option>
+              <option value="Activo">Activos</option>
+              <option value="Inactivo">Inactivos</option>
             </select>
-            {!esEmpleado && (
+            {!soloEmpleado && (
               <div className="toolbar-actions">
                 <button
-                  className="primary-button"
+                  className="primary-button compact-action-button"
                   onClick={abrirNuevo}
                   type="button"
                   disabled={loading}
@@ -609,13 +721,17 @@ export function InventarioPage() {
                 </tr>
               </thead>
               <tbody>
-                {materialesFiltrados.map((m) => {
+                {materialesPaginados.map((m) => {
                   const inv = inventarioParaMaterial(m.idMaterial);
                   const stockActual = inv ? Number(inv.stockActual) : null;
                   const stockMin = inv ? Number(inv.stockMinimo) : null;
                   const bajo = inv && stockActual <= stockMin;
+                  const activo = materialActivo(m);
                   return (
-                    <tr key={m.idMaterial} style={bajo ? { background: "#fff7ed" } : undefined}>
+                    <tr
+                      key={m.idMaterial}
+                      style={!activo ? { background: "#f3f4f6" } : bajo ? { background: "#fff7ed" } : undefined}
+                    >
                       <td>{m.idMaterial}</td>
                       <td>
                         {bajo && <span aria-hidden>⚠ </span>}
@@ -626,21 +742,23 @@ export function InventarioPage() {
                       <td style={bajo ? { color: "#c2410c", fontWeight: 700 } : undefined}>{stockActual === null || stockActual === undefined ? "—" : stockActual}</td>
                       <td>{stockMin === null || stockMin === undefined ? "—" : stockMin}</td>
                       <td>
-                        {inv ? (
+                        {!activo ? (
+                          <span className="inv-badge neutral">Inactivo</span>
+                        ) : inv ? (
                           bajo ? <span className="inv-badge warn">⚠ Reorden</span> : <span className="inv-badge ok">✓ OK</span>
                         ) : (
                           <span className="inv-badge neutral">Sin stock</span>
                         )}
                       </td>
                       <td>
-                        {!esEmpleado ? (
+                        {soloEmpleado ? (
+                          <span className="muted-action">Solo consulta</span>
+                        ) : (
                           <div className="table-actions">
                             <button className="ghost-button" onClick={() => abrirEditarMaterial(m)} type="button">
                               Editar
                             </button>
                           </div>
-                        ) : (
-                          <span className="inv-badge neutral">Solo consulta</span>
                         )}
                       </td>
                       <td>
@@ -660,18 +778,19 @@ export function InventarioPage() {
             </table>
           </div>
 
-          {formularioAbierto && (
-            <section className="pos-card" style={{ marginTop: 18 }}>
+          <Pagination
+            page={paginaMateriales}
+            pageSize={PAGE_SIZE}
+            total={materialesFiltrados.length}
+            onPageChange={setPaginaMateriales}
+            disabled={loading}
+          />
+
+          {!soloEmpleado && formularioAbierto && (
+            <div className="modal-overlay">
+              <div className="modal-card customer-modal" onClick={(event) => event.stopPropagation()}>
               <h2>{materialEditando ? "Editar Material" : "Nuevo Material"}</h2>
               <form onSubmit={guardarMaterial}>
-                <label className="pos-field floating">
-                  <span>Sucursal</span>
-                  <select value={formulario.sucursalId} onChange={(e) => setFormulario((f) => ({ ...f, sucursalId: e.target.value }))}>
-                    <option value="">Selecciona</option>
-                    {sucursales.map((s) => <option key={s.idSucursal} value={s.idSucursal}>{s.nombre}</option>)}
-                  </select>
-                </label>
-
                 <label className="pos-field floating">
                   <span>Nombre</span>
                   <input name="nombre" value={formulario.nombre} onChange={(e) => setFormulario((f) => ({ ...f, nombre: e.target.value }))} type="text" />
@@ -712,7 +831,7 @@ export function InventarioPage() {
                       onChange={(e) => {
                         const v = e.target.value;
                         if (v === "__nueva__") {
-                          setNuevaCat(c => ({ ...c, visible: true }));
+                          abrirNuevaCategoriaMaterial();
                           setFormulario(f => ({ ...f, categoriaMaterialId: "" }));
                           return;
                         }
@@ -726,7 +845,6 @@ export function InventarioPage() {
                       <option value="__nueva__">+ Nueva categoría...</option>
                     </select>
                   </label>
-
                   <label className="pos-field floating">
                     <span>Estado</span>
                     <select value={formulario.estado} onChange={(e) => setFormulario((f) => ({ ...f, estado: e.target.value }))}>
@@ -754,30 +872,133 @@ export function InventarioPage() {
                   <button className="ghost-button" type="button" onClick={cancelarFormulario}>Cancelar</button>
                 </div>
               </form>
-            </section>
+              </div>
+            </div>
           )}
+        </>
+      )}
+
+      {/* Categorías */}
+      {tabActivo === "categorias" && (
+        <>
+          <div className="inv-toolbar">
+            <input
+              placeholder="Buscar categoría por nombre o descripción"
+              value={buscarCategoria}
+              onChange={(e) => setBuscarCategoria(e.target.value)}
+              disabled={loading}
+            />
+            <select
+              value={estadoCategoriaFiltro}
+              onChange={(e) => setEstadoCategoriaFiltro(e.target.value)}
+              disabled={loading}
+            >
+              <option value="">Todos los estados</option>
+              <option value="Activo">Activo</option>
+              <option value="Inactivo">Inactivo</option>
+            </select>
+            {!soloEmpleado && (
+              <div className="toolbar-actions">
+                <button
+                  className="primary-button compact-action-button"
+                  onClick={abrirNuevaCategoriaMaterial}
+                  type="button"
+                  disabled={loading}
+                >
+                  + Nueva Categoría
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="inv-table-wrap">
+            <table className="inv-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Nombre</th>
+                  <th>Descripción</th>
+                  <th>Estado</th>
+                  {!soloEmpleado && <th>Acciones</th>}
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {categoriasFiltradas.map((categoria) => (
+                  <tr key={categoria.idCategoriaMaterial || categoria.id}>
+                    <td>{categoria.idCategoriaMaterial || categoria.id}</td>
+                    <td style={{ fontWeight: 700 }}>{categoria.nombre}</td>
+                    <td>{categoria.descripcion || "-"}</td>
+                    <td>
+                      <span className={categoria.estado === "Activo" ? "inv-badge ok" : "inv-badge neutral"}>
+                        {categoria.estado || "Activo"}
+                      </span>
+                    </td>
+                    {!soloEmpleado && (
+                      <td>
+                        <div className="table-actions">
+                          <button
+                            className="ghost-button"
+                            onClick={() => {
+                              setNuevaCat({
+                                visible: true,
+                                editando: categoria,
+                                nombre: categoria.nombre || "",
+                                descripcion: categoria.descripcion || "",
+                                estado: categoria.estado || "Activo"
+                              });
+                            }}
+                            type="button"
+                          >
+                            Editar
+                          </button>
+                        </div>
+                      </td>
+                    )}
+                    <td>
+                      <button
+                        aria-label="Ver auditoria de la categoría"
+                        className="audit-toggle"
+                        onClick={() => abrirAuditoria(`Categoría ${categoria.idCategoriaMaterial || categoria.id}`, categoria)}
+                        type="button"
+                      >
+                        ▼
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {categoriasFiltradas.length === 0 && !loading && (
+                  <tr>
+                    <td colSpan={soloEmpleado ? 5 : 6} style={{ textAlign: "center", color: "#64748b", padding: 24 }}>
+                      Sin categorías que coincidan con la búsqueda.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
 
       {/* Movimientos */}
       {tabActivo === "movimientos" && (
         <>
-          {!esEmpleado && (
-            <div className="inv-toolbar">
-              <div />
-              <div />
+          <div className="inv-toolbar">
+            <div />
+            <div />
+            {!soloEmpleado && (
               <div className="toolbar-actions">
                 <button
-                  className="primary-button"
+                  className="primary-button compact-action-button"
                   onClick={abrirNuevo}
                   type="button"
                   disabled={loading}
                 >
-                  Registrar Movimiento
+                  Nuevo Movimiento
                 </button>
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           <div className="inv-table-wrap">
             <table className="inv-table">
@@ -792,9 +1013,9 @@ export function InventarioPage() {
                 </tr>
               </thead>
               <tbody>
-                {movimientosFiltrados.map((m) => (
-                  <tr key={m.idMovimiento || m.id}>
-                    <td>{m.idMovimiento || m.id}</td>
+                {movimientosPaginados.map((m) => (
+                  <tr key={idMovimiento(m)}>
+                    <td>{idMovimiento(m)}</td>
                     <td>{m.fecha ? new Date(m.fecha).toLocaleString() : "—"}</td>
                     <td>{m.tipo}</td>
                     <td>{m.cantidad}</td>
@@ -803,7 +1024,7 @@ export function InventarioPage() {
                       <button
                         aria-label="Ver auditoria del movimiento"
                         className="audit-toggle"
-                        onClick={() => abrirAuditoria(`Movimiento ${m.idMovimiento || m.id}`, m, [["Inventario", m.inventarioId || "-"]])}
+                        onClick={() => abrirAuditoria(`Movimiento ${idMovimiento(m)}`, m, [["Inventario", m.inventarioId || "-"]])}
                         type="button"
                       >
                         ▼
@@ -815,21 +1036,22 @@ export function InventarioPage() {
             </table>
           </div>
 
-          {formularioAbierto && (
-            <section className="pos-card" style={{ marginTop: 18 }}>
+          <Pagination
+            page={paginaMovimientos}
+            pageSize={MOVEMENTS_PAGE_SIZE}
+            total={movimientosFiltrados.length}
+            onPageChange={setPaginaMovimientos}
+            disabled={loading}
+          />
+
+          {!soloEmpleado && formularioAbierto && (
+            <div className="modal-overlay">
+              <div className="modal-card customer-modal" onClick={(event) => event.stopPropagation()}>
               <h2>Registrar Movimiento</h2>
               <form onSubmit={guardarMovimiento}>
                 <label className="pos-field floating">
                   <span>Nombre del Material</span>
                   <BuscadorMaterial materiales={materialesActivos} value={formulario.nombreMaterial} onChange={(v) => setFormulario((f) => ({ ...f, nombreMaterial: v }))} />
-                </label>
-
-                <label className="pos-field floating">
-                  <span>Sucursal</span>
-                  <select value={formulario.sucursalId} onChange={(e) => setFormulario((f) => ({ ...f, sucursalId: e.target.value }))}>
-                    <option value="">Selecciona</option>
-                    {sucursales.map((s) => <option key={s.idSucursal} value={s.idSucursal}>{s.nombre}</option>)}
-                  </select>
                 </label>
 
                 <div className="pos-field-row">
@@ -863,26 +1085,22 @@ export function InventarioPage() {
                   <input type="text" value={formulario.motivo} onChange={(e) => setFormulario((f) => ({ ...f, motivo: e.target.value }))} />
                 </label>
 
-                <label className="pos-field floating">
-                  <span>Fecha</span>
-                  <input type="datetime-local" value={formulario.fecha} onChange={(e) => setFormulario((f) => ({ ...f, fecha: e.target.value }))} />
-                </label>
-
                 <div style={{ display: "flex", gap: 12, marginTop: 12 }}>
                   <button className="primary-button" type="submit" disabled={saving}>{saving ? "Guardando..." : "Guardar"}</button>
                   <button className="ghost-button" type="button" onClick={cancelarFormulario}>Cancelar</button>
                 </div>
               </form>
-            </section>
+              </div>
+            </div>
           )}
         </>
       )}
 
       {/* Modal flotante para nueva categoría */}
       {nuevaCat.visible && (
-        <div className="modal-overlay" onClick={() => setNuevaCat({ visible: false, nombre: "", descripcion: "" })}>
+        <div className="modal-overlay">
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-            <h2>Nueva Categoría</h2>
+            <h2>{nuevaCat.editando ? "Editar Categoría" : "Nueva Categoría"}</h2>
             <label className="pos-field floating">
               <span>Nombre</span>
               <input type="text" value={nuevaCat.nombre} onChange={e => setNuevaCat(c => ({ ...c, nombre: e.target.value }))} />
@@ -891,9 +1109,26 @@ export function InventarioPage() {
               <span>Descripción</span>
               <input type="text" value={nuevaCat.descripcion} onChange={e => setNuevaCat(c => ({ ...c, descripcion: e.target.value }))} />
             </label>
+            <label className="pos-field floating">
+              <span>Estado</span>
+              <select value={nuevaCat.estado} onChange={e => setNuevaCat(c => ({ ...c, estado: e.target.value }))}>
+                <option>Activo</option>
+                <option>Inactivo</option>
+              </select>
+            </label>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 20 }}>
-              <button className="ghost-button" type="button" onClick={() => setNuevaCat({ visible: false, nombre: "", descripcion: "" })}>Cancelar</button>
-              <button className="primary-button" type="button" disabled={saving} onClick={guardarNuevaCategoria}>{saving ? "Guardando..." : "Guardar categoría"}</button>
+              <button
+                className="ghost-button"
+                type="button"
+                onClick={() => setNuevaCat({
+                  visible: false, editando: null, nombre: "", descripcion: "", estado: "Activo"
+                })}
+              >
+                Cancelar
+              </button>
+              <button className="primary-button" type="button" disabled={saving} onClick={guardarNuevaCategoria}>
+                {saving ? "Guardando..." : nuevaCat.editando ? "Guardar cambios" : "Guardar categoría"}
+              </button>
             </div>
           </div>
         </div>
@@ -901,7 +1136,7 @@ export function InventarioPage() {
 
       {/* Modal nueva unidad */}
       {nuevaUnidad.visible && (
-        <div className="modal-overlay" onClick={() => setNuevaUnidad({ visible: false, nombre: "" })}>
+        <div className="modal-overlay">
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
             <h2>Nueva Unidad</h2>
             <label className="pos-field floating">
@@ -916,8 +1151,39 @@ export function InventarioPage() {
         </div>
       )}
 
+      {confirmarMaterialInactivo && materialEditando && (
+        <div className="modal-overlay nested-modal-overlay">
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <h2>Confirmar material inactivo</h2>
+            <p>
+              El material <strong>{materialEditando.material.nombre}</strong> tiene existencias de{" "}
+              <strong>{materialEditando.inventario?.stockActual || 0}</strong>. Al ponerlo inactivo conservara
+              el stock, pero ya no podra usarse en nuevos movimientos o servicios.
+            </p>
+            <div className="modal-actions">
+              <button
+                className="ghost-button"
+                disabled={saving}
+                onClick={() => setConfirmarMaterialInactivo(false)}
+                type="button"
+              >
+                Cancelar
+              </button>
+              <button
+                className="primary-button"
+                disabled={saving}
+                onClick={() => guardarMaterial(null, true)}
+                type="button"
+              >
+                {saving ? "Guardando..." : "Confirmar inactivacion"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {auditModal && (
-        <div className="modal-overlay" onClick={() => setAuditModal(null)}>
+        <div className="modal-overlay">
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
             <h2>{auditModal.titulo}</h2>
             <div className="audit-grid modal-audit-grid">
@@ -939,7 +1205,7 @@ export function InventarioPage() {
 
       {/* Modal de error */}
       {modalError && (
-        <div className="modal-overlay" onClick={() => setModalError("")}>
+        <div className="modal-overlay">
           <div className="modal-error-card" onClick={e => e.stopPropagation()}>
             <h2>Error</h2>
             <p className="modal-error-msg">{modalError}</p>
